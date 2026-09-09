@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="180" viewBox="0 0 600 180" role="img">
+<title>FitCore GMS — Gym Management System</title>
+<rect width="600" height="180" rx="22" fill="#0f1f2e"/>
+<!-- Icon square -->
+<rect x="28" y="28" width="124" height="124" rx="22" fill="#7ffa88"/>
+<text x="90" y="108" text-anchor="middle" dominant-baseline="central" font-family="Arial Black, Space Grotesk, sans-serif" font-weight="900" font-size="82" fill="#0a0a0a">F</text>
+<!-- Wordmark -->
+<text x="172" y="78" font-family="Space Grotesk, Arial Black, sans-serif" font-weight="900" font-size="52" letter-spacing="1.5" fill="#ffffff">FIT<tspan fill="#7ffa88">CORE</tspan></text>
+<text x="172" y="108" font-family="Roboto, sans-serif" font-weight="600" font-size="13" letter-spacing="6" fill="#7ffa88">GYM MANAGEMENT SYSTEM</text>
+<rect x="172" y="120" width="380" height="2" rx="1" fill="rgba(127,250,136,.35)"/>
+<text x="172" y="144" font-family="Roboto, sans-serif" font-weight="400" font-size="11" letter-spacing="1" fill="#8ea0b0">Train Hard • Stay Strong • Push Your Limits</text>
+</svg>
