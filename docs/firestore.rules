@@ -1,22 +1,29 @@
 rules_version = '2';
 // ============================================================
-// FitCore GMS — Firestore Security Rules
+// FitCore GMS — Firestore Security Rules (v2.1)
 // Paste into: Firebase console → Firestore → Rules → Publish
+//
+// NOTE: The app uses custom document IDs (u1, MEM-0001, etc.)
+// for users/members — NOT Firebase Auth UIDs.  This means we
+// cannot use get() to look up roles by request.auth.uid.
+//
+// Security is therefore enforced in two layers:
+//   1. Firestore Rules: auth gate + collection-level protection
+//   2. App Logic: role checks, activation gate, panel access
 // ============================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // One-time admin bootstrap flag: readable by all (so the app
-    // knows setup is done), creatable only once, never editable after.
+    // ─── Meta (bootstrap flag) ──────────────────────────────
     match /meta/{doc} {
       allow read: if true;
       allow create: if !exists(/databases/$(database)/documents/meta/config);
       allow update, delete: if false;
     }
 
-    // Public catalogue: guests visiting the landing page / member signup
-    // must be able to see the membership plans and the walk-in day rate
-    // WITHOUT signing in. Writes still require authentication.
+    // ─── Public catalogue ───────────────────────────────────
+    // Guests (landing page / member signup) can read plans
+    // and settings without signing in.  Writes require auth.
     match /plans/{doc} {
       allow read: if true;
       allow write: if request.auth != null;
@@ -30,24 +37,38 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // App collections: any signed-in user may read;
-    // writes require authentication too (roles enforced in app logic).
+    // ─── App collections (auth required) ───────────────────
+    // All personal/app collections require authentication.
+    // Role-based access control is enforced in app logic
+    // (sidebar rendering, navigate(), panel guards).
     match /{collection}/{doc} {
       allow read: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts','workoutPlans','measurements','goals','exerciseLibrary'];
-      allow create, update: if request.auth != null
+                          'announcements','activitylog','workouts',
+                          'workoutPlans','measurements','goals',
+                          'exerciseLibrary'];
+      allow create: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts','workoutPlans','measurements','goals','exerciseLibrary'];
+                          'announcements','activitylog','workouts',
+                          'workoutPlans','measurements','goals',
+                          'exerciseLibrary'];
+      allow update: if request.auth != null
+        && collection in ['users','members','payments','sessions',
+                          'attendance','walkins','notifications','messages',
+                          'announcements','activitylog','workouts',
+                          'workoutPlans','measurements','goals',
+                          'exerciseLibrary'];
       allow delete: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts','workoutPlans','measurements','goals','exerciseLibrary'];
+                          'announcements','activitylog','workouts',
+                          'workoutPlans','measurements','goals',
+                          'exerciseLibrary'];
     }
 
-    // Everything else: denied
+    // ─── Catch-all: deny everything else ────────────────────
     match /{document=**} {
       allow read, write: if false;
     }
