@@ -36,6 +36,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null;
     }
+    // Members collection: allow unauthenticated reads for cross-device login
+    // lookup (username → authEmail resolution).  This exposes member profile
+    // data but NOT passwords (stored in Firebase Auth, not Firestore).
+    match /members/{doc} {
+      allow read: if true;
+    }
 
     // ─── App collections (auth required) ───────────────────
     // All personal/app collections require authentication.
