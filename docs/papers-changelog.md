@@ -32,3 +32,24 @@
 - [x] localStorage: 0 | Firebase 7x, Cloud Firestore 41x | GMMS: 0
 - [x] Roles/scope untouched (Staff/Trainer self-register sama sa original — walay gidugang nga Member signup)
 - [x] DFD/ERD/FR-15 extras: WALA gisulod sa docx (naa sa docs/*.md as specs) — per "ilisdi ra ang text" instruction
+
+## Round 2 — Use Case tables + Sequence/Activity alignment (same file)
+| # | Location | Before | After |
+|---|---|---|---|
+| 12 | Budget: VS Code row | "for PHP, HTML, CSS, JS" (walay PHP sa system) | HTML, CSS, JavaScript and Firebase |
+| 13 | Budget: Bootstrap row | Bootstrap CSS Framework (walay Bootstrap — custom CSS ang system) | Firebase (Authentication + Cloud Firestore) |
+| 14 | Software Specs | "enhanced using Bootstrap" | custom-built CSS3, no framework + Firebase Auth/Firestore |
+| 15 | Reference + glossary Bootstrap | Bootstrap docs/framework | Firebase Authentication docs + Firebase platform entry |
+| 16 | Glossary Relational Data Structure | relational tables model | Cloud Firestore collections model |
+| 17 | Login use case (actors + steps) | Admin/Staff/Trainer only; "validates against database" | + Member actor; verifies with Firebase Authentication |
+| 18 | Billing use case | Amount + Date only | + Payment Method (Cash, GCash, Bank Transfer) |
+| 19 | Walk-In use case | duration-based time rates (12 steps) | fixed single-day fee from settings (10 steps) |
+| 20 | Renewal (sprint/scan/use case/glossary/Fig23) | "three/3 days" (7 spots) | "seven/7 days" (matches system + Reminders section) |
+| 21 | Trainer schedule use case | "Trainers cannot modify" (contradicts system) | cannot create, but can mark Completed/Cancelled |
+| 22 | Logout use case | Admin/Staff/Trainer only | + Member actor |
+| 23 | Renewal use case | "Members table" | "Members collection" |
+
+## Verification (Round 2)
+- [x] localStorage 0, three/3-days 0, Bootstrap 0, PHP 0, duration-fee 0, relational 0
+- [x] strict XML VALID, tables balanced (13/13), paras 996 (2 walk-in steps merged by rewrite)
+- [x] Figures 19 = 19, Tables 13 = 13, images/styles byte-identical
