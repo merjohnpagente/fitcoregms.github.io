@@ -1,6 +1,11 @@
-﻿* text=auto
+* text=auto
 *.html text eol=lf working-tree-encoding=UTF-8
 *.js text eol=lf working-tree-encoding=UTF-8
 *.css text eol=lf working-tree-encoding=UTF-8
 *.ps1 text eol=lf working-tree-encoding=UTF-8
+*.docx binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
 

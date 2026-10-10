@@ -1,0 +1,6 @@
+%% Fig 6 — FitCore GMS System Architecture.
+flowchart TB
+  B[Browser<br>index.html + style.css<br>script.js + db-firebase.js<br>qrcode.min.js + jsQR.min.js] -->|login/signup/CRUD| AUTH[Firebase Auth<br>fitcoregym-1019f]
+  B -->|read/write 18 collections| DB[(Firestore<br>users/members/plans/payments<br>attendance/walkins/sessions<br>announcements/messages/notifications<br>workouts/settings/activitylog)]
+  B -->|OTP mail| EMAIL[EmailJS<br>forgot-password OTP]
+  AUTH -->|uid| DB

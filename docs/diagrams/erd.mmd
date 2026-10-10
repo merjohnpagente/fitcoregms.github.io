@@ -1,0 +1,49 @@
+%% Fig 5 — FitCore GMS ERD (Firestore). Custom IDs: users=u1 style, members=MEM-0001.
+erDiagram
+  PLANS ||--o{ MEMBERS : "1-N has"
+  PLANS ||--o{ PAYMENTS : "1-N priced-by"
+  MEMBERS ||--o{ PAYMENTS : "1-N pays"
+  MEMBERS ||--o{ ATTENDANCE : "1-N logs"
+  MEMBERS ||--o{ SESSIONS : "1-N books"
+  MEMBERS ||--o{ MEASUREMENTS : "1-N tracks"
+  MEMBERS ||--o{ GOALS : "1-N sets"
+  MEMBERS ||--o{ WORKOUTS : "1-N logs"
+  MEMBERS ||--o{ WORKOUTPLANS : "1-N assigned"
+  MEMBERS ||--o{ MESSAGES : "1-N sends"
+  USERS ||--o{ SESSIONS : "trainer 1-N handles"
+  WALKINS }o--|| MEMBERS : "converts-to"
+  SETTINGS ||--o{ WALKINS : "fees"
+  MEMBERS {
+    string member_id PK "MEM-0001"
+    string plan_id FK
+    string name
+    string contact
+    date expiry
+    string status
+  }
+  PAYMENTS {
+    string payment_id PK
+    string member_id FK
+    string plan_id FK
+    number amount
+    string method "Cash/GCash/Bank"
+    string status
+  }
+  USERS {
+    string user_id PK "u1"
+    string role "admin/staff/trainer"
+    string authEmail
+  }
+  SESSIONS {
+    string session_id PK
+    string member_id FK
+    string trainer_id FK
+    string type
+    string status
+  }
+  ATTENDANCE {
+    string log_id PK
+    string member_id FK
+    datetime checkin
+    datetime checkout
+  }

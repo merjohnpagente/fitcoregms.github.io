@@ -1,0 +1,22 @@
+%% Fig 1 — FitCore GMS Use Case (mermaid flowchart; i-draw sa Word gamit ovals).
+flowchart LR
+  Guest((Guest)) --> UC1[Browse Plans/Trainers]
+  Guest --> UC2[Member Signup]
+  Guest --> UC3[Login]
+  Member((Member)) --> UC3
+  Trainer((Trainer)) --> UC3
+  Staff((Staff/Admin)) --> UC3
+  Member --> UC4[View QR/Attendance/Sessions]
+  Member --> UC5[Pay + Receipt]
+  Member --> UC6[Book Session]
+  Staff --> UC7[Manage Members]
+  Staff --> UC8[Manage Plans]
+  Staff --> UC9[Record/Confirm Payment]
+  Staff --> UC10[Check-in/out + Scanner]
+  Staff --> UC11[Walk-in + Fee]
+  Staff --> UC12[Announcements/Messages]
+  Staff --> UC13[Reports]
+  Trainer --> UC14[Profile/Availability/Sessions]
+  UC2 -->|includes| UC1
+  UC5 -->|includes| UC9
+  UC6 -->|extends| UC14

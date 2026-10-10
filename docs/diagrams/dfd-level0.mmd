@@ -1,0 +1,12 @@
+%% Fig 2 — FitCore GMS DFD Level 0 (Context). Paste sa mermaid.live o MarkDown.
+flowchart LR
+  G[Guest] -->|browse plans/trainers, signup info| P0((0<br>FitCore GMS))
+  P0 -->|plans list, trainers list| G
+  M[Member] -->|login, payment, booking, attendance| P0
+  P0 -->|receipt, schedule, profile| M
+  T[Trainer] -->|profile, availability, session update| P0
+  P0 -->|assigned sessions| T
+  S[Staff/Admin] -->|all CRUD, reports| P0
+  P0 -->|dashboard, reports, receipts| S
+  P0 <-->|authenticate| AUTH[(Firebase Auth)]
+  P0 <-->|store / read| DB[(Firestore<br>fitcoregym-1019f)]

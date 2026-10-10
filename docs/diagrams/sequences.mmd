@@ -1,0 +1,77 @@
+%% Fig 7-13 — FitCore GMS Sequence Diagrams S1-S7. Tagsa ka block = 1 ka figure sa Word.
+%% S1 Login
+sequenceDiagram
+  participant A as Actor
+  participant UI as UI
+  participant AT as Firebase Auth
+  participant DB as Firestore
+  A->>UI: 1: login(user, pass)
+  UI->>AT: 2: verify()
+  AT->>DB: 3: get users/members
+  DB-->>UI: 4: role + status
+  UI-->>A: 5: open dashboard / pendingGate
+
+%% S2 Member Signup + Plan
+sequenceDiagram
+  participant G as Guest
+  participant UI as UI
+  participant AT as Firebase Auth
+  participant DB as Firestore
+  G->>UI: 1: selectPlan(planId)
+  G->>UI: 2: submitMemberSignup(form)
+  UI->>AT: 3: createUser()
+  UI->>DB: 4: create D2 members
+  DB-->>UI: 5: ok
+  UI-->>G: 6: pendingGate / success
+
+%% S3 Payment + Receipt
+sequenceDiagram
+  participant S as Staff/Member
+  participant UI as UI
+  participant DB as Firestore
+  S->>UI: 1: savePayment(member, amount, method)
+  UI->>DB: 2: create D4 payments
+  S->>UI: 3: confirmPayment(id)
+  UI->>DB: 4: update D2 members expiry
+  UI-->>S: 5: printReceipt()
+
+%% S4 Attendance Check-in/out (QR)
+sequenceDiagram
+  participant M as Member
+  participant UI as UI
+  participant DB as Firestore
+  M->>UI: 1: doCheckin(QR/manual)
+  UI->>DB: 2: create D5 attendance
+  M->>UI: 3: doCheckout()
+  UI->>DB: 4: update D5 log
+
+%% S5 Session Booking
+sequenceDiagram
+  participant M as Member
+  participant UI as UI
+  participant TR as Trainer
+  participant DB as Firestore
+  M->>UI: 1: bookSession(trainer, sched)
+  UI->>DB: 2: create D7 sessions
+  TR->>UI: 3: accept/completeSession()
+  UI->>DB: 4: update D7 + notify D9
+
+%% S6 Walk-in + Fee
+sequenceDiagram
+  participant S as Staff
+  participant UI as UI
+  participant DB as Firestore
+  S->>UI: 1: saveWalkin(name)
+  UI->>DB: 2: read D11 settings fee
+  UI->>DB: 3: create D6 walkins
+
+%% S7 Forgot-OTP
+sequenceDiagram
+  participant U as User
+  participant UI as UI
+  participant E as EmailJS
+  participant AT as Firebase Auth
+  U->>UI: 1: sendForgotCode(email/phone)
+  UI->>E: 2: send OTP
+  U->>UI: 3: fpVerifyCode(otp)
+  UI->>AT: 4: resetPassword()
