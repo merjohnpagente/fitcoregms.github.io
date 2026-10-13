@@ -1,0 +1,13 @@
+# Rebuild the public (obfuscated) files from the local sources in src/.
+# Edit files inside src\ ONLY, then run:
+#   powershell -ExecutionPolicy Bypass -File src\build.ps1
+# The root-level script.js / db-firebase.js / style.css are the deployed,
+# obfuscated versions - never edit them directly.
+
+npx --yes javascript-obfuscator src/script.js --output script.js --compact true --self-defending false --control-flow-flattening true --control-flow-flattening-threshold 0.5 --string-array true --string-array-threshold 0.75 --string-array-encoding rc4 --rename-globals false --identifier-names-generator hexadecimal --unicode-escape-sequence false --dead-code-injection true --dead-code-injection-threshold 0.25
+
+npx --yes javascript-obfuscator src/db-firebase.js --output db-firebase.js --compact true --self-defending false --control-flow-flattening true --control-flow-flattening-threshold 0.5 --string-array true --string-array-threshold 0.75 --string-array-encoding rc4 --rename-globals false --identifier-names-generator hexadecimal --unicode-escape-sequence false
+
+npx --yes clean-css-cli -o style.css src/style.css
+
+Write-Host "Build complete - commit and push the root files to deploy."
