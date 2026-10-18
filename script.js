@@ -1,4 +1,4 @@
-﻿// ============================= DATA LAYER =============================
+// ============================= DATA LAYER =============================
 const KEY={users:'gms_users',members:'gms_members',payments:'gms_payments',sessions:'gms_sessions',plans:'gms_plans',attendance:'gms_attendance',walkins:'gms_walkins',loginAttempts:'gms_login_attempts',activityLog:'gms_activity_log',settings:'gms_settings',notifications:'gms_notifications',messages:'gms_messages',announcements:'gms_announcements',workouts:'gms_workouts',workoutPlans:'gms_workout_plans',measurements:'gms_measurements',goals:'gms_goals',exerciseLibrary:'gms_exercise_library'};
 const PENDING_ARCHIVE_DAYS=7;
 const QR_SCAN_DUP_WINDOW_MIN=30;
