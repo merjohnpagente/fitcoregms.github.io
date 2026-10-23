@@ -577,6 +577,12 @@ function nextId(key,prefix){
   }
   return `${prefix}-${(max+1).toString().padStart(4,'0')}`;
 }
+// Dashboard and Billing both show newest payments first. Date is the
+// authoritative field; timestamp breaks ties for same-day records.
+function newestPaymentFirst(a,b){
+  const da=String((a&&a.date)||''),db=String((b&&b.date)||'');
+  return db.localeCompare(da)||((Number(b&&b.timestamp)||0)-(Number(a&&a.timestamp)||0));
+}
 function nextMemberId(){const n=Members.all().filter(m=>m.status!=='Archived').length;return 'MEM-'+String(n+1).padStart(4,'0');}
 function addDays(dateStr,days){const d=new Date(dateStr);d.setDate(d.getDate()+days);return d.toISOString().split('T')[0];}
 function addMonths(dateStr,months){const d=new Date(dateStr);d.setMonth(d.getMonth()+months);return d.toISOString().split('T')[0];}
@@ -2874,7 +2880,7 @@ function buildAdminDashboard(){
   const walkinRevMonth=walkinThisMonth.reduce((a,w)=>a+Number(w.fee),0);
   const totalMonthRev=monthRev+walkinRevMonth;
   const pendingUsers=Users.all().filter(u=>u.status==='pending');
-  const recent=payments.slice(-5).reverse();
+  const recent=payments.slice().sort(newestPaymentFirst).slice(0,5);
   const revData=[];
   for(let i=5;i>=0;i--){
     const d=new Date();d.setMonth(d.getMonth()-i);
@@ -4129,7 +4135,7 @@ function refreshBillingTable(){
   if(billingFromDate)data=data.filter(p=>p.date>=billingFromDate);
   if(billingToDate)data=data.filter(p=>p.date<=billingToDate);
   if(billingPlanFilter!=='All')data=data.filter(p=>p.planId===billingPlanFilter);
-  data=data.slice().reverse();
+  data=data.slice().sort(newestPaymentFirst);
   const perPage=10;const total=data.length;const pages=Math.ceil(total/perPage)||1;
   const slice=data.slice((billingPage-1)*perPage,billingPage*perPage);
   const rows=slice.length?slice.map(p=>`<tr>
@@ -6424,7 +6430,9 @@ function renderQueue(){
   if(_queueSearch){const s=_queueSearch.toLowerCase();pending=pending.filter(m=>m.name.toLowerCase().includes(s)||m.id.toLowerCase().includes(s)||(m.email||'').toLowerCase().includes(s));}
   if(_queuePlanFilter!=='All')pending=pending.filter(m=>m.planId===_queuePlanFilter);
   pending.sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
-  const total=openPendingNotifs().length;
+  // Badge must mirror the cards below. Notifications can outlive a member
+  // (deleted/archived/paid) and made this show 8 with an empty queue.
+  const total=pending.length;
   const items=pending.map(m=>{
     const plan=m.planId?Plans.one(m.planId):null;
     const ageDays=Math.max(0,Math.floor((Date.now()-new Date(m.createdAt||Date.now()))/86400000));
@@ -6454,10 +6462,11 @@ function renderQueue(){
     </div>`;
   }).join('');
   const bulkBtn=_queueSelected.size?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary btn-sm" onclick="confirmSelectedPayments()">✓ Confirm Selected (${_queueSelected.size})</button><button class="btn-danger btn-sm" onclick="deleteSelectedQueue()" style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.28);color:#ef4444">🗑 Delete Selected (${_queueSelected.size})</button></div>`:'';
+  const totalBadge=total?`<span class="badge badge-expiring" style="margin-left:6px">${total}</span>`:'';
   el.innerHTML=`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
-      <div class="section-title" style="margin-bottom:4px">Pending Payments <span class="badge badge-expiring" style="margin-left:6px">${total}</span></div>
+      <div class="section-title" style="margin-bottom:4px">Pending Payments ${totalBadge}</div>
       <div style="font-size:12px;color:var(--gray-500)">Members who self-registered and are awaiting counter payment. Unpaid sign-ups are auto-archived after ${PENDING_ARCHIVE_DAYS} days.</div>
     </div>
     ${bulkBtn}
@@ -6616,12 +6625,9 @@ async function applyPaymentConfirmation(memberId,amount,method,reference){
   const start=today();
   const newExpiry=addMonths(start,plan?plan.duration:1);
   const now=new Date();
-  // collision-safe PAY id: check cloud mirror as well
-  let newId=nextId(KEY.payments,'PAY');
-  try{
-    const cloudPays=(window.GMSFB&&GMSFB._lastCloud&&GMSFB._lastCloud.payments)||{};
-    while(cloudPays[newId]) newId='PAY-'+String(parseInt(newId.split('-')[1],10)+1).padStart(4,'0');
-  }catch(e){}
+  // Use the same source as the Billing table. The cloud mirror can retain
+  // just-deleted docs, which made the first real payment start at PAY-0004.
+  const newId=nextId(KEY.payments,'PAY');
   const payments=Payments.all();
   payments.push({id:newId,memberId,memberName:member.name,planId:member.planId,planName:plan?plan.name:'Unknown',amount:amount|| (plan?Number(plan.price):0),date:start,newExpiry,method:method||'Cash',reference:reference||'',notes:'',recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:'activation',timestamp:now.getTime(),createdAt:start});
   Payments.save(payments);
