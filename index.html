@@ -18,7 +18,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=22">
 
 </head>
 
@@ -102,7 +102,7 @@
 
       <h1 class="hero-title reveal reveal-d1">Manage Your<br><span>Gym</span> with<br>FITCORE</h1>
 
-      <p class="hero-sub reveal reveal-d2">A complete gym management system built for local fitness centers — members, billing, trainer schedules, walk-ins, and reports all in one place.</p>
+      <p class="hero-sub reveal reveal-d2">A complete gym management system built for local fitness centers. Members, billing, trainer schedules, walk-ins, and reports all in one place.</p>
 
       <div class="hero-btns reveal reveal-d3">
 
@@ -114,7 +114,7 @@
 
       <div class="hero-stats reveal reveal-d4">
 
-        <div class="hs-item"><span class="hs-num" id="heroMemberCount">—</span><span class="hs-label">Members</span></div>
+        <div class="hs-item"><span class="hs-num" id="heroMemberCount">0</span><span class="hs-label">Members</span></div>
 
         <div class="hs-div"></div>
 
@@ -2935,6 +2935,18 @@
   </div>
 </div>
 
+<!-- Exercise Animation Modal -->
+<div class="modal-overlay" id="exerciseMediaModal" role="dialog" aria-modal="true" aria-labelledby="exMediaTitle">
+  <div class="modal modal-lg ex-modal">
+    <div class="modal-head">
+      <h2 id="exMediaTitle">Exercise</h2>
+      <button type="button" class="modal-close" onclick="closeExerciseMedia()" aria-label="Close exercise details">✕</button>
+    </div>
+    <div class="modal-body" id="exMediaBody"></div>
+    <div class="modal-foot"><button type="button" class="btn-secondary" onclick="closeExerciseMedia()">Close</button></div>
+  </div>
+</div>
+
 <!-- EmailJS for Gmail OTP (Forgot Password) -->
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -2979,7 +2991,14 @@
 
 <script src="vendor/jsQR.min.js?v=21"></script>
 
-<script src="script.js?v=21"></script>
+<script>
+  // Optional: set this when the static site and the Vercel API use different origins.
+  window.WORKOUTX_API_BASE = window.WORKOUTX_API_BASE || '';
+</script>
+
+<script src="workoutx-exercises.js?v=22"></script>
+
+<script src="script.js?v=23"></script>
 
 </body>
 

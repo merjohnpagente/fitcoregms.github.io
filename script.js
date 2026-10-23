@@ -878,24 +878,80 @@ function seedData(){
   getQrSecret();
   localStorage.setItem('gms_seeded','15');
 }
+let _wxMediaMap=null,_wxMediaByName=null,_wxMediaLoading=false,_wxMediaError='';
+function _wxNameKey(name){return String(name==null?'':name).trim().toLowerCase();}
+function mergeWorkoutXExercises(list){
+  if(!Array.isArray(list)||!list.length) return false;
+  const all=ExerciseLibrary.all();
+  const byId=new Map(all.map(e=>[e.id,e]));
+  const byName=new Map(all.map(e=>[_wxNameKey(e.name),e]));
+  let changed=false;
+  list.forEach(raw=>{
+    if(!raw||!raw.apiId||!raw.name) return;
+    const id=raw.id||('wx_'+raw.apiId);
+    const key=_wxNameKey(raw.name);
+    const existing=byId.get(id)||byName.get(key);
+    const record={...raw};
+    // Signed WorkoutX links expire; never persist them in Firestore.
+    delete record.media;
+    record.id=existing?existing.id:id;
+    record.apiId=raw.apiId;
+    record.source='workoutx';
+    if(existing){
+      let did=false;
+      ['apiId','name','muscle','equipment','level','desc','target','bodyPart','instructions','tips','recommendedSets','recommendedReps','model','source'].forEach(field=>{
+        if(record[field]===undefined) return;
+        if(JSON.stringify(existing[field])!==JSON.stringify(record[field])){existing[field]=record[field];did=true;}
+      });
+      if(did) changed=true;
+    }else{
+      all.push(record);
+      byId.set(record.id,record);
+      byName.set(key,record);
+      changed=true;
+    }
+  });
+  if(changed){
+    ExerciseLibrary.save(all);
+    if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.exerciseLibrary, all);
+  }
+  return changed;
+}
 function seedExerciseLibrary(){
-  if(ExerciseLibrary.all().length) return;
-  const defaults=[
-    {id:'ex1',name:'Barbell Squat',muscle:'Legs',equipment:'Barbell',level:'Intermediate',desc:'Compound leg exercise for quads and glutes.'},
-    {id:'ex2',name:'Bench Press',muscle:'Chest',equipment:'Barbell',level:'Intermediate',desc:'Primary chest builder.'},
-    {id:'ex3',name:'Deadlift',muscle:'Back',equipment:'Barbell',level:'Advanced',desc:'Full posterior chain.'},
-    {id:'ex4',name:'Pull-up',muscle:'Back',equipment:'Bodyweight',level:'Intermediate',desc:'Upper body pulling.'},
-    {id:'ex5',name:'Shoulder Press',muscle:'Shoulders',equipment:'Dumbbell',level:'Beginner',desc:'Shoulder strength.'},
-    {id:'ex6',name:'Plank',muscle:'Core',equipment:'Bodyweight',level:'Beginner',desc:'Core stability hold.'},
-    {id:'ex7',name:'Lunges',muscle:'Legs',equipment:'Dumbbell',level:'Beginner',desc:'Unilateral leg work.'},
-    {id:'ex8',name:'Bicep Curl',muscle:'Arms',equipment:'Dumbbell',level:'Beginner',desc:'Arm isolation.'},
-    {id:'ex9',name:'Triceps Dip',muscle:'Arms',equipment:'Bodyweight',level:'Intermediate',desc:'Triceps focus.'},
-    {id:'ex10',name:'Treadmill Run',muscle:'Cardio',equipment:'Machine',level:'Beginner',desc:'Cardiovascular endurance.'},
-    {id:'ex11',name:'Leg Press',muscle:'Legs',equipment:'Machine',level:'Beginner',desc:'Machine leg press.'},
-    {id:'ex12',name:'Lat Pulldown',muscle:'Back',equipment:'Cable',level:'Beginner',desc:'Lat isolation.'}
-  ];
-  ExerciseLibrary.save(defaults);
-  if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.exerciseLibrary, defaults);
+  // Snapshot notifications render while GMSFB._applying is true; a write
+  // in that window only reaches localStorage and is overwritten by the
+  // snapshot. Re-run once the snapshot handler finishes.
+  if(window.GMSFB&&GMSFB._applying){
+    clearTimeout(window._exSeedTimer);
+    window._exSeedTimer=setTimeout(()=>{if(document.getElementById('panelExerciseLibrary'))renderExerciseLibrary();},0);
+    return;
+  }
+  let current=ExerciseLibrary.all();
+  if(!current.length){
+    const defaults=[
+      {id:'ex1',name:'Barbell Squat',muscle:'Legs',equipment:'Barbell',level:'Intermediate',desc:'Compound leg exercise for quads and glutes.'},
+      {id:'ex2',name:'Bench Press',muscle:'Chest',equipment:'Barbell',level:'Intermediate',desc:'Primary chest builder.'},
+      {id:'ex3',name:'Deadlift',muscle:'Back',equipment:'Barbell',level:'Advanced',desc:'Full posterior chain.'},
+      {id:'ex4',name:'Pull-up',muscle:'Back',equipment:'Bodyweight',level:'Intermediate',desc:'Upper body pulling.'},
+      {id:'ex5',name:'Shoulder Press',muscle:'Shoulders',equipment:'Dumbbell',level:'Beginner',desc:'Shoulder strength.'},
+      {id:'ex6',name:'Plank',muscle:'Core',equipment:'Bodyweight',level:'Beginner',desc:'Core stability hold.'},
+      {id:'ex7',name:'Lunges',muscle:'Legs',equipment:'Dumbbell',level:'Beginner',desc:'Unilateral leg work.'},
+      {id:'ex8',name:'Bicep Curl',muscle:'Arms',equipment:'Dumbbell',level:'Beginner',desc:'Arm isolation.'},
+      {id:'ex9',name:'Triceps Dip',muscle:'Arms',equipment:'Bodyweight',level:'Intermediate',desc:'Triceps focus.'},
+      {id:'ex10',name:'Treadmill Run',muscle:'Cardio',equipment:'Machine',level:'Beginner',desc:'Cardiovascular endurance.'},
+      {id:'ex11',name:'Leg Press',muscle:'Legs',equipment:'Machine',level:'Beginner',desc:'Machine leg press.'},
+      {id:'ex12',name:'Lat Pulldown',muscle:'Back',equipment:'Cable',level:'Beginner',desc:'Lat isolation.'}
+    ];
+    ExerciseLibrary.save(defaults);
+    if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.exerciseLibrary, defaults);
+    current=ExerciseLibrary.all();
+  }
+  const wx=window.WORKOUTX_EXERCISES;
+  if(!Array.isArray(wx)||!wx.length) return;
+  const ids=new Set(current.map(e=>e.apiId).filter(Boolean));
+  // Re-check on every render: a late Firestore snapshot can replace the
+  // in-memory library with an older 12-item list.
+  if(wx.some(e=>!ids.has(e.apiId))) mergeWorkoutXExercises(wx);
 }
 
 // ============================= AUTH =============================
@@ -5836,16 +5892,132 @@ function updateGoalProgress(id){
   const val=prompt('Enter current value (target '+g.target+')', g.current||'0'); if(val===null) return;
   const all=Goals.all(); const idx=all.findIndex(x=>x.id===id); if(idx<0) return; all[idx].current=String(val).trim(); Goals.save(all); renderMyGoals(); toast('Progress updated.');
 }
+function _exMediaFor(e){return (e&&e.apiId&&_wxMediaMap&&_wxMediaMap[e.apiId])||(e&&e.name&&_wxMediaByName&&_wxMediaByName[_wxNameKey(e.name)])||null;}
+function _exCardHtml(e){
+  const media=_exMediaFor(e);
+  const hasMedia=!!(media&&media.mp4);
+  const poster=hasMedia&&media.poster?esc(media.poster):'';
+  const mc=_wbMuscleColors[e.muscle]||'m-default';
+  const pending=!!(e.apiId&&_wxMediaLoading&&!_wxMediaMap);
+  const mediaHtml=hasMedia
+    ? `<span class="ex-card-media"><img class="ex-card-poster" src="${poster}" alt="" loading="lazy" decoding="async" width="300" height="360">${media.watermarked?'<span class="ex-card-wm">Preview</span>':''}<span class="ex-card-play" aria-hidden="true"></span></span>`
+    : `<span class="ex-card-media ${pending?'is-loading':'is-no-media'}"><span class="ex-card-noMedia" aria-hidden="true">${pending?'Loading demo':'No demo'}</span></span>`;
+  return `<button type="button" class="ex-card${hasMedia?' is-video':' is-no-media'}" data-ex-id="${esc(e.id)}" aria-haspopup="dialog" aria-label="${esc(e.name)}, ${esc(e.muscle||'Exercise')}, ${hasMedia?'video demonstration':'details only'}">${mediaHtml}<span class="ex-card-body"><span class="ex-card-title">${esc(e.name)}</span><span class="ex-card-tags"><span class="wb-muscle-pill ${mc}">${esc(e.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(e.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(e.level||'Intermediate')}</span></span><span class="ex-card-desc">${esc(e.desc||'')}</span></span></button>`;
+}
+function _exGridHtml(list){
+  if(!list.length) return '<div class="ex-empty"><p>No exercises match.</p></div>';
+  return list.map(_exCardHtml).join('');
+}
+async function loadWorkoutXMedia(force){
+  if(_wxMediaLoading) return;
+  if(_wxMediaMap&&!force) return;
+  _wxMediaLoading=true;
+  _wxMediaError='';
+  const base=String(window.WORKOUTX_API_BASE||'').replace(/\/$/,'');
+  try{
+    if(!base&&/\.github\.io$/i.test(location.hostname)) throw new Error('Set window.WORKOUTX_API_BASE to the Vercel API URL.');
+    const res=await fetch(base+'/api/exercises',{cache:force?'reload':'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    const list=Array.isArray(data.exercises)?data.exercises:[];
+    if(!list.length) throw new Error('No exercises returned.');
+    const map={},byName={};
+    list.forEach(ex=>{
+      if(!ex.media||!ex.media.mp4) return;
+      if(ex.apiId) map[ex.apiId]=ex.media;
+      if(ex.name) byName[_wxNameKey(ex.name)]=ex.media;
+    });
+    _wxMediaMap=map;
+    _wxMediaByName=byName;
+    // Normally the static seed already added the 50. Only use the API
+    // metadata as a fallback when the static file could not load.
+    const hasStatic=Array.isArray(window.WORKOUTX_EXERCISES)&&window.WORKOUTX_EXERCISES.length;
+    if(!hasStatic&&!ExerciseLibrary.all().some(e=>e.apiId)) mergeWorkoutXExercises(list);
+  }catch(e){
+    _wxMediaError=/\.github\.io$/i.test(location.hostname)&&!base
+      ?'Video demos need the Vercel API URL. Set window.WORKOUTX_API_BASE.'
+      :'Video demos are unavailable right now.';
+  }finally{
+    _wxMediaLoading=false;
+    if(document.getElementById('panelExerciseLibrary')) renderExerciseLibrary();
+  }
+}
+function _exSearchTerms(q){return String(q||'').toLowerCase().split(/\s+/).filter(Boolean);}
+function _exMatchesTerms(e,terms){
+  const text=`${e.name||''} ${e.muscle||''} ${e.equipment||''} ${e.level||''} ${e.target||''} ${e.bodyPart||''} ${e.desc||''}`.toLowerCase();
+  return terms.every(t=>text.includes(t));
+}
 function renderExerciseLibrary(){
   const el=document.getElementById('panelExerciseLibrary'); if(!el) return;
   seedExerciseLibrary();
-  const q=(window._exLibQuery||'').toLowerCase();
+  if(!_wxMediaMap&&!_wxMediaLoading&&!_wxMediaError) loadWorkoutXMedia();
+  const terms=_exSearchTerms(window._exLibQuery);
   let list=ExerciseLibrary.all();
-  if(q) list=list.filter(e=> `${e.name} ${e.muscle} ${e.equipment} ${e.level} ${e.desc}`.toLowerCase().includes(q));
-  el.innerHTML=`
-  <div class="table-card"><div class="table-header" style="flex-wrap:wrap;gap:10px"><h3>Exercise Library <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${list.length} exercises</span></h3><input type="text" id="exSearch" placeholder="Search muscle or equipment..." value="${esc(window._exLibQuery||'')}" oninput="window._exLibQuery=this.value; renderExerciseLibrary()" class="search-input" style="min-width:200px;flex:1;max-width:320px"></div>
-    ${list.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:16px 20px">${list.map(e=>`<div style="background:var(--glass-bg);border:var(--glass-border);border-radius:12px;padding:14px 16px"><div style="font-weight:700;color:var(--white);font-size:13px">${esc(e.name)}</div><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(127,250,136,.12);color:var(--green);border:1px solid rgba(127,250,136,.18)">${esc(e.muscle)}</span><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--gray-300)">${esc(e.equipment)}</span><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.18);color:var(--gold)">${esc(e.level)}</span></div><div style="font-size:11px;color:var(--gray-500);margin-top:8px;line-height:1.5">${esc(e.desc)}</div></div>`).join('')}</div>`:`<div class="empty-state" style="padding:40px 20px"><p>No exercises match.</p></div>`}
-  </div>`;
+  if(terms.length) list=list.filter(e=>_exMatchesTerms(e,terms));
+  const animated=_wxMediaMap?list.filter(e=>_exMediaFor(e)).length:0;
+  const countText=`${list.length} exercise${list.length===1?'':'s'}${animated?` · ${animated} animated`:''}`;
+  const notice=_wxMediaError
+    ?`<div class="ex-notice" role="status">${esc(_wxMediaError)} <button type="button" class="ex-notice-retry" data-ex-retry>Retry</button></div>`
+    :(_wxMediaLoading&&!_wxMediaMap?`<div class="ex-notice" role="status">Loading video demos...</div>`:'');
+  let grid=document.getElementById('exGrid');
+  if(!grid){
+    el.innerHTML=`<div class="table-card"><div class="table-header ex-lib-head"><h3>Exercise Library <span id="exCount" class="ex-count" aria-live="polite">${esc(countText)}</span></h3><input type="text" id="exSearch" placeholder="Search name, muscle, or equipment..." value="${esc(window._exLibQuery||'')}" oninput="window._exLibQuery=this.value; clearTimeout(window._exSearchTimer); window._exSearchTimer=setTimeout(renderExerciseLibrary,120)" class="search-input ex-search" aria-label="Search exercises"></div><div id="exNotice">${notice}</div><div id="exGrid" class="ex-grid">${_exGridHtml(list)}</div></div>`;
+    grid=document.getElementById('exGrid');
+  }else{
+    const count=document.getElementById('exCount'); if(count) count.textContent=countText;
+    const noticeEl=document.getElementById('exNotice'); if(noticeEl) noticeEl.innerHTML=notice;
+    grid.innerHTML=_exGridHtml(list);
+  }
+  if(grid) grid.setAttribute('aria-busy',_wxMediaLoading?'true':'false');
+  if(!el._exClickBound){
+    el._exClickBound=true;
+    el.addEventListener('click',function(ev){
+      const retry=ev.target.closest('[data-ex-retry]');
+      if(retry){ev.preventDefault();_wxMediaMap=null;_wxMediaByName=null;_wxMediaError='';loadWorkoutXMedia(true);renderExerciseLibrary();return;}
+      const card=ev.target.closest('.ex-card');
+      if(card){ev.preventDefault();openExerciseMedia(card.dataset.exId);}
+    });
+  }
+}
+let _exReturnFocus=null;
+function openExerciseMedia(id){
+  const ex=ExerciseLibrary.one(id);
+  if(!ex) return;
+  _exReturnFocus=document.activeElement;
+  const media=_exMediaFor(ex);
+  const title=document.getElementById('exMediaTitle');
+  if(title) title.textContent=ex.name||'Exercise';
+  const body=document.getElementById('exMediaBody');
+  if(!body) return;
+  const mc=_wbMuscleColors[ex.muscle]||'m-default';
+  const tags=`<div class="ex-card-tags ex-modal-tags"><span class="wb-muscle-pill ${mc}">${esc(ex.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(ex.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(ex.level||'Intermediate')}</span></div>`;
+  const pending=!!(ex.apiId&&_wxMediaLoading&&!_wxMediaMap);
+  const video=media&&media.mp4
+    ?`<div class="ex-player"><video id="exModalVideo" class="ex-video" src="${esc(media.mp4)}" poster="${media.poster?esc(media.poster):''}" controls playsinline muted loop preload="metadata" aria-label="${esc(ex.name)} demonstration, silent loop"></video></div>`
+    :`<div class="ex-player ex-player-empty"><span>${pending?'Video is still loading. Try again in a moment.':'Demo not available for this exercise.'}</span></div>`;
+  const instructions=Array.isArray(ex.instructions)&&ex.instructions.length
+    ?`<div class="ex-modal-section"><h4>How to do it</h4><ol>${ex.instructions.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></div>`:'';
+  const tips=Array.isArray(ex.tips)&&ex.tips.length
+    ?`<div class="ex-modal-section"><h4>Form tips</h4><ul>${ex.tips.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`:'';
+  const facts=`<div class="ex-modal-facts"><span><b>Muscle</b>${esc(ex.muscle||'-')}</span><span><b>Equipment</b>${esc(ex.equipment||'-')}</span><span><b>Level</b>${esc(ex.level||'-')}</span>${ex.recommendedSets?`<span><b>Sets</b>${esc(ex.recommendedSets)}</span>`:''}${ex.recommendedReps?`<span><b>Reps</b>${esc(ex.recommendedReps)}</span>`:''}</div>`;
+  body.innerHTML=`${video}${tags}<p class="ex-modal-desc">${esc(ex.desc||'')}</p>${facts}${instructions}${tips}`;
+  openModal('exerciseMediaModal');
+  const v=document.getElementById('exModalVideo');
+  if(v){
+    v.addEventListener('error',()=>{
+      const player=v.closest('.ex-player');
+      if(player){player.className='ex-player ex-player-empty';player.textContent='Demo unavailable. Refresh the page to reload the video links.';}
+    },{once:true});
+    if(!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)) v.play().catch(()=>{});
+  }
+  setTimeout(()=>{const btn=document.querySelector('#exerciseMediaModal .modal-close');if(btn)btn.focus({preventScroll:true});},0);
+}
+function closeExerciseMedia(){
+  const v=document.getElementById('exModalVideo');
+  if(v){try{v.pause();v.removeAttribute('src');v.load();}catch(e){}}
+  closeModal('exerciseMediaModal');
+  if(_exReturnFocus&&document.body.contains(_exReturnFocus)){try{_exReturnFocus.focus({preventScroll:true});}catch(e){}}
+  _exReturnFocus=null;
 }
 /* ====== EXERCISE PICKER STATE ====== */
 let _wbSelected=new Set(),_wbSearch='',_wbMuscle='All';
@@ -8068,7 +8240,16 @@ function doCheckout(){
 // CLOSE MODAL ON BACKDROP CLICK
 // ======================================================================
 document.querySelectorAll('.modal-overlay').forEach(el=>{
-  el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');});
+  el.addEventListener('click',e=>{
+    if(e.target!==el) return;
+    if(el.id==='exerciseMediaModal') closeExerciseMedia();
+    else el.classList.remove('open');
+  });
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  const modal=document.getElementById('exerciseMediaModal');
+  if(modal&&modal.classList.contains('open')) closeExerciseMedia();
 });
 
 // ======================================================================
