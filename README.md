@@ -9,6 +9,10 @@ The Exercise Library ships with 50 WorkoutX exercises in `workoutx-exercises.js`
 - To refresh the local metadata file: copy `.env.example` to `.env`, set the key, then run `node --env-file=.env scripts/sync-workoutx.cjs`.
 - If the static site and the Vercel function are on different origins, set `window.WORKOUTX_API_BASE` in `index.html` before `script.js` (for example, your Vercel project URL).
 
+## Starter exercise demos
+
+The 12 built-in starter exercises have no match in the WorkoutX 50. Their local animated demos live in `assets/exercise-demos/` and are sourced from the `hasaneyldrm/exercises-dataset` project (media © Gym visual, https://gymvisual.com/). They are included for this project's demo; review Gym Visual's media terms before commercial redistribution.
+
 ## Data storage and Activity Log
 
 - All business collections are stored in Firestore. `localStorage` is only a cache/offline fallback; failed cloud writes are retried when the device reconnects or a user signs in.

@@ -5898,17 +5898,38 @@ function updateGoalProgress(id){
   const val=prompt('Enter current value (target '+g.target+')', g.current||'0'); if(val===null) return;
   const all=Goals.all(); const idx=all.findIndex(x=>x.id===id); if(idx<0) return; all[idx].current=String(val).trim(); Goals.save(all); renderMyGoals(); toast('Progress updated.');
 }
-function _exMediaFor(e){return (e&&e.apiId&&_wxMediaMap&&_wxMediaMap[e.apiId])||(e&&e.name&&_wxMediaByName&&_wxMediaByName[_wxNameKey(e.name)])||null;}
+const _exDefaultDemos={
+  'barbell squat':{gif:'assets/exercise-demos/barbell-squat.gif',credit:'© Gym visual'},
+  'bench press':{gif:'assets/exercise-demos/bench-press.gif',credit:'© Gym visual'},
+  'deadlift':{gif:'assets/exercise-demos/deadlift.gif',credit:'© Gym visual'},
+  'pull-up':{gif:'assets/exercise-demos/pull-up.gif',credit:'© Gym visual'},
+  'shoulder press':{gif:'assets/exercise-demos/shoulder-press.gif',credit:'© Gym visual'},
+  'plank':{gif:'assets/exercise-demos/plank.gif',credit:'© Gym visual'},
+  'lunges':{gif:'assets/exercise-demos/lunges.gif',credit:'© Gym visual'},
+  'bicep curl':{gif:'assets/exercise-demos/bicep-curl.gif',credit:'© Gym visual'},
+  'triceps dip':{gif:'assets/exercise-demos/triceps-dip.gif',credit:'© Gym visual'},
+  'treadmill run':{gif:'assets/exercise-demos/treadmill-run.gif',credit:'© Gym visual'},
+  'leg press':{gif:'assets/exercise-demos/leg-press.gif',credit:'© Gym visual'},
+  'lat pulldown':{gif:'assets/exercise-demos/lat-pulldown.gif',credit:'© Gym visual'}
+};
+function _exMediaFor(e){
+  if(!e) return null;
+  if(e.apiId&&_wxMediaMap&&_wxMediaMap[e.apiId]) return _wxMediaMap[e.apiId];
+  const key=_wxNameKey(e.name);
+  if(key&&_exDefaultDemos[key]) return _exDefaultDemos[key];
+  return (e.name&&_wxMediaByName&&_wxMediaByName[key])||null;
+}
 function _exCardHtml(e){
   const media=_exMediaFor(e);
-  const hasMedia=!!(media&&media.mp4);
-  const poster=hasMedia&&media.poster?esc(media.poster):'';
+  const hasMedia=!!(media&&(media.mp4||media.gif));
+  const isGif=!!(media&&media.gif&&!media.mp4);
+  const poster=hasMedia?esc(media.poster||media.gif):'';
   const mc=_wbMuscleColors[e.muscle]||'m-default';
   const pending=!!(e.apiId&&_wxMediaLoading&&!_wxMediaMap);
   const mediaHtml=hasMedia
-    ? `<span class="ex-card-media"><img class="ex-card-poster" src="${poster}" alt="" loading="lazy" decoding="async" width="300" height="360">${media.watermarked?'<span class="ex-card-wm">Preview</span>':''}<span class="ex-card-play" aria-hidden="true"></span></span>`
+    ? `<span class="ex-card-media${isGif?' is-gif':''}"><img class="ex-card-poster" src="${poster}" alt="" loading="lazy" decoding="async" width="300" height="360">${isGif?'<span class="ex-card-wm">Animated</span>':(media.watermarked?'<span class="ex-card-wm">Preview</span>':'')}${isGif?'':`<span class="ex-card-play" aria-hidden="true"></span>`}</span>`
     : `<span class="ex-card-media ${pending?'is-loading':'is-no-media'}"><span class="ex-card-noMedia" aria-hidden="true">${pending?'Loading demo':'No demo'}</span></span>`;
-  return `<button type="button" class="ex-card${hasMedia?' is-video':' is-no-media'}" data-ex-id="${esc(e.id)}" aria-haspopup="dialog" aria-label="${esc(e.name)}, ${esc(e.muscle||'Exercise')}, ${hasMedia?'video demonstration':'details only'}">${mediaHtml}<span class="ex-card-body"><span class="ex-card-title">${esc(e.name)}</span><span class="ex-card-tags"><span class="wb-muscle-pill ${mc}">${esc(e.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(e.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(e.level||'Intermediate')}</span></span><span class="ex-card-desc">${esc(e.desc||'')}</span></span></button>`;
+  return `<button type="button" class="ex-card${hasMedia?' is-video':' is-no-media'}" data-ex-id="${esc(e.id)}" aria-haspopup="dialog" aria-label="${esc(e.name)}, ${esc(e.muscle||'Exercise')}, ${hasMedia?(isGif?'animated demonstration':'video demonstration'):'details only'}">${mediaHtml}<span class="ex-card-body"><span class="ex-card-title">${esc(e.name)}</span><span class="ex-card-tags"><span class="wb-muscle-pill ${mc}">${esc(e.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(e.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(e.level||'Intermediate')}</span></span><span class="ex-card-desc">${esc(e.desc||'')}</span></span></button>`;
 }
 function _exGridHtml(list){
   if(!list.length) return '<div class="ex-empty"><p>No exercises match.</p></div>';
@@ -5960,7 +5981,7 @@ function renderExerciseLibrary(){
   const terms=_exSearchTerms(window._exLibQuery);
   let list=ExerciseLibrary.all();
   if(terms.length) list=list.filter(e=>_exMatchesTerms(e,terms));
-  const animated=_wxMediaMap?list.filter(e=>_exMediaFor(e)).length:0;
+  const animated=list.filter(e=>_exMediaFor(e)).length;
   const countText=`${list.length} exercise${list.length===1?'':'s'}${animated?` · ${animated} animated`:''}`;
   const notice=_wxMediaError
     ?`<div class="ex-notice" role="status">${esc(_wxMediaError)} <button type="button" class="ex-notice-retry" data-ex-retry>Retry</button></div>`
@@ -5998,10 +6019,18 @@ function openExerciseMedia(id){
   const mc=_wbMuscleColors[ex.muscle]||'m-default';
   const tags=`<div class="ex-card-tags ex-modal-tags"><span class="wb-muscle-pill ${mc}">${esc(ex.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(ex.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(ex.level||'Intermediate')}</span></div>`;
   const pending=!!(ex.apiId&&_wxMediaLoading&&!_wxMediaMap);
-  const video=media&&media.mp4
+  const isVideo=!!(media&&media.mp4);
+  const isGif=!!(media&&media.gif&&!isVideo);
+  const video=isVideo
     ?`<div class="ex-player" id="exPlayer"><video id="exModalVideo" class="ex-video" src="${esc(media.mp4)}" playsinline muted loop autoplay preload="auto" aria-label="${esc(ex.name)} demonstration, silent loop"></video><div class="ex-player-loading" id="exPlayerLoading"><span class="ex-spinner"></span><span>Loading demo</span></div><button type="button" class="ex-player-start" id="exPlayerStart" hidden aria-label="Play ${esc(ex.name)} demonstration">${iconSvg('play',22)}<span>Play demo</span></button></div>`
-    :`<div class="ex-player ex-player-empty"><span>${pending?'Video is still loading. Try again in a moment.':'Demo not available for this exercise.'}</span></div>`;
-  const caption=media&&media.mp4?`<div class="ex-player-caption" id="exPlayerCaption"><span class="ex-loop-dot" aria-hidden="true"></span>Silent demo · loops continuously</div>`:'';
+    :isGif
+      ?`<div class="ex-player ex-player-gif" id="exPlayer"><img id="exModalGif" class="ex-video ex-gif" src="${esc(media.gif)}" alt="${esc(ex.name)} animated demonstration" width="180" height="180" decoding="async"></div>`
+      :`<div class="ex-player ex-player-empty"><span>${pending?'Video is still loading. Try again in a moment.':'Demo not available for this exercise.'}</span></div>`;
+  const caption=isVideo
+    ?`<div class="ex-player-caption" id="exPlayerCaption"><span class="ex-loop-dot" aria-hidden="true"></span>Silent demo · loops continuously</div>`
+    :isGif
+      ?`<div class="ex-player-caption" id="exPlayerCaption"><span class="ex-loop-dot" aria-hidden="true"></span>Animated demo · ${esc(media.credit||'loops continuously')}</div>`
+      :'';
   const instructions=Array.isArray(ex.instructions)&&ex.instructions.length
     ?`<div class="ex-modal-section"><h4>How to do it</h4><ol>${ex.instructions.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></div>`:'';
   const tips=Array.isArray(ex.tips)&&ex.tips.length
@@ -6035,6 +6064,8 @@ function openExerciseMedia(id){
 function closeExerciseMedia(){
   const wrap=document.getElementById('exPlayer');
   if(wrap)wrap.dataset.looping='0';
+  const g=document.getElementById('exModalGif');
+  if(g)g.removeAttribute('src');
   const v=document.getElementById('exModalVideo');
   if(v){try{v.pause();v.removeAttribute('src');v.load();}catch(e){}}
   closeModal('exerciseMediaModal');
