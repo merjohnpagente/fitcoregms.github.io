@@ -47,7 +47,7 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 #loginPage::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:
   radial-gradient(600px 600px at 15% 15%, rgba(127,250,136,.16) 0%, transparent 60%),
   radial-gradient(500px 500px at 85% 85%, rgba(127,250,136,.1) 0%, transparent 60%)}
-.login-wrap{width:100%;max-width:420px;padding:20px;position:relative;z-index:1;margin:auto}
+.login-wrap{width:100%;max-width:440px;padding:20px;position:relative;z-index:1;margin:auto}
 .login-card-compact{padding:32px 28px}
 .ms-step-head{text-align:center;margin-bottom:22px}
 .ms-step-icon{font-size:26px;margin-bottom:8px;line-height:1}
@@ -76,10 +76,13 @@ input,select,textarea,button{font-family:inherit;font-size:inherit}
 .login-footer-muted a:hover{color:var(--gray-300)}
 .ms-note{margin-top:14px;font-size:11px;color:var(--gray-500);text-align:center;line-height:1.7}
 @media(max-width:520px){
-  .login-card-compact{padding:24px 18px}
   .country-drop{width:100%;min-width:0;left:0}
 }
 .login-card{width:100%;min-width:0;background:var(--glass-bg);border:var(--glass-border);border-radius:22px;padding:40px;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04),inset 0 1px 0 rgba(255,255,255,.08)}
+.login-card.login-card-compact{padding:32px 28px}
+@media(max-width:520px){
+  .login-card.login-card-compact{padding:24px 18px;border-radius:20px}
+}
 .role-card:hover{border-color:rgba(127,250,136,.55)}
 .role-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 auto 20px;max-width:340px}
 .login-logo{text-align:center;margin-bottom:28px}
@@ -108,17 +111,24 @@ input[type="password"]::-ms-clear{display:none}
 #memberSignup input::placeholder, #memberSignup textarea::placeholder, #registerForm input::placeholder, #registerForm textarea::placeholder{color:var(--white);opacity:.52}
 #memberSignup .form-group, #registerForm .form-group{margin-bottom:16px}
 #memberSignup .form-row, #registerForm .form-row{gap:12px;margin-bottom:4px}
+.addr-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.addr-grid .form-group,
+#memberSignup .addr-grid .form-group,
+#registerForm .addr-grid .form-group{margin-bottom:0}
+.addr-grid .form-group label,
+#memberSignup .addr-grid .form-group label,
+#registerForm .addr-grid .form-group label{min-height:0;margin-bottom:6px}
+.addr-grid select{width:100%}
+.addr-grid select:disabled{opacity:.6;cursor:not-allowed}
 #memberSignup .ms-step-head, #registerForm .ms-step-head{margin-bottom:16px;padding-top:4px}
 #memberSignup .ms-step-icon, #registerForm .ms-step-icon{margin-bottom:6px}
-#memberSignup .age-policy-notice{border:1.5px solid rgba(251,191,36,.32) !important;background:rgba(251,191,36,.08) !important;border-radius:10px !important;padding:10px 12px !important}
-#memberSignup .age-policy-notice a{color:var(--gold) !important;text-decoration:underline !important;text-underline-offset:3px !important;font-weight:700 !important}
-#memberSignup .age-policy-notice a:hover{color:#fff !important;text-decoration-thickness:1.5px !important}
+
 input[type=date]#msDob, input[type=date]#mf_dob, input[type=date]#regDob{padding-right:36px}
 input[type=date]::-webkit-calendar-picker-indicator{margin-right:4px;opacity:.85}
 .phone-wrap{height:48px !important;border-radius:12px}
 .phone-wrap .phone-flag-btn, .phone-wrap #phoneFlagBtn, .phone-wrap #msPhoneFlagBtn{height:48px !important;min-width:96px;display:flex;align-items:center;justify-content:center}
 .phone-wrap .phone-number-input, .phone-number-input{height:48px !important}
-@media(max-width:520px){#memberSignup .form-row, #registerForm .form-row{grid-template-columns:1fr !important}}
+@media(max-width:520px){#memberSignup .form-row, #registerForm .form-row, .addr-grid{grid-template-columns:1fr !important}}
 .pw-toggle:hover{color:var(--white)}
 /* ======= FLOATING LABEL — LOGIN FIELDS ======= */
 .fl-group .input-wrap{position:relative}
@@ -174,18 +184,14 @@ input[type=date]::-webkit-calendar-picker-indicator{margin-right:4px;opacity:.85
 .login-footer a:hover{text-decoration:underline}
 
 /* ======= LOGIN FORM V2 (reference match) ======= */
-.login-card#loginCard{background:linear-gradient(165deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.02) 100%);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:44px 40px 36px;box-shadow:0 28px 90px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04)}
-.login-form-v2 .login-logo{margin-bottom:32px}
-.login-form-v2 .login-logo h1{font-family:'Space Grotesk',sans-serif;font-size:42px;font-weight:900;letter-spacing:5px;text-transform:uppercase;color:var(--white);line-height:1;margin-bottom:0}
+.login-form-v2 .login-logo{margin-bottom:22px}
+.login-form-v2 .login-logo h1{font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:900;letter-spacing:4px;text-transform:uppercase;color:var(--white);line-height:1;margin-bottom:0}
 .login-form-v2 .login-logo h1 span{color:var(--orange)}
-.login-form-v2 .login-logo p{color:var(--gray-500);font-size:10px;font-weight:700;letter-spacing:5px;text-transform:uppercase;margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:14px;position:relative}
-.login-form-v2 .login-logo p::before,.login-form-v2 .login-logo p::after{content:'';position:absolute;top:-1px;height:1px;width:28px;background:rgba(255,255,255,.18)}
-.login-form-v2 .login-logo p::before{left:0}
-.login-form-v2 .login-logo p::after{right:0}
-.lf-group{margin-bottom:18px}
+.login-form-v2 .login-logo p{color:var(--gray-500);font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-top:8px}
+.lf-group{margin-bottom:16px}
 .lf-group .lf-label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.8px;color:var(--gray-300);margin-bottom:8px}
 .lf-group .input-wrap{position:relative}
-.lf-input{width:100%;height:52px;padding:0 16px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:14px;color:var(--white);font-size:14px;outline:none;transition:.2s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.lf-input{width:100%;height:48px;padding:0 16px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:12px;color:var(--white);font-size:14px;outline:none;transition:.2s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .lf-input::placeholder{color:var(--gray-500);opacity:.75}
 .lf-input:hover{border-color:rgba(255,255,255,.22)}
 .lf-input:focus{border-color:var(--orange);background:rgba(255,255,255,.09);box-shadow:0 0 0 3px rgba(127,250,136,.16)}
@@ -203,12 +209,12 @@ input[type=date]::-webkit-calendar-picker-indicator{margin-right:4px;opacity:.85
 #registerForm .form-group input,
 #registerForm .form-group select,
 #registerForm .form-group textarea{
-  width:100%;height:52px;padding:0 16px;background:rgba(255,255,255,.06);
-  border:1.5px solid rgba(255,255,255,.12);border-radius:14px;color:var(--white);
+  width:100%;height:48px;padding:0 16px;background:rgba(255,255,255,.06);
+  border:1.5px solid rgba(255,255,255,.12);border-radius:12px;color:var(--white);
   font-size:14px;outline:none;transition:.2s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   font-family:inherit;
 }
-#registerForm .form-group textarea{height:auto;min-height:84px;padding:14px 16px;resize:vertical}
+#registerForm .form-group textarea{height:auto;min-height:84px;padding:14px 16px;border-radius:12px;resize:vertical}
 #registerForm .form-group input::placeholder,
 #registerForm .form-group textarea::placeholder{color:var(--gray-500);opacity:.75}
 #registerForm .form-group input:hover,
@@ -243,17 +249,17 @@ input[type=date]::-webkit-calendar-picker-indicator{margin-right:4px;opacity:.85
 #registerForm .role-card svg{color:var(--white)}
 #registerForm .error-msg,#registerForm .success-msg{font-size:13px;border-radius:10px;padding:10px 14px;margin-bottom:14px}
 #registerForm select{appearance:auto}
-#registerForm .phone-wrap{position:relative;height:52px !important;border-radius:14px}
+#registerForm .phone-wrap{position:relative;height:48px !important;border-radius:12px}
 #registerForm .phone-wrap .phone-flag-btn,
-#registerForm .phone-wrap #phoneFlagBtn{height:52px !important;min-width:96px;border-radius:14px 0 0 14px}
-#registerForm .phone-number-input{height:52px !important;padding-left:104px !important;border-radius:0 14px 14px 0 !important}
+#registerForm .phone-wrap #phoneFlagBtn{height:48px !important;min-width:96px;border-radius:12px 0 0 12px}
+#registerForm .phone-number-input{height:48px !important;padding-left:104px !important;border-radius:0 12px 12px 0 !important}
 #registerForm .pw-strength-bar{height:4px;border-radius:4px}
 #registerForm .pw-toggle{right:14px;color:var(--white)}
 #registerForm .pw-toggle:hover{color:var(--green)}
 #registerForm .input-wrap{position:relative}
 #registerForm .input-wrap input{padding-right:48px}
 #registerForm .form-group input:not(.phone-number-input):not([type=checkbox]):not([type=radio]),
-#registerForm .form-group select{height:52px;border-radius:14px}
+#registerForm .form-group select{height:48px;border-radius:12px}
 #registerForm .step-bar{display:flex;align-items:center;gap:6px;margin-bottom:20px}
 #registerForm .step-bar .on{width:28px;height:4px;border-radius:2px;background:var(--green)}
 #registerForm .step-bar .off{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1)}
@@ -261,17 +267,16 @@ input[type=date]::-webkit-calendar-picker-indicator{margin-right:4px;opacity:.85
   #registerForm .login-logo h1{font-size:28px;letter-spacing:3px}
   #registerForm .role-grid{grid-template-columns:1fr}
 }
-.lf-submit{margin-top:8px;height:54px;border-radius:14px;font-size:14px;letter-spacing:2.5px;font-weight:900;background:linear-gradient(135deg,#7ffa88 0%,#4ade80 100%);color:#0a0a0a;box-shadow:0 0 28px rgba(127,250,136,.45),0 8px 24px rgba(0,0,0,.35)}
+.lf-submit{margin-top:8px;height:50px;border-radius:12px;font-size:13px;letter-spacing:2px;font-weight:900;background:linear-gradient(135deg,#7ffa88 0%,#4ade80 100%);color:#0a0a0a;box-shadow:0 0 28px rgba(127,250,136,.45),0 8px 24px rgba(0,0,0,.35)}
 .lf-submit:hover{background:linear-gradient(135deg,#a4fcab 0%,#4ade80 100%);transform:translateY(-1px);box-shadow:0 0 36px rgba(127,250,136,.6),0 12px 30px rgba(0,0,0,.4)}
 .lf-submit:active{transform:translateY(0)}
 .lf-forgot{text-align:right;margin:12px 0 4px}
 .lf-forgot a{font-size:13px;color:var(--orange);cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-weight:600}
 .lf-forgot a:hover{color:var(--orange-dark)}
-.login-form-v2 .login-footer{margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07)}
+.login-form-v2 .login-footer{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
 .login-form-v2 .login-footer a{font-weight:700;text-decoration:underline;text-underline-offset:3px}
 @media(max-width:520px){
-  .login-card#loginCard{padding:32px 22px 28px;border-radius:20px}
-  .login-form-v2 .login-logo h1{font-size:34px;letter-spacing:3px}
+  .login-form-v2 .login-logo h1{font-size:28px;letter-spacing:3px}
 }
 /* Password strength */
 .pw-strength{margin-top:6px;display:flex;gap:4px}
@@ -1667,3 +1672,40 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
   .ex-loop-dot{animation:none}
   .ex-player-loading,.ex-player-start{transition:none}
 }
+/* ======= MINIMAL REGISTER ======= */
+#memberSignup .login-card{box-shadow:0 18px 50px rgba(0,0,0,.38);border:1px solid rgba(255,255,255,.08);padding:28px 24px}
+#memberSignup .ms-step-progress,#registerForm .ms-step-progress{margin-bottom:14px;padding:0}
+#memberSignup .ms-step-num,#registerForm .ms-step-num{width:22px;height:22px;font-size:10px;border-width:1.5px;box-shadow:none}
+#memberSignup .ms-step-num.active,#registerForm .ms-step-num.active{box-shadow:none}
+#memberSignup .ms-step-line,#registerForm .ms-step-line{height:1px;margin:0 3px}
+#memberSignup .ms-step-icon,#registerForm .ms-step-icon{display:none}
+#memberSignup .ms-step-head,#registerForm .ms-step-head{margin-bottom:16px;padding-top:0}
+#memberSignup .ms-step-head h1{font-size:20px;font-weight:800;letter-spacing:1.5px}
+#memberSignup .ms-step-head p{font-size:11px;margin-top:3px}
+#registerForm .login-logo{margin-bottom:18px}
+#registerForm .login-logo h1{font-size:24px;letter-spacing:2px}
+#registerForm .login-logo p{font-size:10px;margin-top:6px;padding-top:6px;border-top:0}
+#memberSignup .form-group,#registerForm .form-group{margin-bottom:12px}
+#memberSignup .form-group label,#registerForm .form-group label{font-size:10px;font-weight:600;letter-spacing:.7px;color:var(--gray-500);min-height:0;display:block;line-height:1.3;margin-bottom:5px}
+#memberSignup .form-group input:not(.country-search),#memberSignup .form-group select,#memberSignup .form-group textarea,
+#registerForm .form-group input:not(.country-search),#registerForm .form-group select,#registerForm .form-group textarea{height:48px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);font-size:13px;backdrop-filter:none;-webkit-backdrop-filter:none}
+#memberSignup .form-group input:not(.country-search):focus,#memberSignup .form-group select:focus,#memberSignup .form-group textarea:focus,
+#registerForm .form-group input:not(.country-search):focus,#registerForm .form-group select:focus,#registerForm .form-group textarea:focus{border-color:rgba(127,250,136,.55);background:rgba(255,255,255,.05);box-shadow:0 0 0 2px rgba(127,250,136,.1)}
+#memberSignup .form-row,#registerForm .form-row{gap:10px;margin-bottom:0}
+#memberSignup .addr-grid,#registerForm .addr-grid{gap:10px;margin-bottom:12px}
+#memberSignup .ms-plan-opts{gap:8px;margin-bottom:14px}
+#memberSignup .ms-plan-opt{padding:11px 12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.03)}
+#memberSignup .ms-plan-opt:hover{border-color:rgba(255,255,255,.2)}
+#memberSignup .ms-plan-opt.selected{border-color:rgba(127,250,136,.5);background:rgba(127,250,136,.06);box-shadow:none}
+#memberSignup .ms-plan-opt-name,#memberSignup .ms-plan-opt-price{font-size:14px}
+#memberSignup .ms-plan-opt-feats{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)}
+#memberSignup .ms-plan-opt-feat{padding:0;background:none;border:0}
+#memberSignup .age-policy-notice,#registerForm .age-policy-notice{border:0 !important;background:transparent !important;border-radius:0 !important;padding:0 !important;margin:0 0 12px !important;font-size:10px !important;color:var(--gray-500) !important;line-height:1.5 !important}
+#memberSignup .age-policy-notice a,#registerForm .age-policy-notice a{color:var(--gray-400) !important;text-decoration:underline !important;text-underline-offset:2px !important;font-weight:600 !important}
+#memberSignup .ms-guardian{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px}
+#memberSignup .ms-guardian-title{color:var(--gray-300);font-size:11px;font-weight:600}
+#memberSignup .btn-cta,#memberSignup .btn-primary,#registerForm .btn-primary{height:46px;padding:0 16px;border-radius:10px;font-size:12px;letter-spacing:1.2px;box-shadow:none}
+#memberSignup .btn-cta:hover,#memberSignup .btn-primary:hover,#registerForm .btn-primary:hover{transform:none;box-shadow:none}
+#memberSignup .login-footer-muted{margin-top:10px}
+#memberSignup .login-footer-muted a{font-size:11px;font-weight:500}
+@media(max-width:520px){#memberSignup .login-card{padding:22px 16px}#memberSignup .ms-step-head h1,#registerForm .login-logo h1{font-size:18px;letter-spacing:1px}}

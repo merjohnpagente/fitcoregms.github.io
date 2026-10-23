@@ -18,7 +18,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="style.css?v=26">
+<link rel="stylesheet" href="style.css?v=28">
 
 </head>
 
@@ -638,7 +638,7 @@
 
     <div class="login-wrap">
 
-      <div class="login-card" id="loginCard">
+      <div class="login-card login-card-compact" id="loginCard">
 
         <!-- LOGIN FORM -->
 
@@ -781,8 +781,8 @@
             <div class="form-group"><label>Last Name *</label><input type="text" id="regLastName" placeholder="Last name"></div>
           </div>
           <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-group"><label>Middle Name (optional)</label><input type="text" id="regMiddleName" placeholder="Middle name"></div>
-            <div class="form-group"><label>Suffix (optional, e.g. Jr/Sr/III)</label><input type="text" id="regSuffix" placeholder="Jr, Sr, III"></div>
+            <div class="form-group"><label>Middle Name</label><input type="text" id="regMiddleName" placeholder="Middle name"></div>
+            <div class="form-group"><label>Suffix</label><input type="text" id="regSuffix" placeholder="Jr, Sr, III"></div>
           </div>
 
           <div class="form-group">
@@ -817,9 +817,14 @@
 
             </div>
 
-            <div class="form-group"><label>Address *</label><textarea id="regAddress" placeholder="House No., Street, Barangay, City" rows="2" style="resize:vertical;min-height:56px"></textarea></div>
+            <div class="addr-grid">
+              <div class="form-group"><label for="regProvince">Province *</label><select id="regProvince" autocomplete="address-level1" onchange="loadPhCities('reg',this.value)" onfocus="retryPhProvinces(this)" required><option value="">Select Province</option></select></div>
+              <div class="form-group"><label for="regCity">City *</label><select id="regCity" autocomplete="address-level2" onchange="loadPhBarangays('reg',this.value)" required disabled><option value="">Select City</option></select></div>
+              <div class="form-group"><label for="regBarangay">Barangay *</label><select id="regBarangay" autocomplete="address-level3" required disabled><option value="">Select Barangay</option></select></div>
+              <div class="form-group"><label for="regStreet">Street *</label><input type="text" id="regStreet" autocomplete="address-line1" required></div>
+            </div>
 
-            <div class="form-group"><label>Email * <span style="color:var(--gray-500);font-weight:400">(for login & password reset)</span></label><input type="email" id="regEmail" placeholder="e.g. juan@gmail.com"></div>
+            <div class="form-group"><label for="regEmail">Email * <span style="color:var(--gray-500);font-weight:400">(for login & password reset)</span></label><input type="email" id="regEmail" autocomplete="email" inputmode="email" required></div>
 
            <div class="form-group">
 
@@ -1136,8 +1141,8 @@
             <div class="form-group"><label>Last Name *</label><input type="text" id="lastName" placeholder="Last name"></div>
           </div>
           <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="form-group"><label>Middle Name (optional)</label><input type="text" id="middleName" placeholder="Middle name"></div>
-            <div class="form-group"><label>Suffix (optional, e.g. Jr/Sr/III)</label><input type="text" id="suffix" placeholder="Jr, Sr, III"></div>
+            <div class="form-group"><label>Middle Name</label><input type="text" id="middleName" placeholder="Middle name"></div>
+            <div class="form-group"><label>Suffix</label><input type="text" id="suffix" placeholder="Jr, Sr, III"></div>
           </div>
 
            <div class="form-group"><label>Contact Number *</label>
@@ -1170,7 +1175,7 @@
 
             </div>
 
-            <div class="form-group"><label>Email <span style="color:var(--gray-500);font-weight:400">(optional)</span></label><input type="email" id="msEmail" placeholder="e.g. juan@gmail.com"></div>
+            <div class="form-group"><label for="msEmail">Email *</label><input type="email" id="msEmail" placeholder="e.g. juan@gmail.com" autocomplete="email" inputmode="email" required></div>
 
             <div class="form-row cols-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
@@ -1180,9 +1185,14 @@
 
             </div>
 
-            <div class="form-group"><label>Address *</label><textarea id="msAddress" placeholder="House No., Street, Barangay, City" rows="2" style="resize:vertical;min-height:56px"></textarea></div>
+            <div class="addr-grid">
+              <div class="form-group"><label for="msProvince">Province *</label><select id="msProvince" autocomplete="address-level1" onchange="loadPhCities('ms',this.value)" onfocus="retryPhProvinces(this)" required><option value="">Select Province</option></select></div>
+              <div class="form-group"><label for="msCity">City *</label><select id="msCity" autocomplete="address-level2" onchange="loadPhBarangays('ms',this.value)" required disabled><option value="">Select City</option></select></div>
+              <div class="form-group"><label for="msBarangay">Barangay *</label><select id="msBarangay" autocomplete="address-level3" required disabled><option value="">Select Barangay</option></select></div>
+              <div class="form-group"><label for="msStreet">Street *</label><input type="text" id="msStreet" autocomplete="address-line1" required></div>
+            </div>
 
-            <div class="age-policy-notice" style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.18);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--gray-300);line-height:1.5;margin-bottom:6px">Age Policy: <strong style="color:var(--white)">Under 13 not allowed</strong> • 13–15 with guardian + waiver • 16–17 with consent • 18+ full access. <a onclick="showLandingSection('explore',null);setTimeout(()=>document.querySelector('.explore-extra')&&document.querySelector('.explore-extra').scrollIntoView({behavior:'smooth'}),120)" style="color:var(--gold);cursor:pointer;text-decoration:underline">View details</a></div>
+            <div class="age-policy-notice">Under 13 not allowed. 13–17 require guardian consent. <a onclick="showLandingSection('explore',null);setTimeout(()=>document.querySelector('.explore-extra')&&document.querySelector('.explore-extra').scrollIntoView({behavior:'smooth'}),120)">View details</a></div>
 
             <!-- Guardian consent (shown for ages 13-17) -->
             <div id="msGuardianSection" class="ms-guardian">
@@ -2996,7 +3006,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=27"></script>
+<script src="script.js?v=29"></script>
 
 </body>
 

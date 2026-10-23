@@ -522,7 +522,7 @@ class AuthService{
     const status='pending';
     const {password,...rest}=payload;
     // Sanitize free-text fields at write time (defense in depth against stored XSS)
-    ['name','firstName','middleName','lastName','suffix','address','contact','username','coachName','bio'].forEach(k=>{if(typeof rest[k]==='string')rest[k]=sanitizeText(rest[k]);});
+    ['name','firstName','middleName','lastName','suffix','address','province','city','barangay','street','contact','username','coachName','bio'].forEach(k=>{if(typeof rest[k]==='string')rest[k]=sanitizeText(rest[k]);});
     const user={id:uid(),role,status,createdAt:today(),...rest};
     // ---------- CLOUD-ONLY REGISTRATION ----------
     // The profile doc is written straight to Firestore through the secondary
@@ -1711,8 +1711,124 @@ async function confirmForgotPassword(){
 }
 
 
+const PH_ADDR_API='https://psgc.gitlab.io/api/';
+const _phAddrCache={};
+const _phReq={ms:{city:0,brgy:0},reg:{city:0,brgy:0}};
+let _phProvincesPromise=null;
+function phAddrFetch(path){
+  if(_phAddrCache[path])return Promise.resolve(_phAddrCache[path]);
+  const ctl=typeof AbortController==='function'?new AbortController():null;
+  const timer=ctl?setTimeout(()=>ctl.abort(),15000):null;
+  return fetch(PH_ADDR_API+path,ctl?{signal:ctl.signal}:undefined).then(r=>{
+    if(!r.ok)throw new Error('Address data '+r.status);
+    return r.json();
+  }).then(data=>{
+    if(!Array.isArray(data))throw new Error('Invalid address data');
+    _phAddrCache[path]=data;
+    return data;
+  }).finally(()=>{if(timer)clearTimeout(timer);});
+}
+function phAddrReset(sel,label){
+  if(!sel)return;
+  sel.textContent='';
+  const o=document.createElement('option');o.value='';o.textContent=label;sel.appendChild(o);
+  sel.value='';
+}
+function phAddrFill(sel,items,label){
+  if(!sel)return;
+  const current=sel.value;
+  phAddrReset(sel,label);
+  items.forEach(item=>{
+    const name=String(item.name||'').trim();
+    if(!item.code||!name)return;
+    const o=document.createElement('option');o.value=item.code;o.textContent=name;sel.appendChild(o);
+  });
+  sel.value=current&&items.some(i=>i.code===current)?current:'';
+  sel.disabled=false;
+}
+function phAddrError(sel,label){
+  if(!sel)return;
+  phAddrReset(sel,label);
+  sel.disabled=false;
+}
+async function loadPhProvinces(){
+  if(_phProvincesPromise)return _phProvincesPromise;
+  _phProvincesPromise=(async()=>{
+    const list=await phAddrFetch('provinces/');
+    const provinces=[{code:'130000000',name:'Metro Manila'}].concat(list)
+      .map(p=>({code:p.code,name:String(p.name||'').trim()}))
+      .filter(p=>p.code&&p.name)
+      .sort((a,b)=>a.name.localeCompare(b.name));
+    ['ms','reg'].forEach(prefix=>phAddrFill(document.getElementById(prefix+'Province'),provinces,'Select Province'));
+    return provinces;
+  })().catch(err=>{_phProvincesPromise=null;throw err;});
+  return _phProvincesPromise;
+}
+function retryPhProvinces(sel){
+  if(sel&&sel.options.length<=1)loadPhProvinces().catch(()=>{});
+}
+async function loadPhCities(prefix,provinceCode){
+  const city=document.getElementById(prefix+'City');
+  const brgy=document.getElementById(prefix+'Barangay');
+  const req=++_phReq[prefix].city;
+  ++_phReq[prefix].brgy;
+  if(brgy){phAddrReset(brgy,'Select Barangay');brgy.disabled=true;}
+  if(!city)return;
+  if(!provinceCode){phAddrReset(city,'Select City');city.disabled=true;return;}
+  city.disabled=true;phAddrReset(city,'Loading cities…');
+  try{
+    const path=provinceCode==='130000000'
+      ?'regions/130000000/cities-municipalities/'
+      :'provinces/'+encodeURIComponent(provinceCode)+'/cities-municipalities/';
+    const cities=await phAddrFetch(path);
+    if(req!==_phReq[prefix].city)return;
+    const items=cities.map(c=>({code:c.code,name:String(c.name||'').trim()})).filter(c=>c.code&&c.name).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!items.length){phAddrError(city,'No cities found — reselect province');return;}
+    phAddrFill(city,items,'Select City');
+  }catch(e){
+    if(req===_phReq[prefix].city)phAddrError(city,'Unable to load cities — reselect province');
+  }
+}
+async function loadPhBarangays(prefix,cityCode){
+  const sel=document.getElementById(prefix+'Barangay');
+  if(!sel)return;
+  const req=++_phReq[prefix].brgy;
+  if(!cityCode){phAddrReset(sel,'Select Barangay');sel.disabled=true;return;}
+  sel.disabled=true;phAddrReset(sel,'Loading barangays…');
+  try{
+    const data=await phAddrFetch('cities-municipalities/'+encodeURIComponent(cityCode)+'/barangays/');
+    if(req!==_phReq[prefix].brgy)return;
+    const items=data.map(b=>({code:b.code,name:String(b.name||'').trim()})).filter(b=>b.code&&b.name).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!items.length){phAddrError(sel,'No barangays found — reselect city');return;}
+    phAddrFill(sel,items,'Select Barangay');
+  }catch(e){
+    if(req===_phReq[prefix].brgy)phAddrError(sel,'Unable to load barangays — reselect city');
+  }
+}
+function resetPhAddress(prefix){
+  ++_phReq[prefix].city;++_phReq[prefix].brgy;
+  const p=document.getElementById(prefix+'Province');
+  const c=document.getElementById(prefix+'City');
+  const b=document.getElementById(prefix+'Barangay');
+  if(p)p.value='';
+  if(c){phAddrReset(c,'Select City');c.disabled=true;}
+  if(b){phAddrReset(b,'Select Barangay');b.disabled=true;}
+}
+function getAddressParts(prefix){
+  const v=id=>{
+    const el=document.getElementById(prefix+id);
+    if(!el)return '';
+    if(el.tagName==='SELECT'){
+      const opt=el.options[el.selectedIndex];
+      return opt&&opt.value?String(opt.textContent||'').trim():'';
+    }
+    return String(el.value||'').trim();
+  };
+  const province=v('Province'),city=v('City'),barangay=v('Barangay'),street=v('Street');
+  return {province,city,barangay,street,complete:!!(province&&city&&barangay&&street),full:[street,barangay,city,province].filter(Boolean).join(', ')};
+}
 function resetRegisterForm(){
-  ['regName','regFirstName','regMiddleName','regLastName','regSuffix','regAddress','regContact','regUser','regPass','regPass2','regCoachName','regBio'].forEach(function(id){const el=document.getElementById(id);if(el)el.value='';});
+  ['regName','regFirstName','regMiddleName','regLastName','regSuffix','regProvince','regCity','regBarangay','regStreet','regContact','regUser','regPass','regPass2','regCoachName','regBio'].forEach(function(id){const el=document.getElementById(id);if(el)el.value='';});
   const roleEl=document.getElementById('regRole');if(roleEl)roleEl.value='';
   // Reset role cards
   ['roleCardStaff','roleCardTrainer','roleCardMember'].forEach(function(id){const c=document.getElementById(id);if(c){c.classList.remove('selected');c.style.borderColor='rgba(255,255,255,.12)';c.style.background='rgba(255,255,255,.05)';c.style.boxShadow='none';}});
@@ -1726,6 +1842,7 @@ function resetRegisterForm(){
   ['regError','regError2','regError3','regSuccess','regSuccess3'].forEach(function(id){const el=document.getElementById(id);if(el)el.style.display='none';});
   const rd=document.getElementById('regDone');if(rd)rd.style.display='none';
   const rdm=document.getElementById('regDoneMsg');if(rdm){rdm.textContent='';rdm.style.display='none';}
+  resetPhAddress('reg');
 }
 function selectRegRole(role){
   document.getElementById('regRole').value=role;
@@ -1777,6 +1894,8 @@ function regStep2Next(){
   const err=document.getElementById('regError2');
   err.style.display='none';
   if(!firstName||!lastName){err.textContent='Please fill in First Name and Last Name.';err.style.display='block';return;}
+  const regAddr=getAddressParts('reg');
+  if(!regAddr.complete){err.textContent='Please fill in your complete address (Province, City, Barangay, Street).';err.style.display='block';return;}
   const regEmail=(document.getElementById('regEmail')?document.getElementById('regEmail').value.trim():'');
   if(!regEmail||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail)){err.textContent='Please enter a valid email address.';err.style.display='block';return;}
   if(!contact||!user||!pass||!pass2){err.textContent='Please fill in all required fields.';err.style.display='block';return;}
@@ -1901,12 +2020,12 @@ function msStep2Next(){
   const middleName=(document.getElementById('middleName')?document.getElementById('middleName').value.trim():'');
   const lastName=(document.getElementById('lastName')?document.getElementById('lastName').value.trim():'');
   const suffix=(document.getElementById('suffix')?document.getElementById('suffix').value.trim():'');
-  const address=(document.getElementById('msAddress')?document.getElementById('msAddress').value.trim():'');
+  const msAddr=getAddressParts('ms');
   const legacyNameEl=document.getElementById('msName');
   let name='';
   if(firstName||lastName){ name=(sanitizeText(firstName)+(middleName?' '+sanitizeText(middleName):'')+' '+sanitizeText(lastName)+(suffix?' '+sanitizeText(suffix):'')).replace(/\s+/g,' ').trim(); } else if(legacyNameEl){ name=legacyNameEl.value.trim(); }
   if(!firstName||!lastName){const e=document.getElementById('msStep2Error'); if(e){e.textContent='Please fill in First Name and Last Name.';e.style.display='block';} return;}
-  if(!address){const e=document.getElementById('msStep2Error'); if(e){e.textContent='Please fill in your Address.';e.style.display='block';} return;}
+  if(!msAddr.complete){const e=document.getElementById('msStep2Error'); if(e){e.textContent='Please fill in your complete address (Province, City, Barangay, Street).';e.style.display='block';} return;}
   const contact=document.getElementById('msContact').value.trim();
   const email=document.getElementById('msEmail').value.trim();
   const dob=document.getElementById('msDob')?document.getElementById('msDob').value.trim():'';
@@ -1956,7 +2075,7 @@ function msGoStep2(){
   const e=document.getElementById('msError');if(e)e.style.display='none';
 }
 function resetMemberSignupForm(){
-  ['msName','firstName','middleName','lastName','suffix','msAddress','msUsername','msContact','msEmail','msPass','msPass2','msDob','msGuardianName'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['msName','firstName','middleName','lastName','suffix','msProvince','msCity','msBarangay','msStreet','msUsername','msContact','msEmail','msPass','msPass2','msDob','msGuardianName'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const msSex=document.getElementById('msSex'); if(msSex) msSex.value='';
   const hint=document.getElementById('msAgeHint'); if(hint){hint.textContent=''; hint.style.display='none';}
   const gs=document.getElementById('msGuardianSection');if(gs)gs.classList.remove('show');
@@ -1975,6 +2094,7 @@ function resetMemberSignupForm(){
   const se2=document.getElementById('msStep2Error');if(se2)se2.style.display='none';
   const msuc=document.getElementById('msSuccess');if(msuc)msuc.style.display='none';
   const merr=document.getElementById('msError');if(merr)merr.style.display='none';
+  resetPhAddress('ms');
 }
 function updateMsStrength(val){
   const bars=[document.getElementById('mps1'),document.getElementById('mps2'),document.getElementById('mps3')];
@@ -2003,16 +2123,17 @@ function msStep3Next(){
   submitMemberSignup();
 }
 function msValidateCredentials(err){
+  const fail=msg=>{if(err){err.textContent=msg;err.style.display='block';}return null;};
   const firstName=(document.getElementById('firstName')?document.getElementById('firstName').value.trim():'');
   const middleName=(document.getElementById('middleName')?document.getElementById('middleName').value.trim():'');
   const lastName=(document.getElementById('lastName')?document.getElementById('lastName').value.trim():'');
   const suffix=(document.getElementById('suffix')?document.getElementById('suffix').value.trim():'');
-  const address=(document.getElementById('msAddress')?document.getElementById('msAddress').value.trim():'');
+  const msAddr=getAddressParts('ms'); const address=msAddr.full;
   const legacyNameEl=document.getElementById('msName');
   let name='';
   if(firstName||lastName){ name=(sanitizeText(firstName)+(middleName?' '+sanitizeText(middleName):'')+' '+sanitizeText(lastName)+(suffix?' '+sanitizeText(suffix):'')).replace(/\s+/g,' ').trim(); } else if(legacyNameEl){ name=legacyNameEl.value.trim(); }
   if(!firstName||!lastName) return fail('Please fill in First Name and Last Name.');
-  if(!address) return fail('Please fill in your Address.');
+  if(!msAddr.complete) return fail('Please fill in your complete address (Province, City, Barangay, Street).');
   const uname=document.getElementById('msUsername').value.trim();
   const contact=document.getElementById('msContact').value.trim();
   const email=document.getElementById('msEmail').value.trim();
@@ -2021,7 +2142,6 @@ function msValidateCredentials(err){
   const pass=document.getElementById('msPass').value;
   const pass2=document.getElementById('msPass2').value;
   const msDial=(document.getElementById('msPhoneDialCode')?document.getElementById('msPhoneDialCode').textContent.trim():'+63');
-  const fail=msg=>{if(err){err.textContent=msg;err.style.display='block';}return null;};
   if(!uname||!contact||!email||!dob||!pass||!pass2)return fail('Please fill in all required fields (including Address and Date of Birth).');
   const ageM=calcAge(dob);
   const polM=dobPolicy(ageM);
@@ -2044,7 +2164,7 @@ function msValidateCredentials(err){
   if((window._msPwScore||0)<2)return fail('Password is too weak. Please add uppercase, numbers, or special characters.');
   const normContact=normalizeContact(contact,msDial);
   if(Members.all().find(m=>m.contact===normContact))return fail('Phone number already registered. Please log in instead or use another number.');
-  return{name,uname,contact:normContact,email,pass,dob,sex,age:ageM,address,firstName,middleName,lastName,suffix};
+  return{name,uname,contact:normContact,email,pass,dob,sex,age:ageM,address,province:msAddr.province,city:msAddr.city,barangay:msAddr.barangay,street:msAddr.street,firstName,middleName,lastName,suffix};
 }
 async function submitMemberSignup(){
   const btn=document.getElementById('msSubmitBtn'); const sp=document.getElementById('msSubmitSpinner'); const tx=document.getElementById('msSubmitText');
@@ -2103,7 +2223,7 @@ async function submitMemberSignup(){
   const gName=(document.getElementById('msGuardianName')?document.getElementById('msGuardianName').value.trim():'');
   const consentWaiver=calcAgeVal>=13&&calcAgeVal<=15?!!(document.getElementById('msConsentWaiver')&&document.getElementById('msConsentWaiver').checked):true;
   const consentWritten=calcAgeVal>=16&&calcAgeVal<=17?!!(document.getElementById('msConsentWritten')&&document.getElementById('msConsentWritten').checked):true;
-  const member={id,name:sanitizeText(v.name),firstName:sanitizeText(v.firstName||''),middleName:sanitizeText(v.middleName||''),lastName:sanitizeText(v.lastName||''),suffix:sanitizeText(v.suffix||''),username:v.uname,contact:v.contact,email:sanitizeText(v.email),dob:dob,age:String(calcAgeVal),sex:sanitizeText(v.sex||''),planId,status:'pending_payment',startDate:'',expiryDate:'',planStart:'',qrToken:'',address:addr,ecName:'',ecNum:'',notes:'',createdAt:today(),createdBy:'Self',createdByUsername:v.uname,createdByRole:'member',bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:'',authEmail,guardianName:sanitizeText(gName||''),consentWaiver:consentWaiver,consentWritten:consentWritten};
+  const member={id,name:sanitizeText(v.name),firstName:sanitizeText(v.firstName||''),middleName:sanitizeText(v.middleName||''),lastName:sanitizeText(v.lastName||''),suffix:sanitizeText(v.suffix||''),username:v.uname,contact:v.contact,email:sanitizeText(v.email),dob:dob,age:String(calcAgeVal),sex:sanitizeText(v.sex||''),planId,status:'pending_payment',startDate:'',expiryDate:'',planStart:'',qrToken:'',address:addr,province:sanitizeText(v.province||''),city:sanitizeText(v.city||''),barangay:sanitizeText(v.barangay||''),street:sanitizeText(v.street||''),ecName:'',ecNum:'',notes:'',createdAt:today(),createdBy:'Self',createdByUsername:v.uname,createdByRole:'member',bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:'',authEmail,guardianName:sanitizeText(gName||''),consentWaiver:consentWaiver,consentWritten:consentWritten};
   const wr=await GMSFB.secSetDoc('members',member);
   if(!wr||!wr.ok){
     GMSFB.secondarySignOut();
@@ -2141,8 +2261,8 @@ async function doRegister(){
     return;
   }
   const fullContact=normalizeContact(contact,dialCode);
-  const addressEl=document.getElementById('regAddress'); const address=addressEl?addressEl.value.trim():'';
-  if(!address){ const errEl=document.getElementById(role==='trainer'?'regError3':'regError2'); if(errEl){errEl.textContent='Please fill in your Address.';errEl.style.display='block';} return; }
+  const regAddr=getAddressParts('reg'); const address=regAddr.full;
+  if(!regAddr.complete){ const errEl=document.getElementById(role==='trainer'?'regError3':'regError2'); if(errEl){errEl.textContent='Please fill in your complete address (Province, City, Barangay, Street).';errEl.style.display='block';} return; }
   if(role==='admin'){return;}
   let trainerData={};
   if(role==='trainer'){
@@ -2159,7 +2279,7 @@ async function doRegister(){
     if(days.length===0||!from||!to){err3.textContent='Please fill in your availability (days and hours).';err3.style.display='block';return;}
     trainerData={coachName,specializations:specs,availableDays:days,availableFrom:from,availableTo:to,bio};
   }
-  const result=await Auth.register(role,{name,firstName,middleName,lastName,suffix,address:sanitizeText(address),contact:fullContact,username:user,email:(document.getElementById('regEmail')?document.getElementById('regEmail').value.trim():''),password:pass,...trainerData});
+  const result=await Auth.register(role,{name,firstName,middleName,lastName,suffix,address:sanitizeText(address),province:regAddr.province,city:regAddr.city,barangay:regAddr.barangay,street:regAddr.street,contact:fullContact,username:user,email:(document.getElementById('regEmail')?document.getElementById('regEmail').value.trim():''),password:pass,...trainerData});
   if(!result.ok){
     const errId=role==='trainer'?'regError3':'regError2';
     const errEl=document.getElementById(errId);
@@ -8526,3 +8646,16 @@ selectCountry=function(flag,name,code){
   });
   iconObserver.observe(document.body,{childList:true,subtree:true});
 })();
+loadPhProvinces().catch(function(){
+  ['ms','reg'].forEach(function(prefix){
+    const sel=document.getElementById(prefix+'Province');
+    if(sel)phAddrError(sel,'Unable to load provinces — tap to retry');
+  });
+});
+
+loadPhProvinces().catch(function(){
+  ['ms','reg'].forEach(function(prefix){
+    const s=document.getElementById(prefix+'Province');
+    if(s)phAddrError(s,'Unable to load provinces — tap to retry');
+  });
+});
