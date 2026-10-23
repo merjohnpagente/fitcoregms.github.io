@@ -23,18 +23,20 @@ const DB={
     try{const v=JSON.parse(localStorage.getItem(k));return(v&&typeof v==='object'&&!Array.isArray(v))?v:{};}catch{return{};}
   },
   set:(k,v)=>{
-    // Cloud path: update _lastCloud in-memory + push to Firestore
-    if(window.GMSFB&&GMSFB.enabled&&GMSFB.ready&&!GMSFB._applying){
+    // Keep a local crash/offline backup; Firestore stays the source of truth.
+    try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+    const mapped=!!(window.GMSFB&&GMSFB.enabled&&GMSFB._colmap&&GMSFB._colmap[k]);
+    if(mapped&&GMSFB.ready&&!GMSFB._applying){
       // IMPORTANT: Only update _lastCloud[k] (storageKey), NOT _lastCloud[col].
       // pushCollection compares next vs _lastCloud[col] to find diffs.
       // If we update _lastCloud[col] here, pushCollection sees 0 diffs = nothing pushed!
       // pushCollection updates _lastCloud[col] after the batch commits.
       GMSFB._lastCloud[k]={};
       (Array.isArray(v)?v:[]).forEach(function(item){if(item&&item.id)GMSFB._lastCloud[k][item.id]=item;});
-      GMSFB.pushCollection(k,v);
-    }else{
-      // Offline fallback: keep in localStorage until next online sync
-      try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+      try{GMSFB.pushCollection(k,v);}catch(e){try{GMSFB.queuePush(k,v);}catch(_){}}
+    }else if(mapped&&typeof GMSFB.queuePush==='function'){
+      // Cloud not ready, or a snapshot is being applied: retry this write.
+      try{GMSFB.queuePush(k,v);}catch(e){}
     }
   },
   getOne:(k,id)=>{
@@ -123,6 +125,29 @@ function resolveNotifsForMember(memberId){
 }
 function openPendingNotifs(){return Notifications.all().filter(n=>n.type==='pending_payment'&&n.status==='open');}
 const ActivityLog=new Repository(KEY.activityLog);
+// Internal audit trail only. Member-originated entries are private and are
+// filtered from every view, then pruned from this device and Firestore.
+function _isMemberActivity(e){
+  if(!e)return false;
+  if(String(e.byRole||'').toLowerCase()==='member')return true;
+  // Legacy entries written before byRole was always stored.
+  if(e.category==='Member Profile')return true;
+  if(e.category==='Member'&&(e.action==='Signup'||e.action==='Message'))return true;
+  if(e.category==='Workout Plan'&&/Member self-/.test(e.extra||''))return true;
+  return false;
+}
+function pruneMemberActivity(){
+  if(!currentUser||currentUser.role==='member')return;
+  try{
+    const all=ActivityLog.all()||[];
+    const removed=all.filter(_isMemberActivity);
+    if(!removed.length)return;
+    ActivityLog.save(all.filter(e=>!_isMemberActivity(e)));
+    if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.deleteDocs==='function'){
+      GMSFB.deleteDocs(KEY.activityLog,removed.map(e=>e.id).filter(Boolean)).catch(()=>{});
+    }
+  }catch(e){console.warn('[activity] prune failed',e);}
+}
 const LoginAttempts=new AttemptTracker(KEY.loginAttempts);
 const Settings=new Repository(KEY.settings);
 function getWalkinFee(){return Number((Settings.one('walkin')||{}).fee)||100;}
@@ -523,9 +548,9 @@ class AuthService{
     }
     user.authEmail=authEmail;
     const wr=await GMSFB.secSetDoc('users',user);
-    // Activity entry (same as member signup) so admins see the pending
-    // registration in Reports even before approving it.
-    if(wr&&wr.ok){
+    // Staff/trainer signup entry so admins see pending registrations in the
+    // internal audit trail before approving them. Member signups are excluded.
+    if(wr&&wr.ok&&role!=='member'){
       const act={id:'ACT'+Date.now(),action:'Signup',category:role==='trainer'?'Trainer':'Staff',detail:rest.name||payload.username,extra:'ID: '+user.id+' | Awaiting admin approval',by:rest.name||payload.username,byUsername:payload.username,byRole:role,at:new Date().toISOString()};
       await GMSFB.secSetDoc('activitylog',act);
     }
@@ -2028,10 +2053,11 @@ async function submitMemberSignup(){
   const v=msValidateCredentials(err);
   if(!v){ restoreBtn(); return; }
   // ---------- CLOUD-ONLY REGISTRATION ----------
-  // The member doc, the pending-payment notification and the activity entry
-  // are written straight to Firestore through the secondary app's
-  // authenticated context. Nothing is stored in localStorage here — the live
-  // snapshot delivers the new member to every device, including this one.
+  // The member doc and pending-payment notification are written straight to
+  // Firestore through the secondary app's authenticated context. Nothing is
+  // stored in localStorage here — the live snapshot delivers the new member
+  // to every device, including this one. Member activity is intentionally
+  // kept out of the internal activity log (member privacy).
   if(!(window.GMSFB&&GMSFB.enabled)){
     err.textContent='Registration requires an internet connection. Please connect to the internet and try again.';err.style.display='block'; restoreBtn(); return;
   }
@@ -2079,8 +2105,6 @@ async function submitMemberSignup(){
   }
   const notif={id:'NTF-'+uid(),memberId:member.id,planId:member.planId||'',type:'pending_payment',status:'open',createdAt:member.createdAt||today()};
   await GMSFB.secSetDoc('notifications',notif);
-  const act={id:'ACT'+Date.now(),action:'Signup',category:'Member',detail:v.name,extra:'ID: '+id+' | Plan: '+(plan?plan.name:'')+' | Awaiting front-desk payment',by:v.name,byUsername:v.uname,byRole:'member',at:new Date().toISOString()};
-  await GMSFB.secSetDoc('activitylog',act);
   GMSFB.secondarySignOut();
   restoreBtn();
   _memberSignupPlanId=null;
@@ -2427,6 +2451,8 @@ function loadApp(){
   renderTopbar();
   scanRenewals();
   seedExerciseLibrary();
+  try{if(currentUser&&currentUser.role!=='member')pruneMemberActivity();}catch(e){}
+  try{if(window.GMSFB&&typeof GMSFB.flushPending==='function')GMSFB.flushPending();}catch(e){}
   updatePendingBadge();
   updateSchedPendingBadge();
   updateQueueBadge();
@@ -2480,7 +2506,7 @@ function buildSidebar(){
     {id:'announcements',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg>`,label:'Announcements',roles:['admin']},
     {id:'plans',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,label:'Membership Plans',roles:['admin','staff']},
     {id:'reports',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,label:'Reports',roles:['admin']},
-    {id:'activityLog',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,label:'Activity Log',roles:['admin']},
+    {id:'activityLog',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,label:'Activity Log',roles:['admin','staff','trainer']},
     {id:'users',group:'Administration',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,label:'User Management',roles:['admin'],badge:'pendingBadge'}
   ];
   const visible=items.filter(i=>i.roles.includes(u.role));
@@ -2529,7 +2555,7 @@ function startClock(){
   _clockInterval=setInterval(tick,1000);
 }
 let _lastPanel=null;
-const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
+const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff','trainer'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
 function navigate(panel){
   // ── ACTIVATION GATE: block pending/archived members on every navigation ──
   // This is the route guard that prevents bypassing the pendingGate via
@@ -3949,7 +3975,6 @@ function saveMemberProfileEdit(){
   let bg=document.getElementById('mep_bg').value;
   function finalizeSave(a,b){
     Members.update(m.id,{avatar:a||'',bg:b||''});
-    logActivity('Updated','Member Profile',m.name+' updated profile photo');
     closeModal('memberProfileEditModal');
     refreshMemberHome();
     toast('Profile photo saved.');
@@ -5396,7 +5421,6 @@ function sendMessage(){
   if(!text)return;
   const mem=Members.one(_msgThreadId);
   Messages.add({id:'MSG'+uid(),memberId:_msgThreadId,memberName:mem?mem.name:'Member',text,time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),date:today(),ts:Date.now(),direction:_msgStaffMode?'out':'in',read:_msgStaffMode});
-  if(!_msgStaffMode)logActivity('Message','Member',mem?mem.name:'Member',text);
   input.value='';
   renderMsgThread();updateMessageBadge();
   if(_msgStaffMode&&document.getElementById('panelMessages'))renderMessages();
@@ -5483,7 +5507,6 @@ function sendMyMessage(){
   const mid=currentUser.memberId||currentUser.id;
   const mem=Members.one(mid);
   Messages.add({id:'MSG'+uid(),memberId:mid,memberName:mem?mem.name:'Member',text,time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),date:today(),ts:Date.now(),direction:'in',read:false});
-  logActivity('Message','Member',mem?mem.name:'Member',text);
   if(input)input.value='';
   renderMyMessages();
   toast('Message sent.');
@@ -5723,7 +5746,6 @@ function saveMemberPlan(){
     WorkoutPlans.add({id:'WP'+uid(),trainerId:null,trainerName:'Self',memberId:mid,name,exercises,createdAt:today(),createdBy:'member',createdByName:currentUser.name});
     toast('Your plan has been created.','success');
   }
-  logActivity('Added','Workout Plan',name,'Member self-created plan — '+selected.length+' exercise(s)');
   _mpFormOpen=false;_mpEditId=null;_mpSelected=new Set();_mpSets='3';_mpReps='10';_mpName='';renderMyWorkoutPlan();
 }
 function editMemberPlan(id){
@@ -5741,7 +5763,6 @@ function deleteMemberPlan(id){
   if(p.createdBy!=='member'&&!(p.trainerId==null&&p.trainerName==='Self')){toast('Only your self-created plans can be deleted.','error');return;}
   openConfirm('Delete Plan','Remove your self-created plan "'+esc(p.name)+'"? This cannot be undone.',()=>{
     WorkoutPlans.remove(id);
-    logActivity('Deleted','Workout Plan',p.name||'Plan','Member self-deleted plan');
     toast('Plan deleted.');
     renderMyWorkoutPlan();
   },'Delete','btn-danger');
@@ -7285,17 +7306,16 @@ function deletePlan(id){
 // ======================================================================
 let reportType='revenue';
 function renderActivityLog(){
-  // Admin-only dedicated Activity Log panel - auto shows without needing Generate
+  // Internal audit trail for admin/staff/trainer. Member activity is private.
   const el=document.getElementById('panelActivityLog');
   if(!el) return;
-  // Ensure reports panel also reflects activity if needed, but this is dedicated
-  // Show filters collapsed but auto-render
-  el.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div><h2 style="font-size:18px;font-weight:800;color:var(--white);margin:0">Activity Log</h2><p style="font-size:12px;color:var(--gray-500);margin:4px 0 0">All activity automatically - no Generate needed. Use Reports for filtered views.</p></div><button class="btn-secondary btn-sm" onclick="renderActivityLog()">Refresh</button></div><div id="activityLogOutput"></div>`;
-  // Reuse generateReport logic for activity but auto
-  let log=ActivityLog.all()||[];
+  pruneMemberActivity();
+  const cloudOk=!!(window.GMSFB&&GMSFB.enabled&&GMSFB.ready&&!(typeof GMSFB.degraded==='function'&&GMSFB.degraded()));
+  el.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div><h2 style="font-size:18px;font-weight:800;color:var(--white);margin:0">Activity Log</h2><p style="font-size:12px;color:var(--gray-500);margin:4px 0 0">Internal team only (admin, staff, trainer). Member activity is private and excluded.</p></div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${cloudOk?'var(--green)':'var(--gold)'};border:1px solid ${cloudOk?'rgba(127,250,136,.28)':'rgba(251,191,36,.3)'};background:${cloudOk?'rgba(127,250,136,.08)':'rgba(251,191,36,.08)'};border-radius:999px;padding:5px 9px">${cloudOk?'Cloud synced':'Sync issue'}</span><button class="btn-secondary btn-sm" onclick="renderActivityLog()">Refresh</button></div></div><div id="activityLogOutput"></div>`;
+  let log=(ActivityLog.all()||[]).filter(e=>!_isMemberActivity(e));
   log=log.slice().sort((a,b)=> new Date(b.at) - new Date(a.at));
   const output=document.getElementById('activityLogOutput');
-  if(!log.length){output.innerHTML=`<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><p>No activity recorded yet.</p></div>`;return;}
+  if(!log.length){output.innerHTML=`<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><p>No internal activity recorded yet.</p><p style="font-size:12px;color:var(--gray-500);margin-top:6px">Member actions are private and never appear here.</p></div>`;return;}
   const actionColor={'Added':'#7ffa88','Edited':'#fbbf24','Deleted':'#ef4444','Status Changed':'#b3bcb5'};
   const actionBg={'Added':'rgba(127,250,136,.12)','Edited':'rgba(251,191,36,.12)','Deleted':'rgba(239,68,68,.12)','Status Changed':'rgba(96,165,250,.12)'};
   const roleColorMap={admin:'var(--orange)',staff:'#d7ddd8',trainer:'var(--green)'};
@@ -7327,8 +7347,8 @@ function printActivityLog(){
   doc.close(); setTimeout(()=>frame.contentWindow.print(),300);
 }
 function exportActivityLogCSV(){
-  let log=ActivityLog.all()||[];
-  if(!log.length){toast('No activity to export.','error');return;}
+  let log=(ActivityLog.all()||[]).filter(e=>!_isMemberActivity(e));
+  if(!log.length){toast('No internal activity to export.','error');return;}
   const csv='Action,Category,Detail,Extra,Done By,Role,Date\n' + log.map(e=> `${e.action},${e.category},"${(e.detail||'').replace(/"/g,'""')}","${(e.extra||'').replace(/"/g,'""')}",${e.by},${e.byRole},${e.at}`).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='activity_log_'+today()+'.csv'; a.click(); URL.revokeObjectURL(url);
 }
@@ -7505,7 +7525,8 @@ function generateReport(){
       <div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Trainer</th><th>Time</th><th>Session Type</th><th>Member</th><th>Status</th><th>Created / Edited By</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>`;
   } else if(reportType==='activity'){
-    let log=ActivityLog.all()||[];
+    pruneMemberActivity();
+    let log=(ActivityLog.all()||[]).filter(e=>!_isMemberActivity(e));
     const from2=document.getElementById('rpt_from')?.value||'';
     const to2=document.getElementById('rpt_to')?.value||today();
     if(from2)log=log.filter(e=>e.at>=from2+'T00:00:00.000Z'||e.at>=from2);
@@ -8278,6 +8299,8 @@ function updateHeroMemberCount(){
 // ACTIVITY LOG
 // ======================================================================
 function logActivity(action,category,detail,extra){
+  // Internal audit trail only: never record what a member did.
+  if(currentUser&&currentUser.role==='member')return;
   const log=ActivityLog.all()||[];
   log.unshift({id:'ACT'+Date.now(),action,category,detail,extra:extra||'',
     by:currentUser?currentUser.name:'System',byUsername:currentUser?currentUser.username:'',

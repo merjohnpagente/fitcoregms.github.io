@@ -27,6 +27,7 @@
   var GMSFB={
     enabled:true, ready:false, _applying:false,
     _lastCloud:{}, _listeners:[], _syncErr:{}, _listenersStarted:false, _unsubs:[],
+    _pendingPushes:{}, _flushTimer:null,
     // ---------- bootstrap ----------
     init:function(){
       try{
@@ -42,7 +43,14 @@
         // Re-attach fresh listeners whenever the signed-in identity changes
         // (login, logout, registration flows). A failed listener never
         // recovers by itself, so every auth change gets clean new ones.
-        this.auth.onAuthStateChanged(function(){self.restartListeners();});
+        this.auth.onAuthStateChanged(function(){
+          self.restartListeners();
+          // Flush any write that failed before this user signed in.
+          setTimeout(function(){self.flushPending();},1200);
+        });
+        if(typeof window!=='undefined'&&window.addEventListener){
+          window.addEventListener('online',function(){self.flushPending();});
+        }
         this.startListeners();
       }catch(e){console.error('[GMSFB] init failed',e);this.enabled=false;}
     },
@@ -164,6 +172,10 @@
     pushCollection:function(storageKey,arr){
       if(!this.ready)return Promise.resolve({ok:false,reason:'not-ready'});
       var col=COLMAP[storageKey];if(!col)return Promise.resolve({ok:false,reason:'no-col'});
+      // The audit trail is internal-only: never push a member-authored entry.
+      if(col==='activitylog'&&Array.isArray(arr)){
+        arr=arr.filter(function(v){return !v||String(v.byRole||'').toLowerCase()!=='member';});
+      }
       var last=this._lastCloud[col]||{};
       var next={};var self=this;
       (arr||[]).forEach(function(v){if(v&&v.id)next[v.id]=v;});
@@ -175,16 +187,43 @@
       // REMOVED: delete loop that deleted cloud docs not in local array.
       // This caused members registered on other devices to disappear when
       // the admin performed any save action on a stale local cache.
-      if(!ops)return Promise.resolve({ok:true,ops:0});
+      if(!ops){delete this._pendingPushes[storageKey];return Promise.resolve({ok:true,ops:0});}
       return batch.commit().then(function(){
         // Merge push result into _lastCloud instead of replacing —
         // this preserves cloud-only docs that haven't synced to local yet.
         Object.keys(next).forEach(function(id){self._lastCloud[col][id]=next[id];});
         self._lastCloud[storageKey]=self._lastCloud[col];
+        delete self._pendingPushes[storageKey];
         return {ok:true,ops:ops};
       }).catch(function(e){
         console.warn('[GMSFB] push',col,e&&e.code,e);
+        // Keep the latest snapshot and retry: all business data must reach
+        // Firestore, even after a transient network or auth failure.
+        self.queuePush(storageKey,arr);
         return {ok:false,error:e&&e.code};
+      });
+    },
+    // Latest unsynced snapshot per collection. Retried on reconnect/login.
+    queuePush:function(storageKey,arr){
+      if(!COLMAP[storageKey])return;
+      if(COLMAP[storageKey]==='activitylog'&&Array.isArray(arr)){
+        arr=arr.filter(function(v){return !v||String(v.byRole||'').toLowerCase()!=='member';});
+      }
+      this._pendingPushes[storageKey]=arr;
+      if(this._flushTimer)return;
+      var self=this;
+      this._flushTimer=setTimeout(function(){self._flushTimer=null;self.flushPending();},5000);
+    },
+    flushPending:function(){
+      if(!this.ready||!this.auth||!this.auth.currentUser)return;
+      if(typeof navigator!=='undefined'&&navigator.onLine===false)return;
+      var self=this;
+      Object.keys(this._pendingPushes).forEach(function(key){
+        var arr=self._pendingPushes[key];
+        delete self._pendingPushes[key];
+        self.pushCollection(key,arr).then(function(res){
+          if(!res||!res.ok)self.queuePush(key,arr);
+        }).catch(function(){self.queuePush(key,arr);});
       });
     },
     _clean:function(v){

@@ -43,6 +43,16 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // ─── Internal activity log ──────────────────────────────
+    // Member activity is private: never allow a member-authored entry.
+    // Reads are authenticated-only; the app limits the UI to admin/staff/trainer.
+    match /activitylog/{doc} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.resource.data.byRole != 'member';
+      allow delete: if request.auth != null;
+    }
+
     // ─── App collections (auth required) ───────────────────
     // All personal/app collections require authentication.
     // Role-based access control is enforced in app logic
@@ -51,25 +61,25 @@ service cloud.firestore {
       allow read: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts',
+                          'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
       allow create: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts',
+                          'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
       allow update: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts',
+                          'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
       allow delete: if request.auth != null
         && collection in ['users','members','payments','sessions',
                           'attendance','walkins','notifications','messages',
-                          'announcements','activitylog','workouts',
+                          'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
     }
