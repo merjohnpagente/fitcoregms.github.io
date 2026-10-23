@@ -948,6 +948,51 @@ function mergeWorkoutXExercises(list){
   }
   return changed;
 }
+const STARTER_EXERCISES=[
+  {id:'ex1',name:'Barbell Squat',muscle:'Legs',equipment:'Barbell',level:'Intermediate',target:'Quads, Glutes',bodyPart:'Legs',desc:'Compound lower-body lift for quads, glutes, and core strength.',instructions:['Set the bar on your upper back, not your neck. Stand with feet shoulder-width apart and toes slightly out.','Brace your core, keep your chest up, and push your hips back and down.','Lower until your thighs are about parallel to the floor, or as deep as you can control. Keep your knees tracking over your toes.','Drive through your mid-foot to stand tall, squeezing your glutes at the top.'],tips:['Keep your heels planted and your whole foot pressed into the floor.','Do not let your knees cave inward on the way up.','Keep your spine neutral and use a spotter or safety bars for heavy sets.'],recommendedSets:'3-4',recommendedReps:'6-10'},
+  {id:'ex2',name:'Bench Press',muscle:'Chest',equipment:'Barbell',level:'Intermediate',target:'Pectorals, Triceps',bodyPart:'Chest',desc:'Classic barbell press for the chest, front delts, and triceps.',instructions:['Lie on a flat bench with your eyes under the bar and your feet flat on the floor. Pull your shoulder blades together.','Grip the bar slightly wider than shoulder width. Unrack it and hold it over your mid-chest with straight arms.','Lower the bar under control to your mid-chest, keeping your elbows about 45 to 75 degrees from your torso.','Press the bar back up until your arms are straight, without bouncing or locking out harshly.'],tips:['Keep your wrists stacked over your elbows.','Do not bounce the bar off your chest.','Use a spotter or safety pins when lifting heavy.','Keep your hips and feet planted on the bench and floor.'],recommendedSets:'3-4',recommendedReps:'6-10'},
+  {id:'ex3',name:'Deadlift',muscle:'Back',equipment:'Barbell',level:'Advanced',target:'Hamstrings, Glutes, Back',bodyPart:'Back',desc:'Full-body hinge that trains the posterior chain, grip, and core.',instructions:['Stand with the bar over your mid-foot, feet hip-width apart, and the bar close to your shins.','Hinge at the hips and grip the bar just outside your knees. Brace your core, lift your chest, and tighten your lats.','Push the floor away and stand tall, keeping the bar close to your body.','Hinge back down with control and reset your setup before the next rep.'],tips:['Keep your spine neutral; stop if your lower back rounds.','Do not jerk the bar off the floor.','Keep the bar close to your legs throughout the lift.','Use a weight you can control with good form.'],recommendedSets:'3-4',recommendedReps:'4-6'},
+  {id:'ex4',name:'Pull-up',muscle:'Back',equipment:'Bodyweight',level:'Intermediate',target:'Lats, Upper Back',bodyPart:'Back',desc:'Bodyweight vertical pull for the lats, upper back, and grip.',instructions:['Hang from a pull-up bar with an overhand grip slightly wider than your shoulders.','Brace your core and pull your shoulder blades down and back.','Drive your elbows toward your ribs until your chin clears the bar.','Lower yourself slowly to a full hang and repeat.'],tips:['Avoid swinging or kipping unless your workout calls for it.','Do not shrug your shoulders toward your ears.','Use a band or assisted machine if you cannot complete clean reps.','Control the lowering phase.'],recommendedSets:'3',recommendedReps:'5-8'},
+  {id:'ex5',name:'Shoulder Press',muscle:'Shoulders',equipment:'Dumbbell',level:'Beginner',target:'Deltoids, Triceps',bodyPart:'Shoulders',desc:'Overhead dumbbell press for shoulder strength and stability.',instructions:['Sit or stand with a dumbbell in each hand at shoulder height, palms facing forward.','Brace your core and press the dumbbells overhead without arching your lower back.','Extend your arms and keep the weights over your shoulders.','Lower the dumbbells with control back to shoulder height.'],tips:['Keep your ribs down and your core tight.','Do not clang the dumbbells together at the top.','Keep your wrists neutral and elbows under the weights.','Use a lighter weight if you need to arch your back.'],recommendedSets:'3',recommendedReps:'8-12'},
+  {id:'ex6',name:'Plank',muscle:'Core',equipment:'Bodyweight',level:'Beginner',target:'Core',bodyPart:'Core',desc:'Isometric hold for core stability, posture, and breathing control.',instructions:['Place your forearms on the floor under your shoulders and your feet hip-width apart.','Lift your hips until your body forms a straight line from your head to your heels.','Brace your abs and glutes, and breathe steadily.','Hold for the target time, then lower your knees with control.'],tips:['Do not let your hips sag or pike up.','Keep your neck neutral and look at the floor.','Squeeze your glutes to protect your lower back.','Stop if you feel sharp lower-back pain.'],recommendedSets:'2-3',recommendedReps:'20-60 sec'},
+  {id:'ex7',name:'Lunges',muscle:'Legs',equipment:'Dumbbell',level:'Beginner',target:'Quads, Glutes',bodyPart:'Legs',desc:'Single-leg movement for quads, glutes, and balance.',instructions:['Stand tall with a dumbbell in each hand at your sides and your feet hip-width apart.','Step forward and lower until both knees are bent to about 90 degrees.','Keep your front knee over your mid-foot and your torso upright.','Push through your front foot to return, then alternate legs.'],tips:['Take a stride length that feels stable for you.','Do not let your front knee cave inward.','Keep your heels down and your core braced.','Use a wall or chair for balance if needed.'],recommendedSets:'3',recommendedReps:'8-12 per leg'},
+  {id:'ex8',name:'Bicep Curl',muscle:'Arms',equipment:'Dumbbell',level:'Beginner',target:'Biceps',bodyPart:'Arms',desc:'Dumbbell curl for bicep strength and arm size.',instructions:['Stand with a dumbbell in each hand at your sides, palms facing forward.','Keep your elbows close to your torso and curl the weights up.','Squeeze your biceps at the top without swinging your elbows forward.','Lower the weights slowly to full extension.'],tips:['Keep your elbows pinned to your sides.','Do not use momentum or swing your body.','Keep your wrists neutral.','Control the lowering phase for better results.'],recommendedSets:'3',recommendedReps:'10-15'},
+  {id:'ex9',name:'Triceps Dip',muscle:'Arms',equipment:'Bodyweight',level:'Intermediate',target:'Triceps',bodyPart:'Arms',desc:'Bodyweight press for triceps and chest strength.',instructions:['Grip parallel bars or place your hands on a sturdy bench behind you.','Start with your arms straight and your shoulders down.','Bend your elbows to lower your body until your upper arms are about parallel to the floor.','Press back up to straight arms without shrugging.'],tips:['Keep your elbows pointing back, not flared out.','Stop if you feel shoulder pain.','Use a bench or assistance if full dips are too hard.','Lower only as far as you can control.'],recommendedSets:'3',recommendedReps:'8-12'},
+  {id:'ex10',name:'Treadmill Run',muscle:'Cardio',equipment:'Machine',level:'Beginner',target:'Cardiovascular',bodyPart:'Cardio',desc:'Steady treadmill run for heart health and endurance.',instructions:['Start with 3 to 5 minutes of easy walking to warm up.','Increase the speed to a comfortable jog or run.','Keep your posture tall, your shoulders relaxed, and land lightly.','Cool down with 3 to 5 minutes of walking.'],tips:['Use the safety clip and avoid holding the rails.','Increase speed gradually.','Stop if you feel dizzy, short of breath, or sharp pain.','Choose a pace you can maintain for the full session.'],recommendedSets:'1',recommendedReps:'15-30 min'},
+  {id:'ex11',name:'Leg Press',muscle:'Legs',equipment:'Machine',level:'Beginner',target:'Quads, Glutes',bodyPart:'Legs',desc:'Machine press for quads and glutes with back support.',instructions:['Sit with your back and hips against the pads and your feet shoulder-width on the platform.','Release the safeties and lower the platform by bending your knees toward your chest.','Stop before your lower back rounds or your hips lift off the seat.','Press through your mid-foot to extend your legs without locking your knees.'],tips:['Keep your knees tracking over your toes.','Do not let your lower back lift off the pad.','Avoid locking your knees at the top.','Use a controlled tempo on the way down.'],recommendedSets:'3-4',recommendedReps:'8-12'},
+  {id:'ex12',name:'Lat Pulldown',muscle:'Back',equipment:'Cable',level:'Beginner',target:'Lats, Upper Back',bodyPart:'Back',desc:'Cable pull for the lats and upper-back strength.',instructions:['Sit with your thighs under the pads and grip the bar wider than shoulder width.','Brace your core and pull your shoulder blades down.','Pull the bar toward your upper chest, driving your elbows down and back.','Return the bar slowly to a full stretch.'],tips:['Do not pull the bar behind your neck.','Avoid leaning far back or using momentum.','Keep your chest up and your core braced.','Control the weight on the way up.'],recommendedSets:'3',recommendedReps:'8-12'}
+];
+function _starterKey(name){return String(name||'').trim().toLowerCase();}
+function mergeStarterExercises(list){
+  const byId=new Map(list.map(e=>[e.id,e]));
+  const byName=new Map(list.map(e=>[_starterKey(e.name),e]));
+  let changed=false;
+  STARTER_EXERCISES.forEach(src=>{
+    const existing=byId.get(src.id)||byName.get(_starterKey(src.name));
+    if(!existing){
+      list.push({...src});
+      changed=true;
+      return;
+    }
+    // WorkoutX already supplies a full write-up for some matching names; only fill gaps there.
+    const fields=existing.apiId?['instructions','tips','recommendedSets','recommendedReps']:['target','bodyPart','desc','instructions','tips','recommendedSets','recommendedReps'];
+    fields.forEach(f=>{
+      if(src[f]===undefined) return;
+      if(existing.apiId){
+        const missing=existing[f]===undefined||existing[f]===''||(Array.isArray(existing[f])&&!existing[f].length);
+        if(!missing) return;
+      }
+      if(JSON.stringify(existing[f])===JSON.stringify(src[f])) return;
+      existing[f]=Array.isArray(src[f])?src[f].slice():src[f];
+      changed=true;
+    });
+  });
+  if(changed){
+    ExerciseLibrary.save(list);
+    if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.exerciseLibrary, list);
+  }
+  return changed;
+}
 function seedExerciseLibrary(){
   // Snapshot notifications render while GMSFB._applying is true; a write
   // in that window only reaches localStorage and is overwritten by the
@@ -959,22 +1004,11 @@ function seedExerciseLibrary(){
   }
   let current=ExerciseLibrary.all();
   if(!current.length){
-    const defaults=[
-      {id:'ex1',name:'Barbell Squat',muscle:'Legs',equipment:'Barbell',level:'Intermediate',desc:'Compound leg exercise for quads and glutes.'},
-      {id:'ex2',name:'Bench Press',muscle:'Chest',equipment:'Barbell',level:'Intermediate',desc:'Primary chest builder.'},
-      {id:'ex3',name:'Deadlift',muscle:'Back',equipment:'Barbell',level:'Advanced',desc:'Full posterior chain.'},
-      {id:'ex4',name:'Pull-up',muscle:'Back',equipment:'Bodyweight',level:'Intermediate',desc:'Upper body pulling.'},
-      {id:'ex5',name:'Shoulder Press',muscle:'Shoulders',equipment:'Dumbbell',level:'Beginner',desc:'Shoulder strength.'},
-      {id:'ex6',name:'Plank',muscle:'Core',equipment:'Bodyweight',level:'Beginner',desc:'Core stability hold.'},
-      {id:'ex7',name:'Lunges',muscle:'Legs',equipment:'Dumbbell',level:'Beginner',desc:'Unilateral leg work.'},
-      {id:'ex8',name:'Bicep Curl',muscle:'Arms',equipment:'Dumbbell',level:'Beginner',desc:'Arm isolation.'},
-      {id:'ex9',name:'Triceps Dip',muscle:'Arms',equipment:'Bodyweight',level:'Intermediate',desc:'Triceps focus.'},
-      {id:'ex10',name:'Treadmill Run',muscle:'Cardio',equipment:'Machine',level:'Beginner',desc:'Cardiovascular endurance.'},
-      {id:'ex11',name:'Leg Press',muscle:'Legs',equipment:'Machine',level:'Beginner',desc:'Machine leg press.'},
-      {id:'ex12',name:'Lat Pulldown',muscle:'Back',equipment:'Cable',level:'Beginner',desc:'Lat isolation.'}
-    ];
-    ExerciseLibrary.save(defaults);
-    if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.exerciseLibrary, defaults);
+    ExerciseLibrary.save(STARTER_EXERCISES);
+    if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.exerciseLibrary, STARTER_EXERCISES);
+    current=ExerciseLibrary.all();
+  }else{
+    mergeStarterExercises(current);
     current=ExerciseLibrary.all();
   }
   const wx=window.WORKOUTX_EXERCISES;
