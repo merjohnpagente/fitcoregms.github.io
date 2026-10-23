@@ -1559,3 +1559,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 .ms-guardian .form-group:last-child{margin-bottom:0}
 .ms-guardian-check{display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--gray-300);line-height:1.5;cursor:pointer}
 .ms-guardian-check input[type=checkbox]{margin-top:2px;accent-color:var(--green);flex-shrink:0}
+
+/* ===== BUTTON LOADING SPINNER ===== */
+@keyframes fcSpin{to{transform:rotate(360deg)}}
+.btn-spinner{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:fcSpin .65s linear infinite;vertical-align:-2px;margin-right:8px}

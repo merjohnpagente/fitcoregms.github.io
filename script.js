@@ -316,7 +316,8 @@ class AuthService{
       const member=Members.all().find(m=>m.username&&m.username.toLowerCase()===unameLower);
       // also try by email in case member typed email on login form
       const memberByEmail=!member&&unameLower.indexOf('@')>-1 ? Members.all().find(m=>m.email&&m.email.toLowerCase()===unameLower) : null;
-      const effMember=member||memberByEmail;
+      const effMemberRaw=member||memberByEmail;
+      const effMember=effMemberRaw?_withLocalPwOverride(effMemberRaw):null;
       if(effMember){
         if(effMember.status==='Archived')return{ok:false,error:'Your account has been archived. Please contact the front desk.'};
         if(isMemberExpired(effMember))return{ok:false,error:EXPIRED_LOGIN_MSG};
@@ -995,6 +996,49 @@ function clearFpVerified(){
   _fpVerified=null;
   try{ sessionStorage.removeItem('gms_fp_verified'); }catch(e){}
 }
+// ── LOCAL PASSWORD OVERRIDE (admin-reset fallback) ──────────
+// A member who logs in with the admin's temporary password is authenticated
+// by the hash fallback, NOT by Firebase Auth. Firestore rejects that member's
+// writes, so the new password can't reach the cloud. Keep a per-device copy
+// so the member can finish the forced reset and log in again on this device.
+// Cross-device sync still requires a real Auth session or a Cloud Function.
+function _readPwOverrides(){try{const o=JSON.parse(localStorage.getItem('gms_pw_overrides')||'{}');return(o&&typeof o==='object')?o:{};}catch(e){return{};}}
+function _savePwOverride(id,newHash,baseHash){try{const o=_readPwOverrides();o[id]={hash:newHash,base:baseHash||'',at:Date.now()};localStorage.setItem('gms_pw_overrides',JSON.stringify(o));}catch(e){}}
+function _withLocalPwOverride(m){
+  if(!m)return m;
+  try{
+    const o=_readPwOverrides()[m.id];
+    if(o&&o.hash&&(o.base===m.passwordHash||m.passwordHash===o.hash)) return {...m,passwordHash:o.hash,mustChangePassword:false};
+  }catch(e){}
+  return m;
+}
+async function ensureCloudWriteAuth(){
+  try{
+    if(!(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)) return false;
+    if(GMSFB.auth.currentUser) return true;
+    if(typeof GMSFB.auth.signInAnonymously!=='function') return false;
+    await GMSFB.auth.signInAnonymously();
+    return !!GMSFB.auth.currentUser;
+  }catch(e){ return false; }
+}
+function setFpBtnLoading(btn,on,label){
+  if(!btn)return;
+  if(on){
+    if(!btn.dataset.fpIdle)btn.dataset.fpIdle=btn.textContent;
+    btn.disabled=true;
+    btn.style.opacity='0.7';
+    btn.style.cursor='wait';
+    btn.setAttribute('aria-busy','true');
+    btn.innerHTML='<span class="btn-spinner" aria-hidden="true"></span>'+(label||'Please wait…');
+  } else {
+    btn.disabled=false;
+    btn.style.opacity='';
+    btn.style.cursor='';
+    btn.removeAttribute('aria-busy');
+    btn.textContent=btn.dataset.fpIdle||btn.textContent;
+    delete btn.dataset.fpIdle;
+  }
+}
 function showFpStep(n){
   _fpStep=n;
   ['fpStep1','fpStep2','fpStep3'].forEach((id,i)=>{
@@ -1096,13 +1140,15 @@ function openForgotModal(){
   const codeErr=document.getElementById('fp_code_error'); if(codeErr) codeErr.style.display='none';
   const resend=document.getElementById('fp_resend'); if(resend){ resend.style.display='none'; resend.textContent='Resend Code'; }
   const btn=document.getElementById('fp_verify_btn'); if(btn){ btn.textContent='Continue'; btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; }
+  const cb=document.getElementById('fp_confirm_btn'); if(cb) setFpBtnLoading(cb,false);
   const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Submit Code'; }
   const _fp1=document.getElementById('fp_new_pass'); if(_fp1) _fp1.value='';
   const _fp2=document.getElementById('fp_new_pass2'); if(_fp2) _fp2.value='';
   const _fe=document.getElementById('fpsError'); if(_fe) _fe.style.display='none';
   const _fs=document.getElementById('fpsSuccess'); if(_fs) _fs.style.display='none';
   const banner=document.getElementById('fpsBanner'); if(banner) banner.style.display='none';
-  const cancel=document.getElementById('fp_cancel_btn'); if(cancel) cancel.style.display='';
+  const cancel=document.getElementById('fp_cancel_btn');
+  if(cancel){ cancel.style.display=''; cancel.textContent='Cancel'; cancel.onclick=function(){ closeModal('forgotModal'); }; }
   const _lb=document.getElementById('fpsLabel'); if(_lb) _lb.textContent='';
   ['fps1','fps2','fps3'].forEach(id=>{const b=document.getElementById(id); if(b) b.className='pw-strength-bar';});
   _fpCode=null; _fpCodeExp=0; _fpCooldown=0;
@@ -1354,6 +1400,9 @@ async function fpVerifyCode(){
     if(codeErr){codeErr.textContent=msg;codeErr.style.display='block';}
     return;
   }
+  const verifyBtn=document.getElementById('fp_verify_btn');
+  setFpBtnLoading(verifyBtn,true,'Verifying…');
+  await new Promise(r=>setTimeout(r,350));
   const pending=window._fpPendingTarget || {};
   let username=pending.username || '';
   let targetId=pending.targetId;
@@ -1368,6 +1417,7 @@ async function fpVerifyCode(){
   const _lbl=document.getElementById('fpsLabel'); if(_lbl) _lbl.textContent='';
   ['fps1','fps2','fps3'].forEach(id=>{const b=document.getElementById(id); if(b) b.className='pw-strength-bar';});
   showFpStep(3);
+  setFpBtnLoading(verifyBtn,false);
   toast('Code verified — now set your new password.','success');
   _fpCode=null; _fpCodeExp=0;
   if(_fpCodeTimer){clearInterval(_fpCodeTimer); _fpCodeTimer=null;}
@@ -1396,6 +1446,8 @@ async function confirmForgotPassword(){
   }
   if(!verified){if(err){err.textContent='Verification expired. Please verify again.';err.style.display='block';}return;}
   if(Date.now()>verified.expiresAt){clearFpVerified(); if(err){err.textContent='Verification expired. Please verify again.';err.style.display='block';}return;}
+  const confirmBtn=document.getElementById('fp_confirm_btn');
+  setFpBtnLoading(confirmBtn,true,'Saving…');
   const username=verified.username;
   const targetId=verified.targetId;
   const targetType=verified.targetType;
@@ -1437,8 +1489,14 @@ async function confirmForgotPassword(){
       }
     }catch(e){}
   }
-  if(!target){if(err){err.textContent='Account not found. Please try again.';err.style.display='block';}return;}
+  if(!target){ setFpBtnLoading(confirmBtn,false); if(err){err.textContent='Account not found. Please try again.';err.style.display='block';}return;}
+  // Members who logged in with the admin temp password have no Firebase Auth
+  // session, so Firestore rejects their writes. Try anonymous auth so the new
+  // password can still reach the cloud; the local override below covers
+  // devices where anonymous auth is disabled.
+  await ensureCloudWriteAuth();
   const newHash=hashPassword(pass);
+  let oldMemberHash='';
   let ok=false;
   try{
     if(targetType==='user'){
@@ -1471,6 +1529,7 @@ async function confirmForgotPassword(){
       if(idx<0&&sun) idx=members.findIndex(m=>m.username&&String(m.username).toLowerCase()===sun);
       if(idx<0&&sessMid) idx=members.findIndex(m=>m.id===sessMid);
       if(idx>-1){
+        oldMemberHash=members[idx].passwordHash||'';
         members[idx].passwordHash=newHash;
         members[idx].authEmail=members[idx].authEmail||target.authEmail;
         members[idx].mustChangePassword=false;
@@ -1479,6 +1538,7 @@ async function confirmForgotPassword(){
         target=members[idx];
         ok=true;
       } else {
+        oldMemberHash=target.passwordHash||'';
         target.passwordHash=newHash;
         target.mustChangePassword=false;
         if(window.GMSFB && GMSFB.enabled){
@@ -1487,7 +1547,7 @@ async function confirmForgotPassword(){
         ok=true;
       }
       if(window.GMSFB && GMSFB.enabled){
-        try{ await GMSFB.pushCollection(KEY.members, Members.all()); }catch(e){}
+        try{ await GMSFB.pushCollection(KEY.members, members); }catch(e){}
         // Belt-and-suspenders: force the flag off on the cloud doc even if
         // the collection push no-ops (stale _lastCloud diff).
         if(target&&target.id){
@@ -1503,6 +1563,12 @@ async function confirmForgotPassword(){
   }catch(e){ console.error(e); }
   if(ok){
     try{ LoginAttempts.reset(username); }catch(e){}
+    // Keep the new hash on this device: members who logged in with the admin
+    // temp password have no Auth session, so the cloud write may have failed.
+    if(targetType==='member'){
+      const ovId=(target&&target.id)||targetId;
+      if(ovId) _savePwOverride(ovId,newHash,oldMemberHash);
+    }
     // Safety net: if this was a member reset, force the flag off in local
     // cache + cloud even when the primary write path missed (id mismatch).
     if(targetType==='member'){
@@ -1512,7 +1578,9 @@ async function confirmForgotPassword(){
         const sessMid2=(currentUser&&(currentUser.memberId||currentUser.id))||'';
         let changed=false;
         members.forEach(m=>{
-          const match=m.id===target.id||(targetId&&m.id===targetId)||(sun2&&String(m.username||'').toLowerCase()===sun2)||(sessMid2&&m.id===sessMid2);
+          const isTarget=m.id===target.id||(targetId&&m.id===targetId);
+          const match=isTarget||(sun2&&String(m.username||'').toLowerCase()===sun2)||(sessMid2&&m.id===sessMid2);
+          if(isTarget&&m.passwordHash!==newHash){ m.passwordHash=newHash; changed=true; }
           if(match&&m.mustChangePassword!==false){m.mustChangePassword=false;changed=true;}
         });
         if(changed){
@@ -1550,6 +1618,7 @@ async function confirmForgotPassword(){
       },1800);
     }
   } else {
+    setFpBtnLoading(confirmBtn,false);
     if(err){err.textContent='Reset failed. Please check internet and try again, or contact admin.';err.style.display='block';}
   }
 }
@@ -2218,6 +2287,7 @@ function showForcePasswordChange(mem){
   try{ sessionStorage.setItem('gms_fp_verified',JSON.stringify(_fpVerified)); }catch(e){}
   _fpForcedMode=true;
   _fpStep=3;
+  const fc=document.getElementById('fp_confirm_btn'); if(fc) setFpBtnLoading(fc,false);
   const fm=document.getElementById('fp_new_pass');if(fm)fm.value='';
   const fm2=document.getElementById('fp_new_pass2');if(fm2)fm2.value='';
   const fe=document.getElementById('fpsError');if(fe)fe.style.display='none';
@@ -2239,9 +2309,15 @@ function showForcePasswordChange(mem){
       banner.style.display='none';
     }
   }
-  // Hide Cancel in forced mode (only Confirm)
+  // Forced mode: Cancel becomes "Back to Login" so a member is never trapped
+  // on this screen. Logging out does not bypass the gate — it returns on the
+  // next login — but it lets them leave without finishing the change now.
   const cancel=document.getElementById('fp_cancel_btn');
-  if(cancel) cancel.style.display='none';
+  if(cancel){
+    cancel.style.display='';
+    cancel.textContent='Back to Login';
+    cancel.onclick=function(e){ if(e)e.preventDefault(); clearFpVerified(); _fpForcedMode=false; closeModal('forgotModal'); doLogout(); };
+  }
   initFpOtp();
   showFpStep(3);
   openModal('forgotModal');
@@ -2262,8 +2338,10 @@ function initScrollRefresh(){
   });
 }
 function loadApp(){
+  if(!currentUser)return;
   if(currentUser&&currentUser.role==='member'){
-    const live=Members.one(currentUser.memberId||currentUser.id);
+    let live=Members.one(currentUser.memberId||currentUser.id);
+    if(live) live=_withLocalPwOverride(live);
     if(live)currentUser={...currentUser,name:live.name,email:live.email,contact:live.contact,status:live.status};
     if(live&&(live.status==='pending_payment'||live.status==='Archived')){
       showPendingGate(live);
