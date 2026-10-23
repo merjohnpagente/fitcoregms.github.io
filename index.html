@@ -18,7 +18,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=24">
 
 </head>
 
@@ -1698,10 +1698,6 @@
 
     <div class="content">
 
-      <!-- Floating refresh button (appears when scrolled down) -->
-
-      <button id="scrollRefreshBtn" onclick="refreshCurrentPanel()" title="Refresh data" style="display:none;position:fixed;bottom:88px;right:20px;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange-dark));border:none;color:var(--white);cursor:pointer;z-index:500;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(127,250,136,.4);transition:.2s"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
-
       <!-- PANELS -->
 
       <div class="panel" id="panelDashboard"></div>
@@ -2937,13 +2933,15 @@
 
 <!-- Exercise Animation Modal -->
 <div class="modal-overlay" id="exerciseMediaModal" role="dialog" aria-modal="true" aria-labelledby="exMediaTitle">
-  <div class="modal modal-lg ex-modal">
-    <div class="modal-head">
-      <h2 id="exMediaTitle">Exercise</h2>
+  <div class="modal modal-xl ex-modal">
+    <div class="modal-head ex-modal-head">
+      <div class="ex-modal-title-wrap">
+        <span class="ex-modal-kicker">Exercise Demo</span>
+        <h2 id="exMediaTitle">Exercise</h2>
+      </div>
       <button type="button" class="modal-close" onclick="closeExerciseMedia()" aria-label="Close exercise details">✕</button>
     </div>
-    <div class="modal-body" id="exMediaBody"></div>
-    <div class="modal-foot"><button type="button" class="btn-secondary" onclick="closeExerciseMedia()">Close</button></div>
+    <div class="modal-body ex-modal-body" id="exMediaBody"></div>
   </div>
 </div>
 
@@ -2998,7 +2996,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=23"></script>
+<script src="script.js?v=24"></script>
 
 </body>
 

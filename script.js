@@ -2378,21 +2378,6 @@ function showForcePasswordChange(mem){
   showFpStep(3);
   openModal('forgotModal');
 }
-function refreshCurrentPanel(){
-  scanRenewals();updateHeroMemberCount();
-  if(_lastPanel&&_lastPanel!=='scanner')renderPanel(_lastPanel);
-  toast('Data refreshed.');
-}
-let _contentScrollTimer=null;
-function initScrollRefresh(){
-  const sc=document.querySelector('.content');
-  const btn=document.getElementById('scrollRefreshBtn');
-  if(!sc||!btn)return;
-  sc.addEventListener('scroll',()=>{
-    clearTimeout(_contentScrollTimer);
-    _contentScrollTimer=setTimeout(()=>{btn.style.display=sc.scrollTop>150?'flex':'none';},120);
-  });
-}
 function loadApp(){
   if(!currentUser)return;
   if(currentUser&&currentUser.role==='member'){
@@ -2447,7 +2432,6 @@ function loadApp(){
   updateQueueBadge();
   updateMessageBadge();
   updateSyncWarning();
-  initScrollRefresh();
   navigate('dashboard');
 }
 function buildSidebar(){
@@ -2671,7 +2655,8 @@ const ICONS={
   wave:`<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`,
   ticket:`<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>`,
   star:`<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>`,
-  camera:`<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>`
+  camera:`<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>`,
+  play:`<polygon points="5 3 19 12 5 21 5 3"/>`
 };
 // Keys use the base codepoint only (no variation selector) so both "⚠" and
 // "⚠️" forms match; trailing U+FE0F is skipped by iconize().
@@ -5993,26 +5978,42 @@ function openExerciseMedia(id){
   const tags=`<div class="ex-card-tags ex-modal-tags"><span class="wb-muscle-pill ${mc}">${esc(ex.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(ex.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(ex.level||'Intermediate')}</span></div>`;
   const pending=!!(ex.apiId&&_wxMediaLoading&&!_wxMediaMap);
   const video=media&&media.mp4
-    ?`<div class="ex-player"><video id="exModalVideo" class="ex-video" src="${esc(media.mp4)}" poster="${media.poster?esc(media.poster):''}" controls playsinline muted loop preload="metadata" aria-label="${esc(ex.name)} demonstration, silent loop"></video></div>`
+    ?`<div class="ex-player" id="exPlayer"><video id="exModalVideo" class="ex-video" src="${esc(media.mp4)}" playsinline muted loop autoplay preload="auto" aria-label="${esc(ex.name)} demonstration, silent loop"></video><div class="ex-player-loading" id="exPlayerLoading"><span class="ex-spinner"></span><span>Loading demo</span></div><button type="button" class="ex-player-start" id="exPlayerStart" hidden aria-label="Play ${esc(ex.name)} demonstration">${iconSvg('play',22)}<span>Play demo</span></button></div>`
     :`<div class="ex-player ex-player-empty"><span>${pending?'Video is still loading. Try again in a moment.':'Demo not available for this exercise.'}</span></div>`;
+  const caption=media&&media.mp4?`<div class="ex-player-caption" id="exPlayerCaption"><span class="ex-loop-dot" aria-hidden="true"></span>Silent demo · loops continuously</div>`:'';
   const instructions=Array.isArray(ex.instructions)&&ex.instructions.length
     ?`<div class="ex-modal-section"><h4>How to do it</h4><ol>${ex.instructions.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></div>`:'';
   const tips=Array.isArray(ex.tips)&&ex.tips.length
     ?`<div class="ex-modal-section"><h4>Form tips</h4><ul>${ex.tips.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>`:'';
   const facts=`<div class="ex-modal-facts"><span><b>Muscle</b>${esc(ex.muscle||'-')}</span><span><b>Equipment</b>${esc(ex.equipment||'-')}</span><span><b>Level</b>${esc(ex.level||'-')}</span>${ex.recommendedSets?`<span><b>Sets</b>${esc(ex.recommendedSets)}</span>`:''}${ex.recommendedReps?`<span><b>Reps</b>${esc(ex.recommendedReps)}</span>`:''}</div>`;
-  body.innerHTML=`${video}${tags}<p class="ex-modal-desc">${esc(ex.desc||'')}</p>${facts}${instructions}${tips}`;
+  body.innerHTML=`<div class="ex-modal-stage">${video}${caption}</div><div class="ex-modal-info">${tags}<p class="ex-modal-desc">${esc(ex.desc||'')}</p>${facts}${instructions}${tips}</div>`;
   openModal('exerciseMediaModal');
   const v=document.getElementById('exModalVideo');
   if(v){
+    const wrap=document.getElementById('exPlayer');
+    const loading=document.getElementById('exPlayerLoading');
+    const start=document.getElementById('exPlayerStart');
+    const hideLoading=()=>{if(loading)loading.classList.add('is-hidden');};
+    v.addEventListener('loadeddata',hideLoading,{once:true});
+    v.addEventListener('playing',hideLoading,{once:true});
+    // The demo is a loop, not a player: if anything pauses it, resume while open.
+    v.addEventListener('pause',()=>{
+      if(wrap&&wrap.dataset.looping==='1'&&!v.ended&&document.getElementById('exerciseMediaModal').classList.contains('open'))v.play().catch(()=>{});
+    });
     v.addEventListener('error',()=>{
-      const player=v.closest('.ex-player');
-      if(player){player.className='ex-player ex-player-empty';player.textContent='Demo unavailable. Refresh the page to reload the video links.';}
+      if(wrap){wrap.classList.add('is-error');wrap.innerHTML='<div class="ex-player-error"><strong>Demo unavailable</strong><span>Refresh the page to reload the demo.</span></div>';}
+      const cap=document.getElementById('exPlayerCaption');if(cap){cap.innerHTML='<span class="ex-loop-dot is-off" aria-hidden="true"></span>Demo unavailable';}
     },{once:true});
-    if(!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)) v.play().catch(()=>{});
+    const begin=()=>{v.play().then(()=>{if(wrap)wrap.dataset.looping='1';if(start)start.hidden=true;}).catch(()=>{if(start)start.hidden=false;});};
+    if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){if(start)start.hidden=false;}
+    else begin();
+    if(start)start.addEventListener('click',begin);
   }
   setTimeout(()=>{const btn=document.querySelector('#exerciseMediaModal .modal-close');if(btn)btn.focus({preventScroll:true});},0);
 }
 function closeExerciseMedia(){
+  const wrap=document.getElementById('exPlayer');
+  if(wrap)wrap.dataset.looping='0';
   const v=document.getElementById('exModalVideo');
   if(v){try{v.pause();v.removeAttribute('src');v.load();}catch(e){}}
   closeModal('exerciseMediaModal');
