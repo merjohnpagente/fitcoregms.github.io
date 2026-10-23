@@ -358,6 +358,13 @@ tbody td{padding:11px 14px;color:var(--gray-300);font-size:13px;vertical-align:m
 .empty-state{text-align:center;padding:48px 20px;color:var(--gray-500)}
 .empty-state .empty-icon{font-size:32px;margin-bottom:12px;opacity:.4}
 .empty-state p{font-size:13px}
+.mp-empty{padding:56px 24px}
+.mp-empty-icon{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;margin-bottom:16px;border-radius:50%;color:var(--orange);background:rgba(127,250,136,.08);border:1px solid rgba(127,250,136,.22);box-shadow:0 0 28px rgba(127,250,136,.12)}
+.mp-empty-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:800;letter-spacing:.5px;color:var(--white)}
+.mp-empty-sub{max-width:340px;margin:6px auto 20px;font-size:12px;line-height:1.6;color:var(--gray-500)}
+.mp-empty-cta{width:auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px}
+.mp-empty-cta svg{flex-shrink:0}
+@media(max-width:600px){.mp-empty{padding:44px 18px}.mp-empty-cta{width:100%}}
 
 /* ======= BADGES / PILLS ======= */
 .badge{display:inline-flex;align-items:center;border-radius:6px;font-size:10px;font-weight:800;padding:3px 8px;text-transform:uppercase;letter-spacing:.8px}

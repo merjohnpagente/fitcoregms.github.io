@@ -5548,7 +5548,7 @@ function renderMyWorkoutPlan(){
   const headerBtns=_mpFormOpen
     ? `<button class="btn-secondary btn-sm" style="width:auto;display:inline-flex;align-items:center;gap:6px" onclick="cancelMemberPlanForm()">${iconSvg('x',13)} Close Form</button>
        <button class="btn-secondary btn-sm" style="width:auto;display:inline-flex;align-items:center;gap:6px" onclick="navigate('exerciseLibrary'); renderExerciseLibrary()">${iconSvg('search',13)} Browse Exercises</button>`
-    : `<button class="btn-primary btn-sm" style="width:auto;display:inline-flex;align-items:center;gap:6px" onclick="openMemberPlanForm()">${iconSvg('userPlus',13)} Create My Plan</button>
+    : `${plans.length?`<button class="btn-primary btn-sm" style="width:auto;display:inline-flex;align-items:center;gap:6px" onclick="openMemberPlanForm()">${iconSvg('userPlus',13)} Create My Plan</button>`:''}
        <button class="btn-secondary btn-sm" style="width:auto;display:inline-flex;align-items:center;gap:6px" onclick="navigate('exerciseLibrary'); renderExerciseLibrary()">${iconSvg('search',13)} Browse Exercises</button>`;
   const cardsHtml=plans.length?`<div class="mp-plan-grid">${plans.map(p=>{
       const isSelf=p.createdBy==='member'||p.trainerId==null&&p.trainerName==='Self';
@@ -5577,10 +5577,16 @@ function renderMyWorkoutPlan(){
             <span class="mp-ex-sets">${esc(e.sets||'-')}×${esc(e.reps||'-')}${e.weight?` · ${esc(e.weight)}kg`:''}</span>
           </label>`).join('')}
       </div>
-    </div>`;}).join('')}</div>`:`<div class="empty-state" style="padding:44px 20px"><div class="empty-icon">🏋</div><p>No workout plan yet</p><p class="empty-sub" style="font-size:12px;color:var(--gray-500);max-width:360px;margin:6px auto 16px">Your trainer can assign a plan here, or build your own in under a minute.</p><button class="btn-primary" style="width:auto;display:inline-flex;align-items:center;gap:8px;margin:0 auto" onclick="openMemberPlanForm()">${iconSvg('userPlus',14)} Create My Plan</button></div>`;
+    </div>`;}).join('')}</div>`:`
+    <div class="empty-state mp-empty">
+      <span class="mp-empty-icon">${iconSvg('dumbbell',26)}</span>
+      <div class="mp-empty-title">No workout plan yet</div>
+      <p class="mp-empty-sub">Your trainer can assign one, or build your own in under a minute.</p>
+      <button class="btn-primary mp-empty-cta" onclick="openMemberPlanForm()">${iconSvg('userPlus',14)} Create My Plan</button>
+    </div>`;
   el.innerHTML=`
   <div class="table-card${_mpFormOpen?' mp-form-open':''}">
-    <div class="table-header"><h3>My Workout Plan</h3>
+    <div class="table-header"><h3>My Plans</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${headerBtns}</div>
     </div>
     ${formHtml}
