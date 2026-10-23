@@ -8652,10 +8652,3 @@ loadPhProvinces().catch(function(){
     if(sel)phAddrError(sel,'Unable to load provinces — tap to retry');
   });
 });
-
-loadPhProvinces().catch(function(){
-  ['ms','reg'].forEach(function(prefix){
-    const s=document.getElementById(prefix+'Province');
-    if(s)phAddrError(s,'Unable to load provinces — tap to retry');
-  });
-});
