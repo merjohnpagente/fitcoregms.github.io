@@ -4121,23 +4121,37 @@ function openMemberProfileEdit(){
   if(!m){toast('Member record not found.','error');return;}
   if(m.avatar){document.getElementById('mep_avatar_preview').src=m.avatar;document.getElementById('mep_avatar_preview').style.display='block';document.getElementById('mep_avatar_clear').style.display='inline-flex';}
   else {document.getElementById('mep_avatar_preview').src='';document.getElementById('mep_avatar_preview').style.display='none';document.getElementById('mep_avatar_clear').style.display='none';}
-  if(m.bg){document.getElementById('mep_bg_preview').src=m.bg;document.getElementById('mep_bg_preview').style.display='block';document.getElementById('mep_bg_clear').style.display='inline-flex';}
-  else {document.getElementById('mep_bg_preview').src='';document.getElementById('mep_bg_preview').style.display='none';document.getElementById('mep_bg_clear').style.display='none';}
   document.getElementById('mep_avatar').value=m.avatar||'';
-  document.getElementById('mep_bg').value=m.bg||'';
+  document.getElementById('mep_name').value=m.name||currentUser.name||'';
+  document.getElementById('mep_contact').value=m.contact||'';
+  document.getElementById('mep_address').value=m.address||'';
   const err=document.getElementById('mepError');if(err){err.textContent='';err.style.display='none';}
   openModal('memberProfileEditModal');
 }
 function saveMemberProfileEdit(){
   const m=Members.one(currentUser.memberId||currentUser.id);
   if(!m){toast('Member record not found.','error');return;}
+  const err=document.getElementById('mepError');
+  const showErr=msg=>{if(err){err.textContent=msg;err.style.display='block';}};
+  if(err){err.textContent='';err.style.display='none';}
+  const name=document.getElementById('mep_name').value.trim();
+  const contactRaw=document.getElementById('mep_contact').value.trim();
+  const address=document.getElementById('mep_address').value.trim();
+  if(!name){showErr('Full name is required.');return;}
+  if(!contactRaw){showErr('Contact number is required.');return;}
+  if(!validatePhone(contactRaw,'+63')){showErr(phoneErrorMsg('+63'));return;}
+  const contact=normalizeContact(contactRaw,'+63');
+  const dup=Members.all().find(x=>x.id!==m.id&&x.status!=='Archived'&&normalizeContact(x.contact,'+63')===contact);
+  if(dup){showErr('Contact number is already used by '+dup.name+' ('+dup.id+').');return;}
   let avatar=document.getElementById('mep_avatar').value;
-  let bg=document.getElementById('mep_bg').value;
-  function finalizeSave(a,b){
-    Members.update(m.id,{avatar:a||'',bg:b||''});
+  function finalizeSave(a){
+    const cleanName=sanitizeText(name);
+    Members.update(m.id,{avatar:a||'',name:cleanName,contact:contact,address:sanitizeText(address)});
+    currentUser={...currentUser,name:cleanName,contact:contact};
+    setSession(currentUser);
     closeModal('memberProfileEditModal');
     refreshMemberHome();
-    toast('Profile photo saved.');
+    toast('Profile updated.');
   }
   function compressIfNeeded(data,cb){
     if(!data||data.length<=900000) return cb(data);
@@ -4161,16 +4175,8 @@ function saveMemberProfileEdit(){
     img.onerror=function(){cb(data);};
     img.src=data;
   }
-  if(avatar&&avatar.length>900000){
-    compressIfNeeded(avatar,function(compA){
-      if(bg&&bg.length>900000){ compressIfNeeded(bg,function(compB){ finalizeSave(compA,compB); }); }
-      else finalizeSave(compA,bg);
-    });
-  } else if(bg&&bg.length>900000){
-    compressIfNeeded(bg,function(compB){ finalizeSave(avatar,compB); });
-  } else {
-    finalizeSave(avatar,bg);
-  }
+  if(avatar&&avatar.length>900000) compressIfNeeded(avatar,finalizeSave);
+  else finalizeSave(avatar);
 }
 function refreshMemberHome(){
   buildSidebar();

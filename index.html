@@ -1564,7 +1564,7 @@
 
 
 
-  <!-- Member Edit Profile (photo) -->
+  <!-- Member Edit Profile -->
 
   <div class="modal-overlay" id="memberProfileEditModal">
 
@@ -1600,23 +1600,25 @@
 
         <div class="form-group">
 
-          <label>Background Photo</label>
+          <label>Full Name *</label>
 
-          <div style="display:flex;align-items:center;gap:12px">
+          <input type="text" id="mep_name" autocomplete="name">
 
-            <img id="mep_bg_preview" src="" style="width:54px;height:34px;border-radius:6px;object-fit:cover;border:1px solid rgba(255,255,255,.12);display:none;flex-shrink:0">
+        </div>
 
-            <button type="button" class="btn-secondary btn-sm" onclick="document.getElementById('mep_bg_file').click()" style="flex:1">Choose background</button>
+        <div class="form-group">
 
-            <input type="file" id="mep_bg_file" accept="image/*" onchange="onImagePick(this,'mep_bg','mep_bg_preview','mep_bg_clear')" style="display:none">
+          <label>Contact Number *</label>
 
-            <input type="hidden" id="mep_bg" value="">
+          <input type="text" id="mep_contact" inputmode="tel" autocomplete="tel">
 
-            <button type="button" class="btn-icon btn-sm" id="mep_bg_clear" onclick="removeImage('mep_bg','mep_bg_preview','mep_bg_clear')" title="Remove background" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/></svg></button>
+        </div>
 
-          </div>
+        <div class="form-group">
 
-          <p style="font-size:11px;color:var(--gray-500);margin-top:4px">Shown behind your dashboard hero. Keep each image small — stored in browser storage.</p>
+          <label>Address</label>
+
+          <textarea id="mep_address" rows="2" autocomplete="street-address"></textarea>
 
         </div>
 
@@ -3006,7 +3008,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=33"></script>
+<script src="script.js?v=34"></script>
 
 </body>
 
