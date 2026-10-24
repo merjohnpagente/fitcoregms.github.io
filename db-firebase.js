@@ -200,7 +200,7 @@
       });
     },
     _notify:function(storageKey){
-      try{
+      try{if(storageKey==='gms_members'&&typeof updateHeroMemberCount==='function')updateHeroMemberCount();
         if(storageKey==='gms_plans'){
           var plansMap=this._lastCloud['plans']||this._lastCloud[storageKey]||{};
           var arr=Object.keys(plansMap).map(function(id){return plansMap[id];});

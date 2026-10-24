@@ -833,8 +833,9 @@ function onImagePick(input,urlField,previewId,clearId){
     const u=document.getElementById(urlField);if(u) u.value=data;
     const p=document.getElementById(previewId);if(p){p.src=data;p.style.display='block';p.style.cursor='zoom-in';p.title='Click to zoom';p.onclick=function(){openAvatarZoom(data, 'Preview');};}
     const c=document.getElementById(clearId);if(c) c.style.display='inline-flex';
-    // staff modal: keep a single visible preview (image instead of initials)
+    // Keep exactly one visible preview: image instead of the initials tile.
     if(urlField==='sep_avatar') updateSepAvatar((document.getElementById('sep_name')||{}).value||'');
+    if(urlField==='uf_avatar') updateUfAvatar((document.getElementById('uf_name')||{}).value||'');
     input.value='';
   };
   r.readAsDataURL(f);
@@ -844,6 +845,7 @@ function removeImage(urlField,previewId,clearId){
   const p=document.getElementById(previewId);if(p){p.src='';p.style.display='none';}
   const c=document.getElementById(clearId);if(c)c.style.display='none';
   if(urlField==='sep_avatar') updateSepAvatar((document.getElementById('sep_name')||{}).value||'');
+  if(urlField==='uf_avatar') updateUfAvatar((document.getElementById('uf_name')||{}).value||'');
 }
 // Compress DataURL to stay under Firestore 1MB limit (~650k chars ≈ 480KB binary)
 function compressDataUrl(dataUrl,maxDim=700,maxChars=650000){
@@ -4681,12 +4683,15 @@ function renderTrainerProfile(){
 }
 function openTrainerEditModal(){
   const u=currentUser;
+  const tepPreview=document.getElementById('tep_avatar_preview');
+  const tepClear=document.getElementById('tep_avatar_clear');
+  document.getElementById('tep_avatar').value=u.avatar||'';
   if(u.avatar){
-    document.getElementById('tep_avatar').value=u.avatar||'';
-    document.getElementById('tep_avatar_preview').src=u.avatar;document.getElementById('tep_avatar_preview').style.display='block';
+    tepPreview.src=u.avatar;tepPreview.style.display='block';
+    if(tepClear)tepClear.style.display='inline-flex';
   } else {
-    document.getElementById('tep_avatar').value='';
-    document.getElementById('tep_avatar_preview').style.display='none';
+    tepPreview.src='';tepPreview.style.display='none';
+    if(tepClear)tepClear.style.display='none';
   }
   document.getElementById('tep_fullname').value=u.name||'';
   document.getElementById('tep_coachname').value=u.coachName||'';
@@ -4747,17 +4752,49 @@ function updateSepAvatar(name){
   const av=document.getElementById('sep_avatar_initials');
   const img=document.getElementById('sep_avatar_preview');
   const hidden=document.getElementById('sep_avatar').value;
+  const clear=document.getElementById('sep_avatar_clear');
   const uname=name||currentUser.name;
   if(hidden&&hidden.length>20){
     // One preview only: hide the initials tile when a photo is present.
     if(av){av.style.display='none';av.style.backgroundImage='';av.textContent='';av.onclick=null;}
     if(img){img.src=hidden;img.style.display='block';img.style.cursor='zoom-in';img.title='Click to zoom';img.onclick=function(){openAvatarZoom(hidden,uname);};}
+    if(clear)clear.style.display='inline-flex';
   } else {
     if(av){av.style.display='';av.style.backgroundImage='';av.textContent=initials(uname);av.className='user-avatar avatar-'+(currentUser&&currentUser.role==='admin'?'admin':'staff');av.style.cursor='default';av.onclick=null;}
     if(img){img.style.display='none';img.onclick=null;}
+    if(clear)clear.style.display='none';
   }
   const dn=document.getElementById('sep_display_name');
   if(dn)dn.textContent=uname;
+}
+function updateUfAvatar(name){
+  const hidden=document.getElementById('uf_avatar');
+  const prev=document.getElementById('uf_avatar_preview');
+  const init=document.getElementById('uf_avatar_initials');
+  const clear=document.getElementById('uf_avatar_clear');
+  if(!hidden||!prev||!init)return;
+  const data=hidden.value||'';
+  const nm=name||((document.getElementById('uf_name')||{}).value||'Trainer');
+  if(data){
+    // One preview only: hide the initials tile when a photo is present.
+    prev.src=data;
+    prev.style.display='block';
+    prev.style.cursor='zoom-in';
+    prev.title='Click to zoom';
+    prev.onclick=function(){openAvatarZoom(data,nm);};
+    init.style.display='none';
+    init.style.backgroundImage='';
+    init.textContent='';
+    if(clear)clear.style.display='inline-flex';
+  } else {
+    prev.src='';
+    prev.style.display='none';
+    prev.onclick=null;
+    init.style.display='';
+    init.style.backgroundImage='';
+    init.textContent=initials(nm);
+    if(clear)clear.style.display='none';
+  }
 }
 function openStaffEditModal(){
   if(!currentUser)return;
@@ -7955,15 +7992,15 @@ function initReveals(){
   els.forEach(el=>_revealObserver.observe(el));
 }
 
-function animateCount(el,target,dur=1100){
+function animateCount(el,target,dur=1100,from=0){
   if(!el)return;
   const end=parseInt(target,10);
   if(isNaN(end)){el.textContent=target;return;}
-  const t0=performance.now();
+  const token=(el._countToken=(el._countToken||0)+1);const t0=performance.now();
   function step(t){
     const p=Math.min(1,(t-t0)/dur);
     const eased=1-Math.pow(1-p,3);
-    el.textContent=Math.round(end*eased);
+    if(el._countToken!==token)return;el.textContent=Math.round(from+(end-from)*eased);
     if(p<1)requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -8665,23 +8702,17 @@ function openUserModal(id=null){
       // Set hours
       document.getElementById('ufAvailFrom').value=u.availableFrom||'';
       document.getElementById('ufAvailTo').value=u.availableTo||'';
-      // Avatar
+      // Avatar (single preview)
       document.getElementById('uf_avatar').value=u.avatar||'';
-      const avPrev=document.getElementById('uf_avatar_preview');
-      const avInit=document.getElementById('uf_avatar_initials');
-      if(u.avatar){avPrev.src=u.avatar;avPrev.style.display='block';avInit.style.backgroundImage='url("'+u.avatar+'")';avInit.textContent='';}
-      else{avPrev.src='';avPrev.style.display='none';avInit.style.backgroundImage='';avInit.textContent='';}
-      document.getElementById('uf_avatar_clear').style.display=u.avatar?'inline-flex':'none';
+      updateUfAvatar(u.name||u.coachName||'');
       updateUfSpecChips();
     } else {
       document.getElementById('uf_coachName').value='';document.getElementById('uf_bio').value='';
       document.querySelectorAll('#ufSpecGrid input[type=checkbox],#ufAvailDays input[type=checkbox]').forEach(cb=>{cb.checked=false;});
       document.getElementById('ufAvailFrom').value='';document.getElementById('ufAvailTo').value='';
-      // Clear avatar
+      // Clear avatar (single preview)
       document.getElementById('uf_avatar').value='';
-      document.getElementById('uf_avatar_preview').src='';document.getElementById('uf_avatar_preview').style.display='none';
-      document.getElementById('uf_avatar_initials').style.backgroundImage='';document.getElementById('uf_avatar_initials').textContent='';
-      document.getElementById('uf_avatar_clear').style.display='none';
+      updateUfAvatar('');
       updateUfSpecChips();
     }
   } else {
@@ -9085,13 +9116,6 @@ document.addEventListener('keydown',e=>{
 // ======================================================================
 // INIT
 // ======================================================================
-function updateHeroMemberCount(){
-  const el=document.getElementById('heroMemberCount');
-  if(!el)return;
-  const count=Members.all().filter(m=>m.status!=='Archived').length;
-  el.setAttribute('data-count',count);
-  if(!el.dataset.counted){el.dataset.counted='1';animateCount(el,count);}
-}
 (function(){
   seedData();
   updateHeroMemberCount();
@@ -9303,3 +9327,17 @@ loadPhProvinces().catch(function(){
     if(sel)phAddrError(sel,'Unable to load provinces — tap to retry');
   });
 });
+
+function updateHeroMemberCount(){
+  const el=document.getElementById('heroMemberCount');
+  if(!el)return;
+  const fb=window.GMSFB;
+  if(fb&&fb.enabled&&fb.ready&&fb._lastCloud&&fb._lastCloud.members===undefined)return;
+  const count=Members.all().filter(m=>m&&m.status!=='Archived').length;
+  const prev=parseInt(el.getAttribute('data-count'),10);
+  if(prev===count&&el.dataset.counted)return;
+  const from=parseInt(el.textContent,10)||0;
+  el.setAttribute('data-count',count);
+  el.dataset.counted='1';
+  animateCount(el,count,700,from);
+}
