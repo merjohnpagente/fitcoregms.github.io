@@ -804,11 +804,8 @@ function onImagePick(input,urlField,previewId,clearId){
     const u=document.getElementById(urlField);if(u) u.value=data;
     const p=document.getElementById(previewId);if(p){p.src=data;p.style.display='block';p.style.cursor='zoom-in';p.title='Click to zoom';p.onclick=function(){openAvatarZoom(data, 'Preview');};}
     const c=document.getElementById(clearId);if(c) c.style.display='inline-flex';
-    // also update initials preview if this is staff modal
-    if(urlField==='sep_avatar'){
-      const av=document.getElementById('sep_avatar_initials');
-      if(av){av.style.backgroundImage='url("'+data+'")';av.textContent='';av.style.cursor='zoom-in';av.title='Click to zoom';av.onclick=function(){openAvatarZoom(data, document.getElementById('sep_display_name').textContent||'Profile');};}
-    }
+    // staff modal: keep a single visible preview (image instead of initials)
+    if(urlField==='sep_avatar') updateSepAvatar((document.getElementById('sep_name')||{}).value||'');
     input.value='';
   };
   r.readAsDataURL(f);
@@ -817,6 +814,7 @@ function removeImage(urlField,previewId,clearId){
   const u=document.getElementById(urlField);if(u)u.value='';
   const p=document.getElementById(previewId);if(p){p.src='';p.style.display='none';}
   const c=document.getElementById(clearId);if(c)c.style.display='none';
+  if(urlField==='sep_avatar') updateSepAvatar((document.getElementById('sep_name')||{}).value||'');
 }
 // Compress DataURL to stay under Firestore 1MB limit (~650k chars ≈ 480KB binary)
 function compressDataUrl(dataUrl,maxDim=700,maxChars=650000){
@@ -4682,32 +4680,25 @@ function updateSepAvatar(name){
   const av=document.getElementById('sep_avatar_initials');
   const img=document.getElementById('sep_avatar_preview');
   const hidden=document.getElementById('sep_avatar').value;
+  const uname=name||currentUser.name;
   if(hidden&&hidden.length>20){
-    if(av){av.style.backgroundImage='url("'+hidden+'")';av.textContent='';av.className='user-avatar avatar-'+(currentUser&&currentUser.role==='admin'?'admin':'staff');av.style.cursor='zoom-in';av.title='Click to zoom';av.onclick=function(){openAvatarZoom(hidden, name||currentUser.name);};}
-    if(img){img.src=hidden;img.style.display='block';img.style.cursor='zoom-in';img.title='Click to zoom';img.onclick=function(){openAvatarZoom(hidden, name||currentUser.name);};}
+    // One preview only: hide the initials tile when a photo is present.
+    if(av){av.style.display='none';av.style.backgroundImage='';av.textContent='';av.onclick=null;}
+    if(img){img.src=hidden;img.style.display='block';img.style.cursor='zoom-in';img.title='Click to zoom';img.onclick=function(){openAvatarZoom(hidden,uname);};}
   } else {
-    if(av){av.style.backgroundImage='';av.textContent=initials(name||currentUser.name);av.className='user-avatar avatar-'+(currentUser&&currentUser.role==='admin'?'admin':'staff');av.style.cursor='default';av.onclick=null;}
+    if(av){av.style.display='';av.style.backgroundImage='';av.textContent=initials(uname);av.className='user-avatar avatar-'+(currentUser&&currentUser.role==='admin'?'admin':'staff');av.style.cursor='default';av.onclick=null;}
     if(img){img.style.display='none';img.onclick=null;}
   }
   const dn=document.getElementById('sep_display_name');
-  if(dn)dn.textContent=name||currentUser.name;
+  if(dn)dn.textContent=uname;
 }
 function openStaffEditModal(){
   if(!currentUser)return;
   if(currentUser.role==='member'){openMemberProfileEdit();return;}
   if(currentUser.role==='trainer'){openTrainerEditModal();return;}
   const u={...currentUser};
-  const avEl=document.getElementById('sep_avatar_initials');
-  if(avEl) avEl.className='user-avatar avatar-'+(u.role==='admin'?'admin':'staff');
-  if(u.avatar){
-    document.getElementById('sep_avatar').value=u.avatar||'';
-    const prev=document.getElementById('sep_avatar_preview'); if(prev){prev.src=u.avatar;prev.style.display='block';prev.style.cursor='zoom-in';prev.title='Click to zoom';prev.onclick=function(){openAvatarZoom(u.avatar, u.name);};}
-    if(avEl){avEl.style.backgroundImage='url("'+u.avatar+'")';avEl.textContent='';avEl.style.cursor='zoom-in';avEl.title='Click to zoom';avEl.onclick=function(){openAvatarZoom(u.avatar, u.name);};}
-  } else {
-    document.getElementById('sep_avatar').value='';
-    const prev=document.getElementById('sep_avatar_preview'); if(prev){prev.style.display='none';prev.onclick=null;}
-    if(avEl){avEl.style.backgroundImage='';avEl.textContent=initials(u.name);avEl.style.cursor='default';avEl.onclick=null;}
-  }
+  document.getElementById('sep_avatar').value=u.avatar||'';
+  updateSepAvatar(u.name);
   document.getElementById('sep_name').value=u.name||'';
   document.getElementById('sep_contact').value=u.contact||'';
   document.getElementById('sep_display_name').textContent=u.name;
