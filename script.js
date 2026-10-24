@@ -307,6 +307,17 @@ class AuthService{
     const found=Users.all().find(x=>x.username&&x.username.toLowerCase()===unameLower) || Users.all().find(x=>x.authEmail&&x.authEmail.toLowerCase()===unameLower+'@fitcoregym.local');
     if(found&&found.status==='locked')return{ok:false,error:'Account locked. Please contact the administrator.'};
     if(found&&found.status==='pending')return{ok:false,error:'Your account is pending admin approval. Please wait.'};
+    // Admin-set password: accept only the new hash on devices that have the updated record,
+    // so the previous Firebase Auth password stops working here.
+    if(found&&found.role!=='admin'&&found.passwordResetAt&&found.passwordHash){
+      if(verifyPassword(password,found.passwordHash)){
+        LoginAttempts.reset(username);
+        this.setSession(found);
+        return{ok:true,user:found};
+      }
+      LoginAttempts.register(username);
+      return{ok:false,error:'Invalid username or password.'};
+    }
     // ---------- ONLINE (Firebase Auth) ----------
     if(window.GMSFB&&GMSFB.enabled){
       // Give the first Firestore snapshot a moment to arrive so this login is
@@ -322,7 +333,7 @@ class AuthService{
         if(r.ok){LoginAttempts.reset(username);if(found.role==='admin')GMSFB.ensureSeededPlans();this.setSession(found);return{ok:true,user:found};}
         // Do not lock on network errors — only on credential failures
         if(r.code&&r.code.indexOf('network')>-1) return{ok:false,error:r.error};
-        // Fallback: hash check for Forgot Password
+        // Fallback: hash check for Forgot Password / admin password reset
         if(found.passwordHash && verifyPassword(password, found.passwordHash)){
           LoginAttempts.reset(username);
           if(found.role==='admin') GMSFB.ensureSeededPlans();
@@ -2370,10 +2381,6 @@ function _resetPwVis(){
     const btn=wrap&&wrap.querySelector('.pw-toggle');
     if(btn) btn.innerHTML=iconSvg('eyeOff',16);
   });
-  const upEl=document.getElementById('up_pass');
-  if(upEl) upEl.textContent='••••••••';
-  const upBtn=document.getElementById('up_pass_btn');
-  if(upBtn) upBtn.innerHTML=iconSvg('eyeOff',15);
 }
 // Floating label: toggle .has-value on .input-wrap
 (function(){
@@ -8102,7 +8109,8 @@ function openUserModal(id=null){
     const u=Users.one(id);if(!u)return;
     document.getElementById('uf_name').value=u.name;document.getElementById('uf_contact').value=u.contact||'';document.getElementById('uf_user').value=u.username;
     document.getElementById('uf_pass').value='';document.getElementById('uf_pass2').value='';
-    document.getElementById('uf_role').value=u.role==='admin'?'staff':u.role;
+    document.getElementById('uf_pass').placeholder='Leave blank to keep current password';
+    document.getElementById('uf_role').value=u.role;
     // Hide role field for admin users — role cannot be changed
     const roleRow=document.getElementById('uf_role_row');
     if(roleRow)roleRow.style.display=u.role==='admin'?'none':'block';
@@ -8139,6 +8147,7 @@ function openUserModal(id=null){
     }
   } else {
     ['uf_name','uf_contact','uf_user','uf_pass','uf_pass2'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('uf_pass').placeholder='Minimum 8 characters';
     document.getElementById('uf_role').value=userRoleTab;
     const roleRow=document.getElementById('uf_role_row');
     if(roleRow)roleRow.style.display='block';
@@ -8162,11 +8171,14 @@ async function saveUser(){
   const username=document.getElementById('uf_user').value.trim();
   const pass=document.getElementById('uf_pass').value;
   const pass2=document.getElementById('uf_pass2').value;
-  const role=document.getElementById('uf_role').value;
+  const existingUser=editingUserId?Users.one(editingUserId):null;
+  let role=document.getElementById('uf_role').value;
+  if(existingUser&&existingUser.role==='admin')role='admin';
   const err=document.getElementById('userFormError');
   err.style.display='none';
   if(!name||!username||(!editingUserId&&!pass)||!role){err.textContent='Please fill in all required fields.';err.style.display='block';return;}
   if(contact&&!/^09\d{9}$/.test(contact)){err.textContent='Please enter a valid 11-digit contact number (e.g. 09171234567).';err.style.display='block';return;}
+  if(pass&&pass.length<8){err.textContent='Password must be at least 8 characters.';err.style.display='block';return;}
   if(pass&&pass!==pass2){err.textContent='Passwords do not match. Please re-enter your password correctly.';err.style.display='block';return;}
   // Trainer validation
   let coachName='',specializations=[],availableDays=[],availableFrom='',availableTo='',bio='';
@@ -8185,15 +8197,12 @@ async function saveUser(){
   const users=Users.all();
   const dup=users.find(u=>u.username===username&&u.id!==editingUserId);
   if(dup){err.textContent='Username already taken. Please choose a different username.';err.style.display='block';return;}
-  // Online mode: passwords are managed by Firebase Auth
+  // Online mode: new accounts get Firebase Auth credentials; admin-set passwords use the hash fallback.
   let authEmail=null;
-  if(window.GMSFB&&GMSFB.enabled){
-    if(editingUserId&&pass){err.textContent='Changing another user\u2019s password is not supported in online mode.';err.style.display='block';return;}
-    if(!editingUserId){
-      authEmail=GMSFB.authEmailFor({username:username});
-      const r=await GMSFB.createUserCreds(authEmail,pass,contact);
-      if(!r.ok){err.textContent=r.error;err.style.display='block';return;}
-    }
+  if(window.GMSFB&&GMSFB.enabled&&!editingUserId){
+    authEmail=GMSFB.authEmailFor({username:username});
+    const r=await GMSFB.createUserCreds(authEmail,pass,contact);
+    if(!r.ok){err.textContent=r.error;err.style.display='block';return;}
   }
   const doc={name,contact,username,role,status:'active',createdAt:today()};
   if(authEmail)doc.authEmail=authEmail;
@@ -8208,14 +8217,22 @@ async function saveUser(){
     const idx=users.findIndex(u=>u.id===editingUserId);
     if(idx>-1){
       Object.assign(users[idx],{name,contact,username,role});
-      if(pass&&!authEmail)users[idx].passwordHash=hashPassword(pass);
+      if(pass){users[idx].passwordHash=hashPassword(pass);users[idx].passwordResetAt=new Date().toISOString();delete users[idx].password;}
       if(role==='trainer'){Object.assign(users[idx],{coachName,specializations,availableDays,availableFrom,availableTo,bio,avatar});}
-      else{delete users[idx].coachName;delete users[idx].specializations;delete users[idx].availableDays;delete users[idx].availableFrom;delete users[idx].availableTo;delete users[idx].bio;delete users[idx].avatar;}
+      else if(existingUser&&existingUser.role==='trainer'){delete users[idx].coachName;delete users[idx].specializations;delete users[idx].availableDays;delete users[idx].availableFrom;delete users[idx].availableTo;delete users[idx].bio;delete users[idx].avatar;}
     }
-    Users.save(users);toast('User updated.');
+    Users.save(users);
+    if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){
+      try{ await GMSFB.pushCollection(KEY.users, Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
+    }
+    toast(pass?'User updated. New password is active.':'User updated.');
   } else {
     users.push({id:uid(),...doc});
-    Users.save(users);toast(role==='trainer'?'Trainer account created — can log in immediately.':'User created.');
+    Users.save(users);
+    if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){
+      try{ await GMSFB.pushCollection(KEY.users, Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
+    }
+    toast(role==='trainer'?'Trainer account created — can log in immediately.':'User created.');
   }
   userRoleTab=role;
   closeModal('userModal');renderUsers();updatePendingBadge();
@@ -8244,10 +8261,8 @@ async function approveUser(id){
   toast('Account approved. User can now log in on any device.','success');renderUsers();updatePendingBadge();
   if(typeof renderDashboard==='function'&&currentUser&&currentUser.role==='admin') renderDashboard();
 }
-let _upPassVisible=false;
 function viewUser(id){
   const u=Users.one(id);if(!u)return;
-  _upPassVisible=false;
   const roleMap={admin:'Admin',staff:'Staff',trainer:'Trainer'};
   const roleColors={admin:'var(--orange)',staff:'#d7ddd8',trainer:'var(--green)'};
   const avatarCls={admin:'avatar-admin',staff:'avatar-staff',trainer:'avatar-trainer'}[u.role]||'avatar-staff';
@@ -8272,8 +8287,6 @@ function viewUser(id){
   document.getElementById('up_role_badge').innerHTML=`<span class="badge" style="background:rgba(255,255,255,.07);color:${col};font-size:10px">${tag}</span>`;
   document.getElementById('up_contact').textContent=u.contact||'—';
   document.getElementById('up_user2').textContent=u.username;
-  document.getElementById('up_pass').textContent='••••••••';
-  const _upBtnInit=document.getElementById('up_pass_btn');if(_upBtnInit) _upBtnInit.innerHTML=iconSvg('eye',15);
   document.getElementById('up_status').innerHTML=`<span class="badge ${u.status==='locked'?'badge-locked':'badge-active'}">${u.status==='locked'?'Locked':'Active'}</span>`;
   document.getElementById('up_created').textContent=formatDate(u.createdAt||today());
   document.getElementById('up_edit_btn').onclick=function(){closeModal('userProfileModal');openUserModal(id);};
@@ -8305,12 +8318,6 @@ function viewUser(id){
     trainerSection.style.display='none';trainerSection.innerHTML='';
   }
   openModal('userProfileModal');
-}
-function toggleUpPass(){
-  _upPassVisible=!_upPassVisible;
-  document.getElementById('up_pass').textContent='••••••••';
-  const btn=document.getElementById('up_pass_btn');
-  if(btn) btn.innerHTML=_upPassVisible?iconSvg('eye',15):iconSvg('eyeOff',15);
 }
 function deleteUser(id){
   if(id===currentUser.id){toast('You cannot delete your own account.','error');return;}

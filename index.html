@@ -2313,9 +2313,9 @@
 
       <div class="form-row">
 
-        <div class="form-group"><label>Password *</label><div class="input-wrap"><input type="password" id="uf_pass" placeholder="Leave blank to keep current"><button type="button" class="pw-toggle" onclick="togglePw('uf_pass',this)" aria-label="Toggle password visibility"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div></div>
+        <div class="form-group"><label>Password</label><div class="input-wrap"><input type="password" id="uf_pass" placeholder="Minimum 8 characters"><button type="button" class="pw-toggle" onclick="togglePw('uf_pass',this)" aria-label="Toggle password visibility"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div></div>
 
-        <div class="form-group"><label>Confirm Password *</label><div class="input-wrap"><input type="password" id="uf_pass2" placeholder="Repeat password"><button type="button" class="pw-toggle" onclick="togglePw('uf_pass2',this)" aria-label="Toggle password visibility"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div></div>
+        <div class="form-group"><label>Confirm Password</label><div class="input-wrap"><input type="password" id="uf_pass2" placeholder="Repeat password"><button type="button" class="pw-toggle" onclick="togglePw('uf_pass2',this)" aria-label="Toggle password visibility"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button></div></div>
 
       </div>
 
@@ -2471,13 +2471,7 @@
 
             <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:4px">Password</div>
 
-            <div style="display:flex;align-items:center;gap:8px">
-
-              <div id="up_pass" style="font-size:14px;color:var(--white);font-weight:600;font-family:monospace;letter-spacing:2px">••••••••</div>
-
-              <button type="button" class="pw-toggle" onclick="toggleUpPass()" aria-label="Toggle password visibility" id="up_pass_btn" style="position:static;transform:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--gray-500);cursor:pointer;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
-
-            </div>
+            <div id="up_pass" style="font-size:12px;color:var(--gray-400);font-weight:600">Use Edit Profile to set a new password.</div>
 
           </div>
 
@@ -3008,7 +3002,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=35"></script>
+<script src="script.js?v=36"></script>
 
 </body>
 
