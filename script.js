@@ -9,39 +9,54 @@ function deepClone(v){
   if(typeof structuredClone==='function'){try{return structuredClone(v);}catch(e){}}
   try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}
 }
+// Business data is online-only: Firestore is the single source of truth and
+// nothing is mirrored to localStorage. Only device-local security counters
+// (login lockouts) stay on the device. This prevents a stale browser cache
+// from resurrecting a paid member or showing payments that were deleted.
+const LOCAL_ONLY_KEYS=new Set(['gms_login_attempts']);
+function _cloudDataKey(k){return !!(!LOCAL_ONLY_KEYS.has(k)&&window.GMSFB&&GMSFB.enabled);}
+function _cloudMap(k){
+  if(!window.GMSFB||!GMSFB.ready||!GMSFB._lastCloud)return null;
+  if(GMSFB._lastCloud[k])return GMSFB._lastCloud[k];
+  const col=GMSFB._colmap&&GMSFB._colmap[k];
+  return (col&&GMSFB._lastCloud[col])||null;
+}
 const DB={
-  // Cloud-first reads: _lastCloud (in-memory Firestore mirror) is the
-  // primary data source.  localStorage is only a bootstrap/offline fallback.
+  // Reads come from the live Firestore snapshot. Before the first snapshot
+  // the list is empty (never the old localStorage copy).
   get:(k)=>{
-    // Cloud-ready: read from _lastCloud (map → array)
-    try{if(window.GMSFB&&GMSFB.ready&&GMSFB._lastCloud&&GMSFB._lastCloud[k]){var m=GMSFB._lastCloud[k];return Object.keys(m).map(function(id){return m[id];});}}catch(e){}
-    // Offline / pre-snapshot fallback
+    if(_cloudDataKey(k)){
+      const m=_cloudMap(k);
+      if(!m)return[];
+      return Object.keys(m).map(function(id){return m[id];});
+    }
     try{return JSON.parse(localStorage.getItem(k))||[];}catch{return[];}
   },
   getObj:(k)=>{
-    try{if(window.GMSFB&&GMSFB.ready&&GMSFB._lastCloud&&GMSFB._lastCloud[k])return GMSFB._lastCloud[k];}catch(e){}
+    if(_cloudDataKey(k))return _cloudMap(k)||{};
     try{const v=JSON.parse(localStorage.getItem(k));return(v&&typeof v==='object'&&!Array.isArray(v))?v:{};}catch{return{};}
   },
   set:(k,v)=>{
-    // Keep a local crash/offline backup; Firestore stays the source of truth.
-    try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
-    const mapped=!!(window.GMSFB&&GMSFB.enabled&&GMSFB._colmap&&GMSFB._colmap[k]);
-    if(mapped&&GMSFB.ready&&!GMSFB._applying){
-      // IMPORTANT: Only update _lastCloud[k] (storageKey), NOT _lastCloud[col].
-      // pushCollection compares next vs _lastCloud[col] to find diffs.
-      // If we update _lastCloud[col] here, pushCollection sees 0 diffs = nothing pushed!
-      // pushCollection updates _lastCloud[col] after the batch commits.
-      GMSFB._lastCloud[k]={};
-      (Array.isArray(v)?v:[]).forEach(function(item){if(item&&item.id)GMSFB._lastCloud[k][item.id]=item;});
-      try{GMSFB.pushCollection(k,v);}catch(e){try{GMSFB.queuePush(k,v);}catch(_){}}
-    }else if(mapped&&typeof GMSFB.queuePush==='function'){
-      // Cloud not ready, or a snapshot is being applied: retry this write.
-      try{GMSFB.queuePush(k,v);}catch(e){}
+    if(_cloudDataKey(k)){
+      // Do NOT write business data to localStorage. Update the in-memory
+      // snapshot so this tab updates immediately, then push to Firestore.
+      const mapped=!!(GMSFB._colmap&&GMSFB._colmap[k]);
+      if(mapped&&GMSFB.ready&&!GMSFB._applying){
+        GMSFB._lastCloud[k]={};
+        (Array.isArray(v)?v:[]).forEach(function(item){if(item&&item.id)GMSFB._lastCloud[k][item.id]=item;});
+        try{GMSFB.pushCollection(k,v);}catch(e){try{GMSFB.queuePush(k,v);}catch(_){}}
+      }else if(mapped&&typeof GMSFB.queuePush==='function'){
+        try{GMSFB.queuePush(k,v);}catch(e){}
+      }
+      return;
     }
+    try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
   },
   getOne:(k,id)=>{
-    // Fast path: direct map lookup from cloud cache
-    try{if(window.GMSFB&&GMSFB.ready&&GMSFB._lastCloud&&GMSFB._lastCloud[k])return GMSFB._lastCloud[k][id]||null;}catch(e){}
+    if(_cloudDataKey(k)){
+      const m=_cloudMap(k);
+      return (m&&m[id])||null;
+    }
     return DB.get(k).find(x=>x.id===id);
   }
 };
@@ -1135,8 +1150,9 @@ function clearFpVerified(){
 // writes, so the new password can't reach the cloud. Keep a per-device copy
 // so the member can finish the forced reset and log in again on this device.
 // Cross-device sync still requires a real Auth session or a Cloud Function.
-function _readPwOverrides(){try{const o=JSON.parse(localStorage.getItem('gms_pw_overrides')||'{}');return(o&&typeof o==='object')?o:{};}catch(e){return{};}}
-function _savePwOverride(id,newHash,baseHash){try{const o=_readPwOverrides();o[id]={hash:newHash,base:baseHash||'',at:Date.now()};localStorage.setItem('gms_pw_overrides',JSON.stringify(o));}catch(e){}}
+const _pwOverrides={};
+function _readPwOverrides(){return _pwOverrides;}
+function _savePwOverride(id,newHash,baseHash){_pwOverrides[id]={hash:newHash,base:baseHash||'',at:Date.now()};}
 function _withLocalPwOverride(m){
   if(!m)return m;
   try{
@@ -1970,7 +1986,7 @@ function msGoStep3(){
   const e=document.getElementById('msError');if(e)e.style.display='none';
 }
 function resetMemberSignupForm(){
-  ['msName','firstName','middleName','lastName','suffix','msProvince','msCity','msBarangay','msStreet','msUsername','msContact','msEmail','msPass','msPass2','msDob','msGuardianName'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['msName','firstName','middleName','lastName','suffix','msProvince','msCity','msBarangay','msStreet','msUsername','msContact','msEmail','msPass','msPass2','msDob','msGuardianName','msEcName','msEcNum','msMedical'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const msSex=document.getElementById('msSex'); if(msSex) msSex.value='';
   const hint=document.getElementById('msAgeHint'); if(hint){hint.textContent=''; hint.style.display='none';}
   const gs=document.getElementById('msGuardianSection');if(gs)gs.classList.remove('show');
@@ -2142,7 +2158,10 @@ async function submitMemberSignup(){
   const gName=(document.getElementById('msGuardianName')?document.getElementById('msGuardianName').value.trim():'');
   const consentWaiver=calcAgeVal>=13&&calcAgeVal<=15?!!(document.getElementById('msConsentWaiver')&&document.getElementById('msConsentWaiver').checked):true;
   const consentWritten=calcAgeVal>=16&&calcAgeVal<=17?!!(document.getElementById('msConsentWritten')&&document.getElementById('msConsentWritten').checked):true;
-  const member={id,name:sanitizeText(v.name),firstName:sanitizeText(v.firstName||''),middleName:sanitizeText(v.middleName||''),lastName:sanitizeText(v.lastName||''),suffix:sanitizeText(v.suffix||''),username:v.uname,contact:v.contact,email:sanitizeText(v.email),dob:dob,age:String(calcAgeVal),sex:sanitizeText(v.sex||''),planId,status:'pending_payment',startDate:'',expiryDate:'',planStart:'',qrToken:'',address:addr,province:sanitizeText(v.province||''),city:sanitizeText(v.city||''),barangay:sanitizeText(v.barangay||''),street:sanitizeText(v.street||''),ecName:'',ecNum:'',notes:'',createdAt:today(),createdBy:'Self',createdByUsername:v.uname,createdByRole:'member',bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:'',authEmail,guardianName:sanitizeText(gName||''),consentWaiver:consentWaiver,consentWritten:consentWritten};
+  const ecName=(document.getElementById('msEcName')?document.getElementById('msEcName').value.trim():'');
+  const ecNum=(document.getElementById('msEcNum')?document.getElementById('msEcNum').value.trim():'');
+  const medicalNotes=(document.getElementById('msMedical')?document.getElementById('msMedical').value.trim():'');
+  const member={id,name:sanitizeText(v.name),firstName:sanitizeText(v.firstName||''),middleName:sanitizeText(v.middleName||''),lastName:sanitizeText(v.lastName||''),suffix:sanitizeText(v.suffix||''),username:v.uname,contact:v.contact,email:sanitizeText(v.email),dob:dob,age:String(calcAgeVal),sex:sanitizeText(v.sex||''),planId,status:'pending_payment',startDate:'',expiryDate:'',planStart:'',qrToken:'',address:addr,province:sanitizeText(v.province||''),city:sanitizeText(v.city||''),barangay:sanitizeText(v.barangay||''),street:sanitizeText(v.street||''),ecName:sanitizeText(ecName),ecNum:sanitizeText(ecNum),notes:sanitizeText(medicalNotes),createdAt:today(),createdBy:'Self',createdByUsername:v.uname,createdByRole:'member',bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:'',authEmail,guardianName:sanitizeText(gName||''),consentWaiver:consentWaiver,consentWritten:consentWritten};
   const wr=await GMSFB.secSetDoc('members',member);
   if(!wr||!wr.ok){
     GMSFB.secondarySignOut();
@@ -2754,6 +2773,11 @@ const ICONS={
   flag:`<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>`,
   menu:`<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>`,
   file:`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`,
+  archive:`<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>`,
+  cloud:`<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>`,
+  ban:`<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>`,
+  message:`<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
+  key:`<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>`,
   bulb:`<path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/>`,
   gear:`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
   wave:`<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`,
@@ -2773,6 +2797,7 @@ const ICON_EMOJI={
   '🏃':'running',  '🔒':'lock','🔓':'unlock','🏁':'flag','☰':'menu','💡':'bulb','⚙':'gear','📄':'file',
   '🕒':'clock',
   '📍':'mapPin','✉':'mail',
+  '🗄':'archive','☁':'cloud','🚫':'ban','💬':'message','🔑':'key','🗓':'calendar','⭐':'star','⚑':'flag',
   '✓':'check','✔':'check','✕':'x','🙈':'eyeOff','👋':'wave','🎟':'ticket','★':'star','✦':'star'
 };
 function iconSvg(name,size=16){
@@ -3747,89 +3772,132 @@ async function saveMember(){
   };
   if(editingMemberId){
     const existing=members.find(m=>m.id===editingMemberId);
-    if(bgCheckBlocksActivation(existing))data.status=existing.status;
+    // Never activate a pending member from the profile form — activation is
+    // owned by the Payment Queue (member + payment committed together).
+    if(existing&&(existing.status==='pending_payment'||existing.status==='Archived'||bgCheckBlocksActivation(existing)))data.status=existing.status;
   }
   const confirmTitle=editingMemberId?'Update Member':'Add New Member';
   const confirmMsg=editingMemberId
     ?`Save changes to <strong>${esc(name)}</strong>? Billing records linked to this member will also be synced automatically.`
     :`Add <strong>${esc(name)}</strong> as a new member under the <strong>${esc(plan?plan.name:'selected')}</strong> plan? A payment record will be created automatically.`;
-  openConfirm(confirmTitle, confirmMsg, ()=>{
-    if(editingMemberId){
-      const idx=members.findIndex(m=>m.id===editingMemberId);
-      // Capture old values BEFORE overwriting to build a change log
-      const oldM=members[idx]||{};
-      const allPlans=Plans.all();
-      const oldPlanName=(allPlans.find(p=>p.id===oldM.planId)||{name:oldM.planId||'—'}).name;
-      const newPlanName=plan?plan.name:(planId||'—');
-      const fieldLabels={
-        name:'Name', contact:'Contact', email:'Email', age:'Age', sex:'Sex',
-        planId:'Plan', startDate:'Start Date', address:'Address',
-        ecName:'Emergency Contact', ecNum:'EC Number', notes:'Notes'
-      };
-      const changedParts=[];
-      Object.keys(fieldLabels).forEach(k=>{
-        const oldVal=k==='planId'?oldPlanName:(String(oldM[k]||'')).trim();
-        const newVal=k==='planId'?newPlanName:(String(data[k]||'')).trim();
-        if(oldVal!==newVal){
-          changedParts.push(fieldLabels[k]+': "'+oldVal+'" → "'+newVal+'"');
-        }
-      });
-      const changeDetail=changedParts.length?changedParts.join(' | '):'No field changes detected';
-      if(idx>-1)members[idx]={...members[idx],...data,editedBy:currentUser.name,editedByUsername:currentUser.username,editedByRole:currentUser.role,editedAt:today()};
-      Members.save(members);
-      // AUTO-SYNC: update all linked payment records with new member info
-      const payments=Payments.all();
-      let payUpdated=false;
-      payments.forEach(p=>{
-        if(p.memberId===editingMemberId){
-          p.memberName=name;
-          if(planId&&planId!==p.planId){
-            p.planId=planId;
-            p.planName=plan?plan.name:p.planName;
-            p.newExpiry=addMonths(p.date,plan?plan.duration:1);
+  openConfirm(confirmTitle, confirmMsg, async ()=>{
+    try{
+      const online=!!(window.GMSFB&&GMSFB.enabled);
+      if(editingMemberId){
+        const idx=members.findIndex(m=>m.id===editingMemberId);
+        // Capture old values BEFORE overwriting to build a change log
+        const oldM=members[idx]||{};
+        const allPlans=Plans.all();
+        const oldPlanName=(allPlans.find(p=>p.id===oldM.planId)||{name:oldM.planId||'—'}).name;
+        const newPlanName=plan?plan.name:(planId||'—');
+        const fieldLabels={
+          name:'Name', contact:'Contact', email:'Email', age:'Age', sex:'Sex',
+          planId:'Plan', startDate:'Start Date', address:'Address',
+          ecName:'Emergency Contact', ecNum:'EC Number', notes:'Notes'
+        };
+        const changedParts=[];
+        Object.keys(fieldLabels).forEach(k=>{
+          const oldVal=k==='planId'?oldPlanName:(String(oldM[k]||'')).trim();
+          const newVal=k==='planId'?newPlanName:(String(data[k]||'')).trim();
+          if(oldVal!==newVal){
+            changedParts.push(fieldLabels[k]+': "'+oldVal+'" → "'+newVal+'"');
           }
-          p.syncedAt=today();
-          payUpdated=true;
+        });
+        const changeDetail=changedParts.length?changedParts.join(' | '):'No field changes detected';
+        const memberPatch={...data,editedBy:currentUser.name,editedByUsername:currentUser.username,editedByRole:currentUser.role,editedAt:today()};
+        // AUTO-SYNC: linked payment docs carry the member's current name/plan.
+        const linked=Payments.all().filter(p=>p.memberId===editingMemberId);
+        const payPatches=linked.map(p=>{
+          const patch={memberName:name,syncedAt:today()};
+          if(planId&&planId!==p.planId){
+            patch.planId=planId;
+            patch.planName=plan?plan.name:p.planName;
+            patch.newExpiry=addMonths(p.date,plan?plan.duration:1);
+          }
+          return {col:'payments',id:p.id,data:patch,merge:true};
+        });
+        if(online){
+          if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+          const ops=[{col:'members',id:editingMemberId,data:memberPatch,merge:true}];
+          if(currentUser.role==='admin')ops.push(...payPatches);
+          const res=await GMSFB.commitDocs(ops);
+          if(!res||!res.ok)throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+        }else{
+          if(idx>-1)members[idx]={...members[idx],...memberPatch};
+          Members.save(members);
+          if(currentUser.role==='admin'&&linked.length){
+            const payments=Payments.all();
+            payments.forEach(p=>{
+              if(p.memberId===editingMemberId){
+                p.memberName=name;
+                if(planId&&planId!==p.planId){p.planId=planId;p.planName=plan?plan.name:p.planName;p.newExpiry=addMonths(p.date,plan?plan.duration:1);}
+                p.syncedAt=today();
+              }
+            });
+            Payments.save(payments);
+          }
         }
-      });
-      // Only admin can sync/update payment records
-      if(payUpdated&&currentUser.role==='admin')Payments.save(payments);
-      logActivity('Edited','Member',name,'ID: '+editingMemberId+' | '+changeDetail);
-      toast(currentUser.role==='admin'?'Member updated. Billing records synced automatically.':'Member info updated successfully.');
-    } else {
-      const newId=nextMemberId();
-      members.push({id:newId,...data,createdBy:currentUser.name,createdByUsername:currentUser.username,createdByRole:currentUser.role,createdAt:today(),bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:''});
-      Members.save(members);
-      logActivity('Added','Member',name,'ID: '+newId+' | Plan: '+(plan?plan.name:''));
-      // AUTO-CREATE PAYMENT RECORD
-      const payDate=document.getElementById('mf_paydate').value||today();
-      const amount=parseFloat(document.getElementById('mf_amount').value)||plan.price;
-      const method=document.getElementById('mf_method').value;
-      const payNotes=document.getElementById('mf_paynotes').value.trim();
-      const payments=Payments.all();
-      const newPayId=nextId(KEY.payments,'PAY');
-      payments.push({
-        id:newPayId,memberId:newId,memberName:name,
-        planId,planName:plan?plan.name:'Unknown',
-        amount,date:payDate,newExpiry:expiryDate,method,
-        notes:payNotes,
-        recordedBy:currentUser.name,
-        recordedByUsername:currentUser.username,
-        status:'Paid',createdAt:today()
-      });
-      Payments.save(payments);
-      toast('Member added & payment recorded successfully.');
+        logActivity('Edited','Member',name,'ID: '+editingMemberId+' | '+changeDetail);
+        toast(currentUser.role==='admin'?'Member updated and saved to Firebase. Billing records synced automatically.':'Member info updated and saved to Firebase.');
+      } else {
+        const newId=nextMemberId();
+        const memberDoc={id:newId,...data,createdBy:currentUser.name,createdByUsername:currentUser.username,createdByRole:currentUser.role,createdAt:today(),bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:''};
+        const payDate=document.getElementById('mf_paydate').value||today();
+        const amount=parseFloat(document.getElementById('mf_amount').value)||plan.price;
+        const method=document.getElementById('mf_method').value;
+        const payNotes=document.getElementById('mf_paynotes').value.trim();
+        const newPayId=nextId(KEY.payments,'PAY');
+        const paymentDoc={
+          id:newPayId,memberId:newId,memberName:name,
+          planId,planName:plan?plan.name:'Unknown',
+          amount,date:payDate,newExpiry:expiryDate,method,
+          notes:sanitizeText(payNotes),
+          recordedBy:currentUser.name,
+          recordedByUsername:currentUser.username,
+          status:'Paid',createdAt:today()
+        };
+        if(online){
+          if(!GMSFB._lastCloud.members||!GMSFB._lastCloud.payments)throw new Error('Member and payment data are still loading from Firebase. Please wait a moment and try again.');
+          if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+          const res=await GMSFB.commitDocs([
+            {col:'members',id:newId,data:memberDoc,merge:false},
+            {col:'payments',id:newPayId,data:paymentDoc,merge:false}
+          ]);
+          if(!res||!res.ok)throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+        }else{
+          members.push(memberDoc);
+          Members.save(members);
+          const payments=Payments.all();
+          payments.push(paymentDoc);
+          Payments.save(payments);
+        }
+        logActivity('Added','Member',name,'ID: '+newId+' | Plan: '+(plan?plan.name:''));
+        toast('Member added & payment saved to Firebase.');
+      }
+      closeModal('memberModal');renderMembers();scanRenewals();updateHeroMemberCount();
+      if(document.getElementById('billingTableCard'))refreshBillingTable();
+    }catch(e){
+      err.textContent=(e&&e.message)?e.message:'Could not save the member. Please try again.';
+      err.style.display='block';
+      console.error('[saveMember]',e);
     }
-    closeModal('memberModal');renderMembers();scanRenewals();updateHeroMemberCount();
-    if(document.getElementById('billingTableCard'))refreshBillingTable();
   },'Save','btn-primary');
 }
 function deleteMember(id){
   const m=Members.one(id);
-  openConfirm('Delete Member',`Are you sure you want to delete ${m?esc(m.name):'this member'}? This cannot be undone.`,()=>{
+  openConfirm('Delete Member',`Are you sure you want to delete ${m?esc(m.name):'this member'}? This cannot be undone.`,async ()=>{
     const members=Members.all();const idx=members.findIndex(m=>m.id===id);
     if(idx>-1){logActivity('Deleted','Member',members[idx].name,'ID: '+members[idx].id+' | Plan: '+(Plans.all().find(p=>p.id===members[idx].planId)||{name:'—'}).name);members[idx].status='Archived';}
-    Members.save(members);toast('Member archived.');renderMembers();
+    try{
+      if(window.GMSFB&&GMSFB.enabled){
+        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+        const res=await GMSFB.commitDocs([{col:'members',id,data:{status:'Archived',archivedAt:new Date().toISOString()},merge:true}]);
+        if(!res||!res.ok)throw new Error('Could not archive this member in Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+      }else{
+        Members.save(members);
+      }
+      toast('Member archived.','success');renderMembers();updateHeroMemberCount();
+    }catch(e){toast((e&&e.message)||'Could not archive this member.','error');console.warn('[deleteMember]',e);}
   });
 }
 function renumberMembers(){
@@ -4075,14 +4143,26 @@ function saveMemberProfileEdit(){
   const dup=Members.all().find(x=>x.id!==m.id&&x.status!=='Archived'&&normalizeContact(x.contact,'+63')===contact);
   if(dup){showErr('Contact number is already used by '+dup.name+' ('+dup.id+').');return;}
   let avatar=document.getElementById('mep_avatar').value;
-  function finalizeSave(a){
+  async function finalizeSave(a){
     const cleanName=sanitizeText(name);
-    Members.update(m.id,{avatar:a||'',name:cleanName,contact:contact,address:sanitizeText(address)});
-    currentUser={...currentUser,name:cleanName,contact:contact};
-    setSession(currentUser);
-    closeModal('memberProfileEditModal');
-    refreshMemberHome();
-    toast('Profile updated.');
+    const patch={avatar:a||'',name:cleanName,contact:contact,address:sanitizeText(address)};
+    try{
+      if(window.GMSFB&&GMSFB.enabled){
+        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+        const res=await GMSFB.commitDocs([{col:'members',id:m.id,data:patch,merge:true}]);
+        if(!res||!res.ok)throw new Error('Could not save your profile to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+      }else{
+        Members.update(m.id,patch);
+      }
+      currentUser={...currentUser,name:cleanName,contact:contact};
+      setSession(currentUser);
+      closeModal('memberProfileEditModal');
+      refreshMemberHome();
+      toast('Profile updated and saved to Firebase.','success');
+    }catch(e){
+      showErr((e&&e.message)||'Could not save your profile. Please try again.');
+      console.error('[saveMemberProfileEdit]',e);
+    }
   }
   function compressIfNeeded(data,cb){
     if(!data||data.length<=900000) return cb(data);
@@ -4222,6 +4302,11 @@ function renderBilling(){
   refreshBillingTable();
 }
 function refreshBillingTable(){
+  if(window.GMSFB&&GMSFB.enabled&&(_cloudMap(KEY.payments)===null||_cloudMap(KEY.members)===null)){
+    const card=document.getElementById('billingTableCard');
+    if(card)card.innerHTML='<div class="empty-state" style="padding:40px"><div class="empty-icon">☁️</div><p>Loading payments from Firebase…</p></div>';
+    return;
+  }
   let data=Payments.all();
   if(billingSearch){const s=billingSearch.toLowerCase();data=data.filter(p=>p.memberName.toLowerCase().includes(s));}
   if(billingFromDate)data=data.filter(p=>p.date>=billingFromDate);
@@ -4237,12 +4322,13 @@ function refreshBillingTable(){
     <td>${esc(p.recordedBy||'—')}</td><td>${esc(p.method||'—')}</td>
     <td><span class="badge badge-paid">Paid</span></td>
     <td>${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">—</span>'}</td>
-    <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button></div></td>
+    <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button><button class="btn-icon" title="Delete Payment" onclick="deletePayment('${p.id}')" style="color:#ef4444">🗑</button></div></td>
   </tr>`).join(''):`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="billingPage=${billingPage-1};refreshBillingTable()" ${billingPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===billingPage?'active':''}" onclick="billingPage=${i+1};refreshBillingTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="billingPage=${billingPage+1};refreshBillingTable()" ${billingPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
   document.getElementById('billingTableCard').innerHTML=`
     <div class="table-header"><h3>Payments <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${total} record${total!==1?'s':''}</span></h3></div>
     <div style="overflow-x:auto"><table><thead><tr><th>Pay ID</th><th>Member</th><th>Plan</th><th>Amount</th><th>Date</th><th>New Expiry</th><th>Recorded By</th><th>Method</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
+  setTimeout(repairMicoDuplicatePayments,0);
 }
 let _renewalPaymentSource=null;
 function openPaymentModal(prefillMemberId=null){
@@ -4332,33 +4418,42 @@ function savePayment(){
     +'<div><span style="color:var(--gray-500);width:100px;display:inline-block">New Expiry:</span> <strong style="color:var(--white)">'+formatDate(newExpiry)+'</strong></div>'
     +'</div>'
     +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8;background:rgba(179,188,181,.06);border:1px solid rgba(179,188,181,.2);border-radius:6px;padding:8px 12px">&#128161; This will record the payment and update the member expiry date.</div>';
-  openConfirm(confirmTitle,confirmMsg,function(){
-    const payments=Payments.all();
-    const newId=nextId(KEY.payments,'PAY');
-    payments.push({id:newId,memberId,memberName:member?member.name:'Unknown',planId,planName:plan?plan.name:'Unknown',amount,date,newExpiry,method,reference:sanitizeText(reference),notes:sanitizeText(notes),recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:fromRenewal?'renewal':'billing',timestamp:Date.now(),createdAt:today()});
-    Payments.save(payments);
-    const members=Members.all();
-    const idx=members.findIndex(m=>m.id===memberId);
-    if(idx>-1){members[idx].planId=planId;members[idx].expiryDate=newExpiry;members[idx].status='Active';members[idx].planStart=date;members[idx].qrNonce=newQrNonce(memberId);}
-    Members.save(members);
-    const live=Members.one(memberId);
-    if(live)Members.update(memberId,{qrToken:qrTokenFor(memberId,today())});
-    resolveNotifsForMember(memberId);
-    _dismissedIds.add(memberId);
-    document.getElementById('paymentModal').dataset.fromRenewal='';
-    toast('Payment recorded successfully.');
-    closeModal('paymentModal');
-    renderBilling();
-    scanRenewals();
-    if(fromRenewal){setTimeout(function(){navigate('notifications');viewRenewalReceipt(newId);},300);}
+  openConfirm(confirmTitle,confirmMsg,async function(){
+    try{
+      const result=await applyPaymentConfirmation(memberId,amount,method,reference,{planId,date,notes,source:fromRenewal?'renewal':'billing'});
+      if(!result||!result.member){err.textContent='Member not found.';err.style.display='block';return;}
+      _dismissedIds.add(memberId);
+      document.getElementById('paymentModal').dataset.fromRenewal='';
+      toast('Payment recorded and saved to Firebase.','success');
+      closeModal('paymentModal');
+      renderBilling();
+      updateQueueBadge();
+      scanRenewals();
+      if(fromRenewal){setTimeout(function(){navigate('notifications');viewRenewalReceipt(result.payment.id);},300);}
+    }catch(e){
+      err.textContent=(e&&e.message)?e.message:'Could not save the payment. Please try again.';
+      err.style.display='block';
+      console.error(e);
+    }
   },'Confirm','btn-primary');
 }
-function deletePayment(id){
+async function deletePayment(id){
   const p=Payments.one(id);if(!p)return;
-  openConfirm('Delete Payment',`Delete payment record ${p.id} for ${esc(p.memberName)}? This cannot be undone.`,()=>{
-    Payments.remove(id);
-    toast('Payment record deleted.','info');
-    refreshBillingTable();
+  openConfirm('Delete Payment',`Delete payment record ${p.id} for ${esc(p.memberName)}? This cannot be undone.`,async()=>{
+    try{
+      if(window.GMSFB&&GMSFB.enabled){
+        const res=await GMSFB.deleteDocs(KEY.payments,[id]);
+        if(!res||!res.ok)throw new Error('Firebase did not confirm the delete ('+((res&&(res.error||res.reason))||'error')+').');
+      }else{
+        Payments.remove(id);
+      }
+      toast('Payment record deleted.','info');
+      refreshBillingTable();
+      updateQueueBadge();
+    }catch(e){
+      toast((e&&e.message)||'Could not delete the payment.','error');
+      console.error('[deletePayment]',e);
+    }
   });
 }
 function openEditPayment(id){
@@ -4386,7 +4481,7 @@ function onEditPlanChange(){
   const plan=Plans.one(planId);
   if(plan)document.getElementById('ep_amount').value=plan.price;
 }
-function saveEditPayment(){
+async function saveEditPayment(){
   const id=document.getElementById('ep_id').value;
   const memberId=document.getElementById('ep_memberId').value;
   const planId=document.getElementById('ep_plan').value;
@@ -4400,29 +4495,46 @@ function saveEditPayment(){
   if(amount<=0){err.textContent='Invalid amount. The payment amount must be greater than zero.';err.style.display='block';return;}
   const reference=document.getElementById('ep_reference')?document.getElementById('ep_reference').value.trim():'';
   if(method==='GCash'&&!reference){err.textContent='Please enter the GCash reference number.';err.style.display='block';return;}
-  const plan=Plans.one(planId);
-  const newExpiry=addMonths(date,plan?plan.duration:1);
-  const payments=Payments.all();
-  const idx=payments.findIndex(p=>p.id===id);
-  if(idx<0){err.textContent='Payment record not found. Please refresh and try again.';err.style.display='block';return;}
-  payments[idx]={...payments[idx],planId,planName:plan?plan.name:payments[idx].planName,amount,date,newExpiry,method,reference,notes,editedBy:currentUser.username,editedAt:today()};
-  Payments.save(payments);
-  // Update member plan and expiry
-  const members=Members.all();const midx=members.findIndex(m=>m.id===memberId);
-  if(midx>-1){
-    members[midx].planId=planId;
-    members[midx].expiryDate=newExpiry;
-    if(!bgCheckBlocksActivation(members[midx]))members[midx].status='Active';
-    members[midx].planStart=date;
-    members[midx].qrNonce=newQrNonce(memberId);
+  if(window.GMSFB&&GMSFB.enabled&&!GMSFB._lastCloud.settings&&typeof GMSFB.waitForSnap==='function'){
+    try{await GMSFB.waitForSnap('settings',1500);}catch(e){}
   }
-  Members.save(members);
-  const live=Members.one(memberId);
-  if(live)Members.update(memberId,{qrToken:qrTokenFor(memberId,today())});
-  resolveNotifsForMember(memberId);
-  _dismissedIds.add(memberId);
-  toast('Payment updated successfully.','success');
-  closeModal('editPaymentModal');renderBilling();scanRenewals();
+  const plan=Plans.one(planId);
+  const old=Payments.one(id);
+  if(!old){err.textContent='Payment record not found. Please refresh and try again.';err.style.display='block';return;}
+  const newExpiry=addMonths(date,plan?plan.duration:1);
+  const updated={...old,planId,planName:plan?plan.name:old.planName,amount,date,newExpiry,method,reference:sanitizeText(reference),notes:sanitizeText(notes),editedBy:currentUser.username,editedAt:today()};
+  const member=Members.one(memberId);
+  let activation=null;
+  if(member){
+    const nonce=newQrNonce(memberId);
+    const token='FCG.'+memberId+'.'+date.replace(/-/g,'')+'.'+qrSig(memberId,date,nonce,getQrSecret());
+    activation={planId,expiryDate:newExpiry,planStart:date,status:bgCheckBlocksActivation(member)?member.status:'Active',qrNonce:nonce,qrToken:token};
+  }
+  try{
+    if(window.GMSFB&&GMSFB.enabled){
+      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+      const ops=[{col:'payments',id,data:updated,merge:true}];
+      if(activation)ops.push({col:'members',id:memberId,data:activation,merge:true});
+      Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open')
+        .forEach(n=>ops.push({col:'notifications',id:n.id,data:{status:'resolved',resolvedAt:new Date().toISOString()},merge:true}));
+      const res=await GMSFB.commitDocs(ops);
+      if(!res||!res.ok)throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+      if(activation&&typeof GMSFB.applyLocalPatch==='function')GMSFB.applyLocalPatch(KEY.members,memberId,activation);
+    }else{
+      const payments=Payments.all();const idx=payments.findIndex(p=>p.id===id);
+      if(idx<0)throw new Error('Payment record not found.');
+      payments[idx]=updated;Payments.save(payments);
+      if(activation)Members.update(memberId,activation);
+    }
+    resolveNotifsForMember(memberId);
+    _dismissedIds.add(memberId);
+    toast('Payment updated and saved to Firebase.','success');
+    closeModal('editPaymentModal');renderBilling();scanRenewals();
+  }catch(e){
+    err.textContent=(e&&e.message)?e.message:'Could not save the payment. Please try again.';
+    err.style.display='block';
+    console.error('[saveEditPayment]',e);
+  }
 }
 function viewRenewalReceipt(id){viewReceipt(id);}
 function viewReceipt(id){
@@ -4587,7 +4699,7 @@ function openTrainerEditModal(){
   document.getElementById('tepError').style.display='none';
   openModal('trainerEditProfileModal');
 }
-function saveTrainerProfile(){
+async function saveTrainerProfile(){
   const fullname=document.getElementById('tep_fullname').value.trim();
   const coachname=document.getElementById('tep_coachname').value.trim();
   const avatar=document.getElementById('tep_avatar').value;
@@ -4599,19 +4711,26 @@ function saveTrainerProfile(){
   const errEl=document.getElementById('tepError');
   errEl.style.display='none';
   if(!fullname){errEl.textContent='Full name is required.';errEl.style.display='block';return;}
-  const users=Users.all();
-  const idx=users.findIndex(x=>x.id===currentUser.id);
-  if(idx<0){errEl.textContent='User not found.';errEl.style.display='block';return;}
-  users[idx].name=fullname;
-  users[idx].coachName=coachname||fullname;
-  users[idx].bio=bio;
-  users[idx].specializations=specs;
-  users[idx].availableDays=days;
-  users[idx].availableFrom=from;
-  users[idx].availableTo=to;
-  users[idx].avatar=avatar||'';
-  Users.save(users);
-  currentUser={...currentUser,...users[idx]};
+  const patch={name:fullname,coachName:coachname||fullname,bio:bio,specializations:specs,availableDays:days,availableFrom:from,availableTo:to,avatar:avatar||''};
+  try{
+    if(window.GMSFB&&GMSFB.enabled){
+      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+      const res=await GMSFB.commitDocs([{col:'users',id:currentUser.id,data:patch,merge:true}]);
+      if(!res||!res.ok)throw new Error('Could not save profile to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+    }else{
+      const users=Users.all();
+      const idx=users.findIndex(x=>x.id===currentUser.id);
+      if(idx<0)throw new Error('User not found.');
+      Object.assign(users[idx],patch);
+      Users.save(users);
+    }
+  }catch(e){
+    errEl.textContent=(e&&e.message)||'Could not save profile. Please try again.';
+    errEl.style.display='block';
+    console.warn('[saveTrainerProfile]',e);
+    return;
+  }
+  currentUser={...currentUser,...patch};
   setSession(currentUser);
   const sn=document.getElementById('sideUserName');
   if(sn)sn.textContent=fullname;
@@ -5202,6 +5321,10 @@ document.addEventListener('click',function(e){
   if(bw&&bl&&!bw.contains(e.target)&&!bl.contains(e.target))bl.style.display='none';
 });
 const DEFAULT_SESSION_TYPES=['Personal Training','Cardio','Strength Training','Flexibility','Assessment'];
+// Public catalogue of trainer specializations. Session Type is built from
+// this list plus whatever trainers have saved, so Boxing/Zumba/etc. remain
+// selectable even before the users snapshot arrives on a member device.
+const SESSION_TYPE_CATALOG=['Personal Training','Strength Training','Cardio','Yoga','Zumba','HIIT','Flexibility','CrossFit','Body Building','Muay Thai','Boxing','Pilates'];
 function isBookableTrainer(u){return !!u&&u.role==='trainer'&&u.status!=='locked'&&u.status!=='pending';}
 // Trainer specializations can arrive as an array (normal) or a legacy
 // comma-separated string. Normalize everywhere so the Users list, profile,
@@ -5223,13 +5346,16 @@ function sessionTypesForTrainer(trainerId){
   return types;
 }
 function allSessionTypes(){
-  const set=new Set();
+  // Session Type comes from the trainer Specializations catalogue, plus any
+  // custom specialization an admin saved. Assessment is always available.
+  const types=SESSION_TYPE_CATALOG.slice();
+  const extra=[];
   Users.all().filter(isBookableTrainer).forEach(function(t){
-    trainerSpecs(t).forEach(function(s){if(s)set.add(s);});
-    set.add('Assessment');
+    trainerSpecList(t).forEach(function(s){
+      if(s&&s!=='Assessment'&&!types.includes(s)&&!extra.includes(s))extra.push(s);
+    });
   });
-  if(!set.size)DEFAULT_SESSION_TYPES.forEach(function(t){set.add(t);});
-  return [...set].sort(function(a,b){return a==='Assessment'?1:b==='Assessment'?-1:a.localeCompare(b);});
+  return types.concat(extra,['Assessment']);
 }
 function trainerOffersType(trainer,type){
   if(!type||type==='Assessment')return true;
@@ -6853,6 +6979,10 @@ let _queueSearch='',_queuePlanFilter='All';
 const _queueSelected=new Set();
 function renderQueue(){
   const el=document.getElementById('panelQueue');
+  if(window.GMSFB&&GMSFB.enabled&&(_cloudMap(KEY.members)===null||_cloudMap(KEY.payments)===null)){
+    el.innerHTML='<div class="table-card"><div class="empty-state" style="padding:40px"><div class="empty-icon">☁️</div><p>Loading pending payments from Firebase…</p></div></div>';
+    return;
+  }
   const plans=Plans.all().filter(p=>p.status==='Active');
   let pending=Members.all().filter(m=>m.status==='pending_payment');
   if(_queueSearch){const s=_queueSearch.toLowerCase();pending=pending.filter(m=>m.name.toLowerCase().includes(s)||m.id.toLowerCase().includes(s)||(m.email||'').toLowerCase().includes(s));}
@@ -6907,6 +7037,7 @@ function renderQueue(){
     </select>
   </div>
   ${pending.length?`<div class="queue-list">${items}</div>`:`<div class="table-card"><div class="empty-state"><div class="empty-icon">✅</div><p>All caught up! No pending payments right now.</p></div></div>`}`;
+  setTimeout(repairMicoDuplicatePayments,0);
 }
 function deleteQueueItem(memberId){
   const m=Members.one(memberId);
@@ -7025,6 +7156,75 @@ async function confirmSelectedPayments(){
     'btn-primary'
   );
 }
+// One-time data repair for the duplicate Mico Duamin payment created by the
+// old non-atomic confirmation path. Keeps the payment that matches the
+// member's current plan, deletes the extras, and activates the member if the
+// kept payment is valid. Runs once per admin/staff session.
+let _micoRepairDone=false,_micoRepairRunning=false,_micoRepairFailAt=0;
+async function repairMicoDuplicatePayments(){
+  if(_micoRepairDone||_micoRepairRunning)return;
+  if(Date.now()-_micoRepairFailAt<15000)return;
+  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+  if(!window.GMSFB||!GMSFB.enabled||!GMSFB.ready||!GMSFB.auth||!GMSFB.auth.currentUser)return;
+  if(GMSFB._lastCloud.members===undefined||GMSFB._lastCloud.payments===undefined)return;
+  const allMembers=Members.all();
+  const isMico=function(m){return (m.name||'').trim().toLowerCase()==='mico duamin';};
+  const member=allMembers.find(m=>m.id==='MEM-0003'&&isMico(m))||allMembers.find(m=>isMico(m)&&m.status==='pending_payment');
+  // Only repair a still-pending Mico. Once the member is active this must be a
+  // no-op so a future renewal payment is never mistaken for a duplicate.
+  if(!member||member.status!=='pending_payment'){_micoRepairDone=true;return;}
+  const pays=Payments.all().filter(p=>p.memberId===member.id);
+  if(!pays.length){_micoRepairDone=true;return;}
+  _micoRepairRunning=true;
+  try{
+    const sorted=pays.slice().sort(newestPaymentFirst);
+    const keep=sorted.find(p=>p.planId===member.planId)||sorted[0];
+    const remove=pays.filter(p=>p.id!==keep.id);
+    const ops=remove.map(p=>({col:'payments',id:p.id,delete:true}));
+    let activated=false;
+    if(member.status==='pending_payment'){
+      if(!GMSFB._lastCloud.settings&&typeof GMSFB.waitForSnap==='function'){try{await GMSFB.waitForSnap('settings',1500);}catch(e){}}
+      const plan=keep.planId?Plans.one(keep.planId):Plans.one(member.planId);
+      const start=keep.date||today();
+      const expiry=keep.newExpiry||addMonths(start,plan?plan.duration:1);
+      const nonce=newQrNonce(member.id);
+      const token='FCG.'+member.id+'.'+start.replace(/-/g,'')+'.'+qrSig(member.id,start,nonce,getQrSecret());
+      const activation={status:'Active',planId:keep.planId||member.planId,planStart:start,startDate:start,expiryDate:expiry,qrNonce:nonce,qrToken:token};
+      ops.push({col:'members',id:member.id,data:activation,merge:true});
+      Notifications.all().filter(n=>n.memberId===member.id&&n.type==='pending_payment'&&n.status==='open')
+        .forEach(n=>ops.push({col:'notifications',id:n.id,data:{status:'resolved',resolvedAt:new Date().toISOString()},merge:true}));
+      GMSFB.applyLocalPatch(KEY.members,member.id,activation);
+      activated=true;
+    }
+    if(!ops.length){_micoRepairDone=true;return;}
+    const res=await GMSFB.commitDocs(ops);
+    if(!res||!res.ok){
+      if(activated&&typeof GMSFB.revertLocalPatch==='function')GMSFB.revertLocalPatch(KEY.members,member.id,member);
+      _micoRepairFailAt=Date.now();
+      console.warn('[repairMico]',res);
+      return;
+    }
+    _micoRepairDone=true;
+    if(activated){
+      resolveNotifsForMember(member.id);
+      _dismissedIds.add(member.id);
+      logActivity('Activated','Member',member.name,'ID: '+member.id+' | Repaired existing payment '+keep.id+' | Removed '+remove.length+' duplicate(s)');
+    }
+    if(remove.length){
+      toast('Removed '+remove.length+' duplicate payment record'+(remove.length!==1?'s':'')+' for '+member.name+(activated?' and activated the membership.':'.'),'success');
+    }
+    updateQueueBadge();
+    if(typeof _lastPanel!=='undefined'){
+      if(_lastPanel==='queue')renderQueue();
+      if(_lastPanel==='billing')refreshBillingTable();
+    }
+  }catch(e){
+    _micoRepairFailAt=Date.now();
+    console.warn('[repairMico]',e);
+  }finally{
+    _micoRepairRunning=false;
+  }
+}
 function openConfirmPayment(memberId){
   _confirmPaymentMemberId=memberId;
   const m=Members.one(memberId);
@@ -7062,20 +7262,28 @@ function toggleCpmReference(){
   const wrap=document.getElementById('cpm_refWrap');
   if(wrap)wrap.style.display=method==='GCash'?'block':'none';
 }
-async function applyPaymentConfirmation(memberId,amount,method,reference){
+async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
+  opts=opts||{};
   const member=Members.one(memberId);
   if(!member)return null;
-  const plan=member.planId?Plans.one(member.planId):null;
-  const start=today();
+  // Make sure the settings snapshot (QR secret) is available before signing
+  // a new token. Without this, a slow first snapshot could generate a second
+  // secret and invalidate QR codes on other devices.
+  if(window.GMSFB&&GMSFB.enabled&&!GMSFB._lastCloud.settings&&typeof GMSFB.waitForSnap==='function'){
+    try{await GMSFB.waitForSnap('settings',1500);}catch(e){}
+  }
+  const planId=opts.planId||member.planId;
+  const plan=planId?Plans.one(planId):null;
+  const start=opts.date||today();
   const newExpiry=addMonths(start,plan?plan.duration:1);
   const now=new Date();
-  const newId=nextId(KEY.payments,'PAY');
-  const payment={id:newId,memberId,memberName:member.name,planId:member.planId,planName:plan?plan.name:'Unknown',amount:amount|| (plan?Number(plan.price):0),date:start,newExpiry,method:method||'Cash',reference:reference||'',notes:'',recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:'activation',timestamp:now.getTime(),createdAt:start};
+  const newId=opts.paymentId||nextId(KEY.payments,'PAY');
+  const payment={id:newId,memberId,memberName:member.name,planId,planName:plan?plan.name:'Unknown',amount:amount|| (plan?Number(plan.price):0),date:start,newExpiry,method:method||'Cash',reference:sanitizeText(reference||''),notes:sanitizeText(opts.notes||''),recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:opts.source||'activation',timestamp:now.getTime(),createdAt:start};
   const nonce=newQrNonce(memberId);
   const token='FCG.'+memberId+'.'+start.replace(/-/g,'')+'.'+qrSig(memberId,start,nonce,getQrSecret());
   // Fields that unlock the member. Written in the same atomic batch as the
   // payment so the queue cannot say "confirmed" before Firestore has them.
-  const activation={status:'Active',planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token};
+  const activation={status:'Active',planId,planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token};
   const openNotifs=Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open');
   if(window.GMSFB&&GMSFB.enabled){
     if(!GMSFB.auth||!GMSFB.auth.currentUser){
@@ -7097,19 +7305,23 @@ async function applyPaymentConfirmation(memberId,amount,method,reference){
       else GMSFB.clearLocalPatch(KEY.members,memberId);
       throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+'). Please check your connection and try again.');
     }
+    // commitDocs updated the live snapshot for members/payments/notifications.
+    // Keep the new payment visible if a cached pre-write snapshot arrives.
+    if(typeof GMSFB.applyLocalPatch==='function')GMSFB.applyLocalPatch(KEY.payments,newId,payment);
+  }else{
+    // Local-only fallback (Firebase not configured).
+    const payments=Payments.all();
+    payments.push(payment);
+    Payments.save(payments);
+    Members.update(memberId,activation);
   }
-  // Local caches now mirror the committed docs.
-  const payments=Payments.all();
-  payments.push(payment);
-  Payments.save(payments);
-  const updated=Members.update(memberId,activation);
   resolveNotifsForMember(memberId);
   if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.applyLocalPatch==='function'){
     GMSFB.applyLocalPatch(KEY.members,memberId,activation);
   }
   _queueSelected.delete(memberId);
   logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'—')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
-  return updated||{...member,...activation};
+  return {member:Members.one(memberId)||{...member,...activation},payment};
 }
 async function confirmPayment(){
   const memberId=document.getElementById('cpm_memberId').value;
@@ -7129,7 +7341,8 @@ async function confirmPayment(){
   }
   if(btn){btn.disabled=true; btn.textContent='Confirming…';}
   try{
-    const member=await applyPaymentConfirmation(memberId,amount,method,reference);
+    const result=await applyPaymentConfirmation(memberId,amount,method,reference);
+    const member=result&&result.member;
     if(!member){err.textContent='Member not found.';err.style.display='block';return;}
     closeModal('confirmPaymentModal');
     toast(`Payment confirmed — ${member.name} is now active. Member can now log in on any device.`);

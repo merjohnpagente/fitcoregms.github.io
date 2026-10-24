@@ -1,13 +1,14 @@
 // ============================================================
 // GMS ⇄ FIREBASE SYNC ADAPTER (db-firebase.js)
 // ------------------------------------------------------------
-// Strategy: "sync-cache". The app keeps using its synchronous
-// localStorage Repository API unchanged. This adapter:
-//   1. Mirrors Firestore collections into localStorage (cache)
-//   2. Pushes local writes to Firestore (diff-based batches)
-//   3. Keeps every device live via onSnapshot listeners
-//   4. Replaces password auth with Firebase Authentication
+// Strategy: online-first. Business collections are read from Firestore
+// snapshots kept in memory; localStorage is never used as a business-data
+// cache. This adapter:
+//   1. Pushes local writes to Firestore (diff-based batches)
+//   2. Keeps every device live via onSnapshot listeners
+//   3. Replaces password auth with Firebase Authentication
 //      (usernames map to synthetic in-app email identities)
+// Only device-local security counters (login lockouts) stay in localStorage.
 // ============================================================
 (function(){
   'use strict';
@@ -23,6 +24,7 @@
     gms_measurements:'measurements', gms_goals:'goals',
     gms_exercise_library:'exerciseLibrary'
   };
+  var REVCOL={};Object.keys(COLMAP).forEach(function(k){REVCOL[COLMAP[k]]=k;});
   var AUTH_DOMAIN_SUFFIX='@fitcoregym.local';
   var GMSFB={
     enabled:true, ready:false, _applying:false,
@@ -42,6 +44,13 @@
         this.secondary=(firebase.apps.find(function(a){return a.name==='gms-admin-tasks';})
           ||firebase.initializeApp(window.FIREBASE_CONFIG,'gms-admin-tasks'));
         this.ready=true;
+        // Online-only: purge business collections cached by older builds.
+        // Device-local security counters (login lockouts) are left alone.
+        try{
+          Object.keys(COLMAP).forEach(function(k){localStorage.removeItem(k);});
+          localStorage.removeItem('gms_pw_overrides');
+          localStorage.removeItem('gms_seeded');
+        }catch(e){}
         var self=this;
         // Re-attach fresh listeners whenever the signed-in identity changes
         // (login, logout, registration flows). A failed listener never
@@ -141,7 +150,13 @@
         if(!p){return;}
         if(Date.now()-p.ts>60000){delete patches[id];return;}
         var doc=map[id];
-        if(!doc){return;}
+        if(!doc){
+          // Newly created doc (e.g. a just-committed payment) can be missing
+          // from a cached snapshot. Re-insert the full patched doc; patches
+          // for existing docs never carry an id, so deleted docs stay gone.
+          if(p.patch&&p.patch.id===id)map[id]=Object.assign({},p.patch);
+          return;
+        }
         var same=true;
         Object.keys(p.patch).forEach(function(k){
           if(JSON.stringify(doc[k])!==JSON.stringify(p.patch[k]))same=false;
@@ -214,7 +229,7 @@
     // ---------- direct atomic writes ----------
     // Used for money/activation changes: the UI must only say "confirmed"
     // after Firestore has acknowledged the member + payment docs.
-    // ops: [{col, id, data, merge}]
+    // ops: [{col, id, data, merge}] or [{col, id, delete:true}]
     commitDocs:function(ops){
       if(!this.ready||!this.db)return Promise.resolve({ok:false,reason:'not-ready'});
       if(!this.auth||!this.auth.currentUser)return Promise.resolve({ok:false,reason:'no-auth'});
@@ -222,12 +237,28 @@
       var batch=this.db.batch(),self=this;
       try{
         ops.forEach(function(op){
-          batch.set(self.db.collection(op.col).doc(op.id),self._clean(op.data||{}),{merge:!!op.merge});
+          var ref=self.db.collection(op.col).doc(op.id);
+          if(op.delete){batch.delete(ref);return;}
+          batch.set(ref,self._clean(op.data||{}),{merge:!!op.merge});
         });
       }catch(e){
         return Promise.resolve({ok:false,error:(e&&e.code)||'batch-build'});
       }
       return batch.commit().then(function(){
+        // Reflect the committed docs in the live snapshot immediately. This
+        // is what makes the queue card disappear and the payment show up in
+        // Billing without waiting for Firestore's next snapshot.
+        ops.forEach(function(op){
+          var keys=[op.col];
+          var sk=REVCOL[op.col];
+          if(sk&&sk!==op.col)keys.push(sk);
+          keys.forEach(function(k){
+            var m=self._lastCloud[k];
+            if(!m)return;
+            if(op.delete){delete m[op.id];if(self._localPatches[op.col])delete self._localPatches[op.col][op.id];}
+            else m[op.id]=Object.assign({},m[op.id]||{},op.data||{});
+          });
+        });
         return {ok:true,ops:ops.length};
       }).catch(function(e){
         console.warn('[GMSFB] commitDocs',e&&e.code,e);
@@ -497,6 +528,7 @@
         ids.forEach(function(id){
           if(self._lastCloud[col])delete self._lastCloud[col][id];
           if(self._lastCloud[storageKey]&&self._lastCloud[storageKey]!==self._lastCloud[col])delete self._lastCloud[storageKey][id];
+          if(self._localPatches[col])delete self._localPatches[col][id];
         });
         return {ok:true,ops:ids.length};
       }).catch(function(e){

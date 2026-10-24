@@ -1218,6 +1218,12 @@
               <div class="form-group"><label for="msStreet">Street *</label><input type="text" id="msStreet" autocomplete="address-line1" required></div>
             </div>
 
+            <div class="form-row cols-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group"><label>Emergency Contact Name</label><input type="text" id="msEcName" placeholder="Parent / guardian / emergency contact"></div>
+              <div class="form-group"><label>Emergency Contact Number</label><input type="tel" id="msEcNum" placeholder="09171234567" inputmode="numeric" maxlength="15"></div>
+            </div>
+            <div class="form-group"><label>Medical / Special Notes</label><textarea id="msMedical" rows="2" placeholder="Allergies, conditions, injuries, or anything staff should know"></textarea></div>
+
             <div class="age-policy-notice">Under 13 not allowed. 13–17 require guardian consent. <a onclick="showLandingSection('explore',null);setTimeout(()=>document.querySelector('.explore-extra')&&document.querySelector('.explore-extra').scrollIntoView({behavior:'smooth'}),120)">View details</a></div>
 
             <!-- Guardian consent (shown for ages 13-17) -->
@@ -2979,7 +2985,7 @@
 
 <script src="firebase-config.js?v=21"></script>
 
-<script src="db-firebase.js?v=27"></script>
+<script src="db-firebase.js?v=28"></script>
 
 <script src="vendor/qrcode.min.js?v=21"></script>
 
@@ -2992,7 +2998,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=44"></script>
+<script src="script.js?v=45"></script>
 
 </body>
 
