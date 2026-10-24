@@ -228,14 +228,43 @@
     },
     _clean:function(v){
       var c=Array.isArray(v)?v.slice():Object.assign({},v);
-      delete c.password; // keep passwordHash for Forgot Password cross-device sync (Firestore requires auth to read, so not public)
-      // delete c.passwordHash; // removed to allow hash sync for phone/gmail reset
+      // SECURITY: password material never leaves the device. Firebase Auth is
+      // the credential store; the in-app salted hash exists only as a local
+      // fallback for legacy/admin-reset accounts. Syncing it to Firestore
+      // exposed every account to offline cracking (and members used to be
+      // able to write another user's hash and log in as them).
+      delete c.password;
+      delete c.passwordHash;
       var self=this;
       Object.keys(c).forEach(function(k){
         if(c[k]===undefined)c[k]=null;
         else if(c[k]&&typeof c[k]==='object'&&!Array.isArray(c[k]))c[k]=self._clean(c[k]);
       });
       return c;
+    },
+    // One-time containment for docs written before _clean stripped hashes.
+    // Runs after an admin signs in; safe to call repeatedly.
+    scrubSensitiveFields:function(){
+      if(!this.db||!this.auth||!this.auth.currentUser)return Promise.resolve({ok:false,reason:'no-auth'});
+      var self=this;
+      return Promise.all(['users','members'].map(function(col){
+        return self.db.collection(col).get().then(function(snap){
+          var batch=self.db.batch(),n=0;
+          snap.forEach(function(doc){
+            var d=doc.data()||{};
+            if(Object.prototype.hasOwnProperty.call(d,'passwordHash')||Object.prototype.hasOwnProperty.call(d,'password')){
+              batch.update(doc.ref,{
+                passwordHash:firebase.firestore.FieldValue.delete(),
+                password:firebase.firestore.FieldValue.delete()
+              });
+              n++;
+            }
+          });
+          if(!n)return{collection:col,removed:0};
+          return batch.commit().then(function(){return{collection:col,removed:n};})
+            .catch(function(e){return{collection:col,removed:0,error:e&&e.code};});
+        }).catch(function(e){return{collection:col,removed:0,error:e&&e.code};});
+      })).then(function(results){return{ok:true,results:results};});
     },
     // ---------- direct fetch helpers (cross-device login reliability) ----------
     // After a successful Firebase Auth sign-in we can directly query Firestore

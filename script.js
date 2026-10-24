@@ -105,9 +105,27 @@ function signupRateCheck(){
   let count=parseInt(localStorage.getItem(key)||'0',10);
   let first=parseInt(localStorage.getItem(key+'_t')||'0',10);
   const now=Date.now();
+  // Anti-spam: one account-creation attempt per 30 seconds per browser.
+  const last=parseInt(localStorage.getItem(key+'_last')||'0',10);
+  if(last&&now-last<30*1000){localStorage.setItem(key,String(count+1));return true;}
+  localStorage.setItem(key+'_last',String(now));
   if(!first||now-first>SIGNUP_RATE_WINDOW_MS){first=now;count=0;localStorage.setItem(key+'_t',String(now));}
   localStorage.setItem(key,String(count+1));
   return count>=SIGNUP_RATE_LIMIT;
+}
+// Generic client-side anti-spam limiter. It stops accidental/rapid abuse but
+// is NOT a security boundary — a determined attacker can clear storage.
+// Real spam protection belongs in Firebase App Check + server-side quotas.
+function rateLimitOk(key,max,windowMs){
+  const now=Date.now();
+  let hits=[];
+  try{hits=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+  if(!Array.isArray(hits))hits=[];
+  hits=hits.filter(t=>typeof t==='number'&&now-t<windowMs);
+  if(hits.length>=max)return false;
+  hits.push(now);
+  try{localStorage.setItem(key,JSON.stringify(hits));}catch(e){}
+  return true;
 }
 function pushPendingPaymentNotif(member){
   const plan=member.planId?Plans.one(member.planId):null;
@@ -238,7 +256,7 @@ class GymUser{
 class Admin extends GymUser{}
 class Staff extends GymUser{}
 class TrainerAccount extends GymUser{
-  get specializationList(){return this.specializations||[];}
+  get specializationList(){return Array.isArray(this.specializations)?this.specializations:(typeof this.specializations==='string'?this.specializations.split(',').map(s=>s.trim()).filter(Boolean):[]);}
   isAvailableOn(day){return (this.availableDays||[]).includes(day);}
 }
 class Plan{
@@ -307,17 +325,10 @@ class AuthService{
     const found=Users.all().find(x=>x.username&&x.username.toLowerCase()===unameLower) || Users.all().find(x=>x.authEmail&&x.authEmail.toLowerCase()===unameLower+'@fitcoregym.local');
     if(found&&found.status==='locked')return{ok:false,error:'Account locked. Please contact the administrator.'};
     if(found&&found.status==='pending')return{ok:false,error:'Your account is pending admin approval. Please wait.'};
-    // Admin-set password: accept only the new hash on devices that have the updated record,
-    // so the previous Firebase Auth password stops working here.
-    if(found&&found.role!=='admin'&&found.passwordResetAt&&found.passwordHash){
-      if(verifyPassword(password,found.passwordHash)){
-        LoginAttempts.reset(username);
-        this.setSession(found);
-        return{ok:true,user:found};
-      }
-      LoginAttempts.register(username);
-      return{ok:false,error:'Invalid username or password.'};
-    }
+    // SECURITY: the old salted-hash fallback was removed for staff/trainer/admin.
+    // It let anyone who could write a user doc (or set a reset hash) turn that
+    // hash into a privileged login. Member legacy resets keep their own local
+    // fallback below; privileged accounts must use Firebase Auth / a reset link.
     // ---------- ONLINE (Firebase Auth) ----------
     if(window.GMSFB&&GMSFB.enabled){
       // Give the first Firestore snapshot a moment to arrive so this login is
@@ -333,16 +344,8 @@ class AuthService{
         if(r.ok){LoginAttempts.reset(username);if(found.role==='admin')GMSFB.ensureSeededPlans();this.setSession(found);return{ok:true,user:found};}
         // Do not lock on network errors — only on credential failures
         if(r.code&&r.code.indexOf('network')>-1) return{ok:false,error:r.error};
-        // Fallback: hash check for Forgot Password / admin password reset
-        if(found.passwordHash && verifyPassword(password, found.passwordHash)){
-          LoginAttempts.reset(username);
-          if(found.role==='admin') GMSFB.ensureSeededPlans();
-          this.setSession(found);
-          return{ok:true,user:found};
-        }
-        // For admin: fall through to bootstrap block below — the Firebase Auth
-        // account may have been deleted from Firebase Console even though the
-        // Firestore profile doc exists. Bootstrap recreates it.
+        // SECURITY: no hash fallback for privileged accounts. A forged
+        // passwordHash must never become an admin/staff session.
         if(found.role!=='admin'){
           LoginAttempts.register(username);
           return{ok:false,error:r.error};
@@ -360,14 +363,14 @@ class AuthService{
         const r=await GMSFB.signIn(GMSFB.authEmailFor(effMember),password);
         if(r.ok){
           LoginAttempts.reset(username);
-          const sess={id:effMember.id,email:effMember.email||'',username:effMember.username,name:effMember.name,contact:effMember.contact,role:'member',memberId:effMember.id,status:effMember.status};
+          const sess={id:effMember.id,email:effMember.email||'',username:effMember.username,name:effMember.name,contact:effMember.contact,role:'member',memberId:effMember.id,status:effMember.status,authEmail:GMSFB.authEmailFor(effMember)};
           this.setSession(sess);
           return{ok:true,user:sess};
         }
         if(r.code&&r.code.indexOf('network')>-1) return{ok:false,error:r.error};
         if(effMember.passwordHash && verifyPassword(password, effMember.passwordHash)){
           LoginAttempts.reset(username);
-          const sess={id:effMember.id,email:effMember.email||'',username:effMember.username,name:effMember.name,contact:effMember.contact,role:'member',memberId:effMember.id,status:effMember.status};
+          const sess={id:effMember.id,email:effMember.email||'',username:effMember.username,name:effMember.name,contact:effMember.contact,role:'member',memberId:effMember.id,status:effMember.status,authEmail:GMSFB.authEmailFor(effMember)};
           this.setSession(sess);
           return{ok:true,user:sess};
         }
@@ -478,7 +481,7 @@ class AuthService{
           // with auto-refresh, so they see their status live. No block here.
           if(isMemberExpired(m)){GMSFB.signOut();return{ok:false,error:EXPIRED_LOGIN_MSG};}
           LoginAttempts.reset(username);
-          const sess={id:m.id,email:m.email||'',username:m.username,name:m.name,contact:m.contact,role:'member',memberId:m.id,status:m.status};
+          const sess={id:m.id,email:m.email||'',username:m.username,name:m.name,contact:m.contact,role:'member',memberId:m.id,status:m.status,authEmail:GMSFB.authEmailFor(m)};
           this.setSession(sess);
           return{ok:true,user:sess};
         }
@@ -1250,7 +1253,7 @@ function onFpOtpPaste(e){
 }
 function openForgotModal(){
   _fpForcedMode=false;
-  const prog=document.getElementById('fpProgress'); if(prog) prog.style.display='';
+  const prog=document.getElementById('fpProgress'); if(prog) prog.style.display='none';
   const closeBtn=document.querySelector('#forgotModal .modal-close'); if(closeBtn) closeBtn.style.display='';
   const t=document.getElementById('fpModalTitle'); if(t) t.textContent='Reset Password';
   document.getElementById('fp_user').value='';
@@ -1271,7 +1274,7 @@ function openForgotModal(){
   const resend=document.getElementById('fp_resend'); if(resend){ resend.style.display='none'; resend.textContent='Resend Code'; }
   const btn=document.getElementById('fp_verify_btn'); if(btn){ btn.textContent='Continue'; btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; }
   const cb=document.getElementById('fp_confirm_btn'); if(cb) setFpBtnLoading(cb,false);
-  const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Submit Code'; }
+  const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Send Reset Link'; }
   const _fp1=document.getElementById('fp_new_pass'); if(_fp1) _fp1.value='';
   const _fp2=document.getElementById('fp_new_pass2'); if(_fp2) _fp2.value='';
   const _fe=document.getElementById('fpsError'); if(_fe) _fe.style.display='none';
@@ -1318,70 +1321,9 @@ function sendForgotCode(){
 }
 function fpBackToLoginAlias(){ fpBackToLogin(); }
 async function resendForgotCode(){
-  const err=document.getElementById('forgotError');
-  if(Date.now()<_fpCooldown){
-    const secs=Math.ceil((_fpCooldown-Date.now())/1000);
-    if(err){err.textContent='Please wait '+secs+'s before resending.'; err.style.display='block';}
-    return;
-  }
-  if(!_fpCode){ fpSubmitCode(); return; }
-  const code=String(Math.floor(100000 + Math.random()*900000));
-  _fpCode=code; _fpCodeExp=Date.now()+5*60*1000; _fpCooldown=Date.now()+60*1000;
-  const hint=document.getElementById('fp_code_hint');
-  const otpHint=document.getElementById('fp_otp_hint');
-  const legacyOtp=document.getElementById('fp_otp');
-  if(legacyOtp) legacyOtp.value='';
-  let realSent=false;
-  let emailError='';
-  const pending=window._fpPendingTarget||{};
-  const targetEmail=pending.email|| (document.getElementById('fp_email')?document.getElementById('fp_email').value.trim().toLowerCase():'');
-  const targetName=pending.username||'FitCore User';
-  if(window.emailjs && window.EMAILJS_CONFIG && window.EMAILJS_CONFIG.publicKey && window.EMAILJS_CONFIG.serviceId && window.EMAILJS_CONFIG.templateId){
-    try{
-      if(!window.emailjs.__initialized && window.EMAILJS_CONFIG.publicKey){ window.emailjs.init(window.EMAILJS_CONFIG.publicKey); window.emailjs.__initialized=true; }
-      await window.emailjs.send(window.EMAILJS_CONFIG.serviceId, window.EMAILJS_CONFIG.templateId, {to_email:targetEmail,to_name:targetName,username:targetName,otp_code:code,from_name:(window.EMAILJS_CONFIG.fromName||'FitCore GMS'),message:'Your new FitCore verification code is '+code+' (valid 5 minutes).'});
-      realSent=true;
-    }catch(e){ emailError=(e&&e.text)||(e&&e.message)||''; console.warn('[EmailJS resend] failed',e); }
-  }
-  if(realSent){
-    const msgReal='✅ Code resent to <strong style="color:var(--green)">'+esc(targetEmail)+'</strong> (valid 5 min). Check inbox/spam.';
-    if(hint){hint.innerHTML=msgReal; hint.style.display='block'; hint.style.color='var(--gray-300)';}
-    if(otpHint){otpHint.innerHTML=msgReal; otpHint.style.display='block'; otpHint.style.color='var(--gray-300)';}
-    toast('Verification code resent — check inbox/spam','success');
-  } else {
-    const waitMsg='Code resent via Gmail — please check inbox/spam (valid 5 min). Tap Resend if not received.';
-    if(hint){hint.innerHTML=waitMsg; hint.style.display='block'; hint.style.color='var(--gray-300)';}
-    if(otpHint){otpHint.innerHTML=waitMsg; otpHint.style.display='block'; otpHint.style.color='var(--gray-300)';}
-    if(emailError) toast('Resend failed — please try again or contact admin.','error'); else toast('Code sent — check Gmail inbox/spam (valid 5 min)','info');
-  }
-  startFpResendCooldown();
-  setFpOtp('');
-  updateFpVerifyBtnState();
-  if(err) err.style.display='none';
-  const codeErr=document.getElementById('fp_code_error'); if(codeErr) codeErr.style.display='none';
-}
-function startFpResendCooldown(){
-  const resend=document.getElementById('fp_resend');
-  const legacyBtn=document.getElementById('fp_send_code');
-  if(_fpCodeTimer) clearInterval(_fpCodeTimer);
-  let left=60;
-  if(resend){
-    resend.style.pointerEvents='none';
-    resend.style.opacity='0.5';
-    resend.textContent='Resend (60s)';
-  }
-  if(legacyBtn){ legacyBtn.textContent='Resend (60s)'; legacyBtn.disabled=true; }
-  _fpCodeTimer=setInterval(()=>{
-    left--;
-    if(left<=0){
-      clearInterval(_fpCodeTimer); _fpCodeTimer=null;
-      if(resend){ resend.textContent='Resend Code'; resend.style.pointerEvents=''; resend.style.opacity=''; }
-      if(legacyBtn){ legacyBtn.textContent='Send Code'; legacyBtn.disabled=false; }
-    } else {
-      if(resend) resend.textContent='Resend ('+left+'s)';
-      if(legacyBtn) legacyBtn.textContent='Resend ('+left+'s)';
-    }
-  },1000);
+  // Firebase Auth generates and rate-limits the reset link now; there is no
+  // client-side OTP to resend. Reuse the same rate-limited send path.
+  return fpSubmitCode();
 }
 function updateFpStrength(val){
   const bars=[document.getElementById('fps1'),document.getElementById('fps2'),document.getElementById('fps3')];
@@ -1407,106 +1349,31 @@ async function fpSubmitCode(){
   if(!email){if(err){err.textContent='Please enter your email.';err.style.display='block';}return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(err){err.textContent='Please enter a valid email address.';err.style.display='block';}return;}
   if(Date.now()<_fpCooldown){if(err){err.textContent='Please wait '+Math.ceil((_fpCooldown-Date.now())/1000)+'s before sending again.';err.style.display='block';}return;}
+  if(!rateLimitOk('gms_rl_forgot',3,15*60*1000)){
+    if(err){err.textContent='Too many reset requests. Please wait 15 minutes and try again.';err.style.display='block';}
+    return;
+  }
   if(sb){ sb.disabled=true; sb.style.opacity='0.7'; sb.textContent='Sending…'; }
-  // Lookup by email only (users then members, local then cloud)
-  let target=null, targetType=null;
-  target=Users.all().find(u=>u.email&&String(u.email).toLowerCase()===emailLower)
-       || Users.all().find(u=>u.authEmail&&String(u.authEmail).toLowerCase()===emailLower);
-  if(target) targetType='user';
-  if(!target){
-    target=Members.all().find(m=>m.email&&String(m.email).toLowerCase()===emailLower)
-         || Members.all().find(m=>m.authEmail&&String(m.authEmail).toLowerCase()===emailLower);
-    if(target) targetType='member';
-  }
-  if(!target && window.GMSFB && GMSFB.enabled){
-    try{
-      let authed=false;
-      if(!GMSFB.auth.currentUser){
-        try{ const r=await GMSFB.auth.signInAnonymously(); authed=r&&r.user!=null; }catch(e){ authed=false; }
-      } else authed=true;
-      if(authed){
-        if(typeof GMSFB.fetchMemberByLogin==='function'){
-          const m=await GMSFB.fetchMemberByLogin(emailLower);
-          if(m){ target=m; targetType='member'; }
-        }
-        if(!target && typeof GMSFB.fetchUserByLogin==='function'){
-          const u=await GMSFB.fetchUserByLogin(emailLower);
-          if(u){ target=u; targetType='user'; }
-        }
-        // also query Firestore by email field directly
-        if(!target){
-          try{
-            const sm=await GMSFB.db.collection('members').where('email','==',emailLower).limit(1).get();
-            if(sm&&!sm.empty){ target=sm.docs[0].data(); target.id=target.id||sm.docs[0].id; targetType='member'; }
-          }catch(e){}
-        }
-        if(!target){
-          try{
-            const su=await GMSFB.db.collection('users').where('email','==',emailLower).limit(1).get();
-            if(su&&!su.empty){ target=su.docs[0].data(); target.id=target.id||su.docs[0].id; targetType='user'; }
-          }catch(e){}
-        }
-      }
-    }catch(e){}
-  }
-  if(!target){
-    if(sb){ sb.disabled=false; sb.style.opacity=''; sb.textContent='Submit Code'; }
-    if(err){err.textContent='No account found with that email. Please check and try again.';err.style.display='block';}
-    return;
-  }
-  const username=target.username||target.id||'';
-  const sendTo=String(target.email&&String(target.email).indexOf('@fitcoregym.local')<0?target.email:emailLower).toLowerCase();
-  if(sendTo.endsWith('@fitcoregym.local')){
-    if(sb){ sb.disabled=false; sb.style.opacity=''; sb.textContent='Submit Code'; }
-    if(err){err.textContent='This account uses a staff-managed password. Please contact the front desk to reset your password.';err.style.display='block';}
-    return;
-  }
-  const code=String(Math.floor(100000 + Math.random()*900000));
-  _fpCode=code; _fpCodeExp=Date.now()+5*60*1000; _fpCooldown=Date.now()+60*1000;
-  window._fpPendingTarget={username:username,targetId:target.id,targetType:targetType,method:'email',email:sendTo,phone:''};
-  let realSent=false;
-  let emailError='';
-  if(window.emailjs && window.EMAILJS_CONFIG && window.EMAILJS_CONFIG.publicKey && window.EMAILJS_CONFIG.serviceId && window.EMAILJS_CONFIG.templateId){
-    try{
-      if(!window.emailjs.__initialized && window.EMAILJS_CONFIG.publicKey){
-        window.emailjs.init(window.EMAILJS_CONFIG.publicKey);
-        window.emailjs.__initialized=true;
-      }
-      await window.emailjs.send(window.EMAILJS_CONFIG.serviceId, window.EMAILJS_CONFIG.templateId, {
-        to_email: sendTo,
-        to_name: target.name||username,
-        username: username,
-        otp_code: code,
-        from_name: (window.EMAILJS_CONFIG.fromName||'FitCore GMS'),
-        message: 'Your FitCore verification code is '+code+' (valid 5 minutes). Do not share this code.'
-      });
-      realSent=true;
-    }catch(e){
-      emailError=(e&&e.text)||(e&&e.message)||'';
-      console.warn('[EmailJS] send failed',e);
+  // SECURITY: Firebase Auth generates and verifies the reset link server-side.
+  // There is no client-side OTP or password hash to forge, and the response is
+  // intentionally generic so the form cannot be used to enumerate accounts.
+  let sent=false;
+  try{
+    if(window.GMSFB&&GMSFB.enabled&&GMSFB.auth&&typeof GMSFB.auth.sendPasswordResetEmail==='function'){
+      await GMSFB.auth.sendPasswordResetEmail(emailLower);
+      sent=true;
     }
+  }catch(e){
+    console.warn('[reset] sendPasswordResetEmail',e&&e.code);
   }
-  const sub=document.getElementById('fpStep2Sub');
-  if(sub) sub.innerHTML='Enter the 6-digit code we sent to<br><strong style="color:var(--green)">'+esc(sendTo)+'</strong>';
-  const hint=document.getElementById('fp_code_hint');
-  if(realSent){
-    const msgReal='✅ Code sent to <strong style="color:var(--green)">'+esc(sendTo)+'</strong> (valid 5 min). Check inbox / spam.';
-    if(hint){hint.innerHTML=msgReal; hint.style.display='block'; hint.style.color='var(--gray-300)';}
-    toast('Verification code sent — check inbox/spam (valid 5 min)','success');
-  } else {
-    const waitMsg='Code sent via Gmail — please check inbox / spam (valid 5 min). If you did not receive it, tap Resend Code or contact front desk.';
-    if(hint){hint.innerHTML=waitMsg; hint.style.display='block'; hint.style.color='var(--gray-300)';}
-    if(emailError){ toast('Email service error — tap Resend or contact admin.','error'); console.warn('[EmailJS] send failed',emailError); }
-    else toast('Code sent — check inbox/spam (valid 5 min)','info');
+  _fpCooldown=Date.now()+60*1000;
+  if(sb){ sb.disabled=false; sb.style.opacity=''; sb.textContent='Send Reset Link'; }
+  const prog=document.getElementById('fpProgress'); if(prog) prog.style.display='none';
+  if(suc){
+    suc.innerHTML='If <strong>'+esc(emailLower)+'</strong> is linked to an account, a secure reset link is on its way. Check your inbox and spam folder.<br><span style="font-size:12px;color:var(--gray-400)">No email? Your account may use a staff-managed password — please contact the front desk.</span>';
+    suc.style.display='block';
   }
-  const resend=document.getElementById('fp_resend'); if(resend){ resend.style.display='inline'; }
-  setFpOtp('');
-  updateFpVerifyBtnState();
-  startFpResendCooldown();
-  if(sb){ sb.disabled=false; sb.style.opacity=''; sb.textContent='Submit Code'; }
-  showFpStep(2);
-  const box0=document.querySelector('.fp-otp-box[data-i="0"]');
-  if(box0) box0.focus();
+  toast(sent?'Password reset link sent — check your email.':'If an account exists, a reset link has been sent.','info');
 }
 async function fpVerifyCode(){
   const err=document.getElementById('forgotError');
@@ -1581,12 +1448,15 @@ async function confirmForgotPassword(){
   const username=verified.username;
   const targetId=verified.targetId;
   const targetType=verified.targetType;
-  let target=null;
+  // Privileged accounts are reset only through the Firebase Auth email link.
+  // Never fall back to a client-side hash write for staff/trainer/admin.
   if(targetType==='user'){
-    target=Users.all().find(u=>u.id===targetId) || Users.all().find(u=>u.username&&u.username.toLowerCase()===username.toLowerCase());
-  } else {
-    target=Members.all().find(m=>m.id===targetId) || Members.all().find(m=>m.username&&m.username.toLowerCase()===username.toLowerCase());
+    setFpBtnLoading(confirmBtn,false);
+    clearFpVerified();
+    if(err){err.textContent='Staff, trainer and admin passwords are reset through the Forgot Password email link, not this screen.';err.style.display='block';}
+    return;
   }
+  let target=Members.all().find(m=>m.id===targetId) || Members.all().find(m=>m.username&&m.username.toLowerCase()===username.toLowerCase());
   if(!target && window.GMSFB && GMSFB.enabled){
     try{
       let authed=false;
@@ -2235,10 +2105,11 @@ async function submitMemberSignup(){
   if(!(window.GMSFB&&GMSFB.enabled)){
     err.textContent='Registration requires an internet connection. Please connect to the internet and try again.';err.style.display='block'; restoreBtn(); return;
   }
-  // Member auth uses synthetic .local email (username@fitcoregym.local) so
-  // cross-device login works via the deterministic fallback path.
-  // Real email is still stored in the member doc for display/contact.
-  const authEmail=v.uname.trim().toLowerCase()+'@fitcoregym.local';
+  // SECURITY: use the member's real email as the Firebase Auth identity.
+  // The old synthetic username@fitcoregym.local identity made secure
+  // Firebase password-reset emails impossible (the inbox did not exist).
+  const authEmail=String(v.email||'').trim().toLowerCase();
+  if(!authEmail){err.textContent='A valid email address is required for your login account.';err.style.display='block';restoreBtn();return;}
   // Server-side duplicate check (catches cross-device duplicates)
   try{
     const dupUser=await GMSFB.db.collection('members').where('username','==',v.uname.toLowerCase()).limit(1).get();
@@ -2379,7 +2250,7 @@ function togglePw(id,btn){
   }
 }
 function _resetPwVis(){
-  const ids=['loginPass','regPass','regPass2','msPass','msPass2','fp_new_pass','fp_new_pass2','uf_pass','uf_pass2','mf_pass'];
+  const ids=['loginPass','regPass','regPass2','msPass','msPass2','fp_new_pass','fp_new_pass2','uf_pass','uf_pass2'];
   ids.forEach(function(pid){
     const el=document.getElementById(pid);
     if(el) el.type='password';
@@ -2573,8 +2444,36 @@ function showForcePasswordChange(mem){
   showFpStep(3);
   openModal('forgotModal');
 }
+// SECURITY: a sessionStorage user object is client-controlled. Verify that the
+// signed-in Firebase Auth identity matches the profile before trusting the
+// session's role/id. Legacy/offline sessions without an Auth user are left to
+// the existing local fallback.
+function authSessionEmailOk(sessionUser, liveDoc){
+  const fb=(window.GMSFB&&GMSFB.enabled)?GMSFB:null;
+  const au=fb&&fb.auth?fb.auth.currentUser:null;
+  if(!au||!au.email)return true;
+  const got=String(au.email).toLowerCase();
+  const expected=[];
+  if(liveDoc&&typeof fb.authEmailFor==='function')expected.push(fb.authEmailFor(liveDoc));
+  if(sessionUser&&sessionUser.authEmail)expected.push(sessionUser.authEmail);
+  if(sessionUser&&sessionUser.role==='admin'&&fb.adminAuthEmail)expected.push(fb.adminAuthEmail);
+  const list=expected.filter(Boolean).map(x=>String(x).toLowerCase());
+  if(!list.length)return true;
+  return list.some(x=>x===got);
+}
 function loadApp(){
   if(!currentUser)return;
+  // Reject a tampered/swapped session before any panel or Firestore write.
+  if(window.GMSFB&&GMSFB.enabled&&GMSFB.auth&&GMSFB.auth.currentUser){
+    const liveCheck=currentUser.role==='member'
+      ? Members.one(currentUser.memberId||currentUser.id)
+      : Users.one(currentUser.id);
+    if(!authSessionEmailOk(currentUser,liveCheck)){
+      doLogout();
+      showLoginError('Session expired — please log in again.');
+      return;
+    }
+  }
   if(currentUser&&currentUser.role==='member'){
     let live=Members.one(currentUser.memberId||currentUser.id);
     if(live) live=_withLocalPwOverride(live);
@@ -2613,6 +2512,14 @@ function loadApp(){
       return;
     }
     currentUser={...currentUser,...live};
+  }
+  // One-time containment: remove legacy password hashes that were synced to
+  // Firestore before _clean stripped them. Runs once per browser session.
+  if(currentUser.role==='admin'&&window.GMSFB&&GMSFB.enabled&&typeof GMSFB.scrubSensitiveFields==='function'){
+    if(!sessionStorage.getItem('gms_sec_scrub')){
+      sessionStorage.setItem('gms_sec_scrub','1');
+      GMSFB.scrubSensitiveFields().then(r=>console.info('[security] credential scrub',r)).catch(()=>{});
+    }
   }
   document.getElementById('loginPage').style.display='none';
   document.getElementById('landingNav').style.display='none';
@@ -3720,8 +3627,10 @@ function openMemberModal(id=null){
     document.getElementById('mf_ecname').value=m.ecName||'';
     document.getElementById('mf_ecnum').value=m.ecNum||'';
     document.getElementById('mf_notes').value=m.notes||'';
-    document.getElementById('mf_user').value=m.username||'';
-    document.getElementById('mf_pass').value='';
+    // Gmail the member registered with: prefer the profile email, then a real
+    // Firebase Auth email (legacy synthetic .local addresses are not shown).
+    const mEmail=String(m.email||'').trim()||(m.authEmail&&!String(m.authEmail).endsWith('@fitcoregym.local')?m.authEmail:'');
+    document.getElementById('mf_email').value=mEmail;
     document.getElementById('mf_paydate').value=today();
     const plan=Plans.one(m.planId);
     document.getElementById('mf_amount').value=plan?plan.price:'';
@@ -3744,7 +3653,7 @@ function openMemberModal(id=null){
       if(billingNote)billingNote.style.display='none';
     }
   } else {
-    ['mf_name','mf_contact','mf_age','mf_address','mf_ecname','mf_ecnum','mf_notes','mf_user','mf_pass'].forEach(id=>document.getElementById(id).value='');
+    ['mf_name','mf_contact','mf_age','mf_address','mf_ecname','mf_ecnum','mf_notes','mf_email'].forEach(id=>document.getElementById(id).value='');
     const dobIn=document.getElementById('mf_dob'); if(dobIn) dobIn.value='';
     const hint=document.getElementById('mf_age_hint'); if(hint){hint.textContent=''; hint.style.display='none';}
     document.getElementById('mf_sex').value='';
@@ -3807,14 +3716,17 @@ async function saveMember(){
   }
   const plan=Plans.one(planId);
   const expiryDate=addMonths(startDate,plan?plan.duration:1);
-  const uname=document.getElementById('mf_user').value.trim();
-  const pass=document.getElementById('mf_pass').value;
-  const mfEmail=(document.getElementById('mf_email')?document.getElementById('mf_email').value.trim():'');
-  if(uname||pass){
-    if(!mfEmail){err.textContent='Email address is required when setting login credentials.';err.style.display='block';return;}
-    if(pass&&pass.length<8){err.textContent='Password must be at least 8 characters.';err.style.display='block';return;}
-    if(uname&&Members.all().some(x=>x.username&&x.username.toLowerCase()===uname.toLowerCase()&&x.id!==editingMemberId)){err.textContent='Username already taken. Please choose a different username.';err.style.display='block';return;}
-    if(uname&&Users.all().some(x=>x.username.toLowerCase()===uname.toLowerCase())){err.textContent='Username already taken by a staff or trainer account.';err.style.display='block';return;}
+  // Member login is created by the member's own registration (Firebase Auth).
+  // The admin profile only records the Gmail they used — no username/password
+  // fields here, and no duplicate Gmail across members or staff accounts.
+  const mfEmail=(document.getElementById('mf_email')?document.getElementById('mf_email').value.trim().toLowerCase():'');
+  if(mfEmail){
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mfEmail)){err.textContent='Please enter a valid Gmail / email address.';err.style.display='block';return;}
+    if(mfEmail.endsWith('@fitcoregym.local')){err.textContent='Please use the member\u2019s real Gmail, not a staff-managed email.';err.style.display='block';return;}
+    const dupMember=members.find(x=>x.id!==editingMemberId&&(String(x.email||'').toLowerCase()===mfEmail||String(x.authEmail||'').toLowerCase()===mfEmail));
+    if(dupMember){err.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
+    const dupUser=Users.all().find(u=>String(u.authEmail||'').toLowerCase()===mfEmail||String(u.email||'').toLowerCase()===mfEmail);
+    if(dupUser){err.textContent='Email already exists — used by '+dupUser.name+'.';err.style.display='block';return;}
   }
   // For 13-17 require emergency contact (guardian verification at front desk)
   const ecNameVal=document.getElementById('mf_ecname').value.trim();
@@ -3826,7 +3738,7 @@ async function saveMember(){
     }
   }
   const data={
-    name:sanitizeText(name),contact:sanitizeText(contact),dob:dob,age:String(ageCalc),sex:sanitizeText(document.getElementById('mf_sex').value),
+    name:sanitizeText(name),contact:sanitizeText(contact),email:mfEmail,dob:dob,age:String(ageCalc),sex:sanitizeText(document.getElementById('mf_sex').value),
     planId,startDate,expiryDate,address:sanitizeText(document.getElementById('mf_address').value.trim()),
     ecName:sanitizeText(ecNameVal),ecNum:sanitizeText(ecNumVal),
     notes:sanitizeText(document.getElementById('mf_notes').value.trim()),status:'Active'
@@ -3835,18 +3747,6 @@ async function saveMember(){
     const existing=members.find(m=>m.id===editingMemberId);
     if(bgCheckBlocksActivation(existing))data.status=existing.status;
   }
-  if(uname)data.username=uname;
-  // Online mode: member login credentials live in Firebase Auth
-  let memberAuthEmail=null;
-  if(window.GMSFB&&GMSFB.enabled&&pass){
-    if(editingMemberId){err.textContent='Changing an existing member\u2019s password is not supported in online mode.';err.style.display='block';return;}
-    if(!mfEmail){err.textContent='Email address is required for creating a login account.';err.style.display='block';return;}
-    memberAuthEmail=mfEmail.toLowerCase();
-    const r=await GMSFB.createUserCreds(memberAuthEmail,pass,contact);
-    if(!r.ok){err.textContent=r.error;err.style.display='block';return;}
-  }
-  if(memberAuthEmail)data.authEmail=memberAuthEmail;
-  else if(pass)data.passwordHash=hashPassword(pass);
   const confirmTitle=editingMemberId?'Update Member':'Add New Member';
   const confirmMsg=editingMemberId
     ?`Save changes to <strong>${esc(name)}</strong>? Billing records linked to this member will also be synced automatically.`
@@ -3860,7 +3760,7 @@ async function saveMember(){
       const oldPlanName=(allPlans.find(p=>p.id===oldM.planId)||{name:oldM.planId||'—'}).name;
       const newPlanName=plan?plan.name:(planId||'—');
       const fieldLabels={
-        name:'Name', contact:'Contact', age:'Age', sex:'Sex',
+        name:'Name', contact:'Contact', email:'Email', age:'Age', sex:'Sex',
         planId:'Plan', startDate:'Start Date', address:'Address',
         ecName:'Emergency Contact', ecNum:'EC Number', notes:'Notes'
       };
@@ -4006,6 +3906,7 @@ function viewMember(id){
   const payments=Payments.all().filter(p=>p.memberId===id);
   const sessions=Sessions.all().filter(s=>s.memberId===id);
   const attendance=Attendance.all().filter(a=>a.memberId===id).slice().reverse();
+  const memberEmail=String(m.email||'').trim()||(m.authEmail&&!String(m.authEmail).endsWith('@fitcoregym.local')?m.authEmail:'');
   const badgeCls={Active:'badge-active',Expired:'badge-expired',Suspended:'badge-suspended','Expiring Soon':'badge-expiring'}[m.status]||'';
   const bgBadgeCls={Cleared:'badge-active',Flagged:'badge-suspended',Pending:'badge-pending'}[m.bgCheckStatus||'Pending']||'badge-pending';
   document.getElementById('profileModalBody').innerHTML=`
@@ -4019,6 +3920,7 @@ function viewMember(id){
     <h4>Personal Information</h4>
         <div class="profile-grid">
       <div class="profile-field"><label>Contact</label><p>${esc(m.contact||'—')}</p></div>
+      <div class="profile-field"><label>Gmail</label><p>${esc(memberEmail||'—')}</p></div>
       <div class="profile-field"><label>Date of Birth</label><p>${m.dob?formatDate(m.dob)+' <span style="color:var(--gray-500)">('+esc(m.age||calcAge(m.dob) )+' yrs)</span>': esc(m.age||'—')}</p></div>
       <div class="profile-field"><label>Sex</label><p>${esc(m.sex||'—')}</p></div>
       <div class="profile-field"><label>Address</label><p>${esc(m.address||'—')}</p></div>
@@ -4125,37 +4027,23 @@ function openEditFromProfile(){
 async function adminResetMemberPassword(memberId){
   const m=Members.one(memberId);
   if(!m){toast('Member not found.','error');return;}
-  // Generate a random 8-char temp password
-  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let tempPass='';for(let i=0;i<8;i++)tempPass+=chars.charAt(Math.floor(Math.random()*chars.length));
-  const newHash=hashPassword(tempPass);
-  // Update local + cloud (Members.save already pushes to Firestore via DB.set→pushCollection)
-  const members=Members.all();
-  const idx=members.findIndex(x=>x.id===memberId);
-  if(idx>-1){
-    members[idx].passwordHash=newHash;
-    members[idx].mustChangePassword=true;
-    Members.save(members);
+  const authEmail=String(m.authEmail||'').trim().toLowerCase();
+  if(!authEmail||authEmail.endsWith('@fitcoregym.local')){
+    toast('This member has no real email on the Firebase Auth account. Reset it in Firebase Console → Authentication → Users, or create a new login with a real email.','error');
+    return;
   }
-  // NOTE: Firebase Auth password is NOT updated here — it can only be changed
-  // via Firebase Admin SDK (server-side). The temp password works via the hash
-  // fallback in login. After login, the member sets a new password via the
-  // forced password change flow which updates both hash and (if real email)
-  // triggers a proper Firebase Auth reset.
-  // Log the action
-  logActivity('Reset Password','Member',m.name,'ID: '+memberId+' | Temporary password set by admin');
-  // Show the temp password to admin
-  openConfirm(
-    'Password Reset — '+esc(m.name),
-    `<div style="text-align:left">
-      <p style="font-size:13px;color:var(--gray-300);margin-bottom:12px">A temporary password has been generated. Give this to the member — they will be forced to set a new password on next login.</p>
-      <div style="background:rgba(127,250,136,.08);border:1px solid rgba(127,250,136,.2);border-radius:8px;padding:12px;font-family:monospace;font-size:18px;font-weight:800;color:var(--green);text-align:center;letter-spacing:2px;user-select:all">${esc(tempPass)}</div>
-      <p style="font-size:11px;color:var(--gray-500);margin-top:10px;text-align:center">Copy this password and share it with the member securely.</p>
-    </div>`,
-    ()=>{ toast('Temporary password generated. Share it with the member.','success'); },
-    'Got It',
-    'btn-primary'
-  );
+  if(!(window.GMSFB&&GMSFB.enabled&&GMSFB.auth&&typeof GMSFB.auth.sendPasswordResetEmail==='function')){
+    toast('Password reset needs an internet connection.','error');
+    return;
+  }
+  try{
+    await GMSFB.auth.sendPasswordResetEmail(authEmail);
+    logActivity('Reset Password','Member',m.name,'ID: '+memberId+' | Firebase reset link sent to '+authEmail);
+    toast('Password reset link sent to '+authEmail+'.','success');
+  }catch(e){
+    console.warn('[adminReset]',e&&e.code);
+    toast('Could not send the reset email: '+((e&&e.message)||'unknown error'),'error');
+  }
 }
 function openMemberProfileEdit(){
   const m=Members.one(currentUser.memberId||currentUser.id);
@@ -4638,7 +4526,7 @@ function renderTrainerProfile(){
   const cancelled=sessions.filter(s=>s.status==='Cancelled').length;
   const todaySessions=sessions.filter(s=>s.date===today()&&s.status==='Scheduled').length;
   const ini=u.avatar?`<img src="${u.avatar}" class="trainer-avatar-lg" style="background-size:cover;background-position:center;background-repeat:no-repeat">`:u.name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-  const specs=Array.isArray(u.specializations)&&u.specializations.length?u.specializations:[];
+  const specs=trainerSpecList(u);
   const days=Array.isArray(u.availableDays)&&u.availableDays.length?u.availableDays:[];
   const hours=(u.availableFrom&&u.availableTo)?`${u.availableFrom} – ${u.availableTo}`:'';
   const displayName=u.coachName||u.name;
@@ -4687,7 +4575,7 @@ function openTrainerEditModal(){
   document.getElementById('tep_coachname').value=u.coachName||'';
   document.getElementById('tep_bio').value=u.bio||'';
   document.querySelectorAll('#tep_specs input[type=checkbox]').forEach(cb=>{
-    cb.checked=Array.isArray(u.specializations)&&u.specializations.includes(cb.value);
+    cb.checked=trainerSpecList(u).includes(cb.value);
   });
   document.querySelectorAll('#tep_days input[type=checkbox]').forEach(cb=>{
     cb.checked=Array.isArray(u.availableDays)&&u.availableDays.includes(cb.value);
@@ -5186,6 +5074,30 @@ function onSessionDateChange(){
   const s=document.getElementById('sf_start');
   const e=document.getElementById('sf_end');
   applyTrainerTimeWindow(s?s.value:'',e?e.value:'');
+  refreshSessionTrainerList();
+}
+function onSessionTimeChange(){
+  refreshSessionTrainerList();
+}
+// If the chosen slot no longer fits the selected trainer, clear them and show
+// the available trainers again, so the form can never keep a conflicting pair.
+function refreshSessionTrainerList(){
+  const hidden=document.getElementById('sf_trainer');
+  const search=document.getElementById('sf_trainerSearch');
+  if(!hidden||!search)return;
+  const type=document.getElementById('sf_type')?document.getElementById('sf_type').value:'';
+  const date=document.getElementById('sf_date')?document.getElementById('sf_date').value:'';
+  const start=document.getElementById('sf_start')?document.getElementById('sf_start').value:'';
+  const end=document.getElementById('sf_end')?document.getElementById('sf_end').value:'';
+  const selected=hidden.value?Users.one(hidden.value):null;
+  if(selected&&!isTrainerAvailable(selected,type,date,start,end,editingSessionId)){
+    hidden.value='';
+    search.value='';
+    filterSessionTrainer('');
+    return;
+  }
+  const list=document.getElementById('sf_trainerList');
+  if(list&&list.style.display==='block')filterSessionTrainer(search.value);
 }
 function applyTrainerTimeWindow(presetStart,presetEnd){
   const trainerId=document.getElementById('sf_trainer').value;
@@ -5238,30 +5150,34 @@ function filterSessionTrainer(val){
   if(!currentId||(val||'').trim()!==currentName)document.getElementById('sf_trainer').value='';
   const type=document.getElementById('sf_type')?document.getElementById('sf_type').value:'';
   const date=document.getElementById('sf_date')?document.getElementById('sf_date').value:'';
-  const trainers=trainersForSessionType(type);
-  const q=(val||'').toLowerCase();
-  const matches=q?trainers.filter(u=>(u.name||'').toLowerCase().includes(q)||(u.coachName||'').toLowerCase().includes(q)):trainers;
+  const start=document.getElementById('sf_start')?document.getElementById('sf_start').value:'';
+  const end=document.getElementById('sf_end')?document.getElementById('sf_end').value:'';
+  if(!type){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">Select a session type first</div>';
+    list.style.display='block';return;
+  }
+  const trainers=availableTrainersFor(type,date,start,end,editingSessionId);
+  const q=(val||'').toLowerCase().trim();
+  const matches=q?trainers.filter(function(u){
+    const specs=trainerSpecList(u);
+    return (u.name||'').toLowerCase().includes(q)||(u.coachName||'').toLowerCase().includes(q)||specs.some(function(s){return s.toLowerCase().includes(q);});
+  }):trainers;
   if(!matches.length){
-    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">'+(type?'No trainers available for '+esc(type):'No trainers found')+'</div>';
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">No available trainers for '+esc(type)+' on '+esc(date?formatDate(date):'the selected date')+'. Try another date or time.</div>';
     list.style.display='block';return;
   }
   list.innerHTML='';
   matches.forEach(function(u){
     const av=trainerAvailabilityInfo(u,date);
     const booked=trainerBookedRanges(u.id,date);
-    const specs=Array.isArray(u.specializations)&&u.specializations.length?u.specializations.slice(0,2).map(esc).join(', ')+(u.specializations.length>2?' +more':''):'';
-    const status=!av.dayOk
-      ?'<span style="font-size:10px;color:var(--red)">✕ Not available on '+esc(av.dayAbbr)+'</span>'
-      :(booked.length?'<span style="font-size:10px;color:var(--gold)">Booked: '+esc(booked.join(', '))+'</span>':'<span style="font-size:10px;color:var(--green)">✓ Available</span>');
+    const _uSpecs=trainerSpecList(u);
+    const specs=_uSpecs.length?_uSpecs.slice(0,2).map(esc).join(', ')+(_uSpecs.length>2?' +more':''):'';
+    const slotText=date&&start&&end?'✓ Available for '+esc(start)+'–'+esc(end):'✓ Available on '+esc(av.dayAbbr||'this day');
+    const status='<span style="font-size:10px;color:var(--green)">'+slotText+'</span>'+(booked.length?'<span style="font-size:10px;color:var(--gray-500)">Other bookings: '+esc(booked.join(', '))+'</span>':'');
     const div=document.createElement('div');
     div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
     div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs?'<span style="font-size:10px;color:var(--orange)">'+specs+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ '+esc(av.text)+'</span>${status}`;
-    if(!av.dayOk){
-      div.style.opacity='.6';
-      div.addEventListener('mousedown',function(e){e.preventDefault();toast((u.coachName||u.name)+' is not available on '+av.dayAbbr+'.','error');});
-    }else{
-      div.addEventListener('mousedown',function(){selectSessTrainer(u.id,u.coachName||u.name);});
-    }
+    div.addEventListener('mousedown',function(){selectSessTrainer(u.id,u.coachName||u.name);});
     div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
     div.addEventListener('mouseout',function(){this.style.background='';});
     list.appendChild(div);
@@ -5279,11 +5195,24 @@ document.addEventListener('click',function(e){
   const wrap=document.getElementById('sf_trainerSearch');
   const list=document.getElementById('sf_trainerList');
   if(wrap&&list&&!wrap.contains(e.target)&&!list.contains(e.target))list.style.display='none';
+  const bw=document.getElementById('bs_trainerSearch');
+  const bl=document.getElementById('bs_trainerList');
+  if(bw&&bl&&!bw.contains(e.target)&&!bl.contains(e.target))bl.style.display='none';
 });
 const DEFAULT_SESSION_TYPES=['Personal Training','Cardio','Strength Training','Flexibility','Assessment'];
 function isBookableTrainer(u){return !!u&&u.role==='trainer'&&u.status!=='locked'&&u.status!=='pending';}
+// Trainer specializations can arrive as an array (normal) or a legacy
+// comma-separated string. Normalize everywhere so the Users list, profile,
+// edit form and session-type filter all see the same values.
+function trainerSpecList(u){
+  const v=u&&u.specializations;
+  if(Array.isArray(v))return v.filter(Boolean).map(String);
+  if(typeof v==='string')return v.split(',').map(s=>s.trim()).filter(Boolean);
+  return [];
+}
 function trainerSpecs(u){
-  return Array.isArray(u&&u.specializations)&&u.specializations.length?u.specializations:DEFAULT_SESSION_TYPES;
+  const list=trainerSpecList(u);
+  return list.length?list:DEFAULT_SESSION_TYPES;
 }
 function sessionTypesForTrainer(trainerId){
   const trainer=Users.all().find(u=>u.id===trainerId);
@@ -5306,6 +5235,31 @@ function trainerOffersType(trainer,type){
 }
 function trainersForSessionType(type){
   return Users.all().filter(function(u){return isBookableTrainer(u)&&trainerOffersType(u,type);});
+}
+// One availability rule for the trainer lists AND the save/book validation.
+// Empty date/start/end means "not chosen yet" — only filter by type/day then.
+function isTrainerAvailable(trainer,type,date,start,end,ignoreSessionId){
+  if(!isBookableTrainer(trainer))return false;
+  if(!type||!trainerOffersType(trainer,type))return false;
+  const av=trainerAvailabilityInfo(trainer,date);
+  if(date&&!av.dayOk)return false;
+  let daySessions=[];
+  if(date){
+    daySessions=Sessions.all().filter(function(s){
+      return s.id!==ignoreSessionId&&s.trainerId===trainer.id&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined';
+    });
+    if(daySessions.length>=8)return false;
+  }
+  if(date&&start&&end){
+    const sM=parseTimeToMin(start),eM=parseTimeToMin(end);
+    if(sM==null||eM==null||sM>=eM)return false;
+    if(av.hasHours&&(sM<av.fromMin||eM>av.toMin))return false;
+    if(daySessions.some(function(s){return !(end<=s.start||start>=s.end);}))return false;
+  }
+  return true;
+}
+function availableTrainersFor(type,date,start,end,ignoreSessionId){
+  return Users.all().filter(function(u){return isTrainerAvailable(u,type,date,start,end,ignoreSessionId);});
 }
 function trainerAvailabilityInfo(trainer,date){
   const days=Array.isArray(trainer&&trainer.availableDays)&&trainer.availableDays.length?trainer.availableDays:[];
@@ -5351,6 +5305,9 @@ function onSessionTypeChange(){
   document.getElementById('sf_trainerSearch').value='';
   const hint=document.getElementById('sf_availHint');
   if(hint){hint.style.display='none';hint.innerHTML='';}
+  // New type = no trainer yet: reset the time window, then show everyone
+  // available for that type at the default slot.
+  applyTrainerTimeWindow();
   filterSessionTrainer('');
 }
 function updateSessionTypesByTrainer(){
@@ -5450,6 +5407,7 @@ function saveSession(){
   if(end<=start){err.textContent='Invalid time range. The end time must be after the start time.';err.style.display='block';return;}
   if(!sessionTypesForTrainer(trainerId).includes(type)){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';return;}
   const trAvail=Users.all().find(u=>u.id===trainerId);
+  if(!isBookableTrainer(trAvail)){err.textContent='That trainer is not available for booking right now. Please choose another trainer.';err.style.display='block';return;}
   const availErr=trainerAvailabilityError(trAvail,date,start,end);
   if(availErr){err.textContent=availErr;err.style.display='block';return;}
   const sessions=Sessions.all();
@@ -5459,7 +5417,8 @@ function saveSession(){
   // Conflict: same member assigned to another session at same time
   const memberConflict=sessions.filter(s=>s.memberId===memberId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined'&&s.id!==editingSessionId).find(s=>start<s.end&&end>s.start);
   if(memberConflict){err.textContent=`Schedule Conflict: This member already has a session from ${memberConflict.start}–${memberConflict.end} on this date.`;err.style.display='block';return;}
-  if(sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined').length>=8){err.textContent='Trainer not available for the selected day.';err.style.display='block';return;}
+  if(sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined'&&s.id!==editingSessionId).length>=8){err.textContent='Trainer not available for the selected day.';err.style.display='block';return;}
+  if(!isTrainerAvailable(trAvail,type,date,start,end,editingSessionId)){err.textContent='That trainer is no longer available for the selected slot. Please choose another available trainer or time.';err.style.display='block';return;}
   const trainer=Users.all().find(u=>u.id===trainerId);
   const member=Members.one(memberId);
   const data={trainerId,trainerName:trainer?trainer.name:'Unknown',memberId,memberName:member?member.name:'Unknown',type,date,start,end,notes:sanitizeText(document.getElementById('sf_notes').value.trim()),status:'Scheduled'};
@@ -5478,6 +5437,11 @@ function toggleSessionStatus(id){
   const s=sessions[idx];
   const cycle={Scheduled:'Completed',Completed:'Cancelled',Cancelled:'Scheduled'};
   const newStatus=cycle[s.status]||'Scheduled';
+  if(newStatus==='Scheduled'){
+    const live=sessions.filter(x=>x.id!==id&&x.date===s.date&&(x.status==='Scheduled'||x.status==='Accepted')&&!(s.end<=x.start||s.start>=x.end));
+    if(live.some(x=>x.trainerId===s.trainerId)){toast('Cannot set to Scheduled — trainer already booked at that time.','error');return;}
+    if(live.some(x=>x.memberId===s.memberId)){toast('Cannot set to Scheduled — member already has a session at that time.','error');return;}
+  }
   // Immutable replace — never mutate the object in place (sync bug fix)
   sessions[idx]={...s,status:newStatus,statusLog:[...(s.statusLog||[]),{from:s.status,to:newStatus,by:currentUser.name,byUsername:currentUser.username,byRole:currentUser.role,at:new Date().toISOString()}]};
   Sessions.save(sessions);logActivity('Status Changed','Session',(s.memberName||'Unknown')+' with '+(s.trainerName||'Unknown'),'Date: '+s.date+' | '+s.start+'–'+s.end+' | '+s.status+' → '+newStatus);toast(`Session marked as ${newStatus}.`,'info');renderSchedule();
@@ -5711,6 +5675,11 @@ function sendMessage(){
   const input=document.getElementById('msgInput');
   const text=(input.value||'').trim();
   if(!text)return;
+  if(text.length>1000){toast('Message is too long — max 1000 characters.','error');return;}
+  const rlId=currentUser?(currentUser.memberId||currentUser.id||currentUser.username||'user'):'anon';
+  if(!rateLimitOk('gms_rl_msg_gap_'+rlId,1,2000)||!rateLimitOk('gms_rl_msg_'+rlId,20,10*60*1000)){
+    toast('Too many messages — please wait a moment and try again.','error');return;
+  }
   const mem=Members.one(_msgThreadId);
   Messages.add({id:'MSG'+uid(),memberId:_msgThreadId,memberName:mem?mem.name:'Member',text,time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),date:today(),ts:Date.now(),direction:_msgStaffMode?'out':'in',read:_msgStaffMode});
   input.value='';
@@ -6479,12 +6448,17 @@ function renderMySessions(){
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Book a Session</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
       <div class="form-group"><label>Session Type *</label><select id="bs_type" onchange="updateBsTrainerOptions()">${allSessionTypes().map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
-      <div class="form-group"><label>Trainer *</label><select id="bs_trainer" onchange="updateBsAvailability()"></select></div>
-      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-        <div class="form-group"><label>Date *</label><input type="date" id="bs_date" min="${today()}" onchange="updateBsAvailability()"></div>
-        <div class="form-group"><label>Start *</label><input type="time" id="bs_start"></div>
-        <div class="form-group"><label>End *</label><input type="time" id="bs_end"></div>
+      <div class="form-group"><label>Trainer *</label>
+        <input type="text" id="bs_trainerSearch" placeholder="Search trainer..." oninput="bsFilterTrainers(this.value)" onclick="bsFilterTrainers(this.value)" autocomplete="off">
+        <div id="bs_trainerList" style="background:var(--navy-700);border:1px solid var(--navy-600);border-radius:8px;max-height:220px;overflow-y:auto;display:none;position:relative;z-index:20"></div>
+        <input type="hidden" id="bs_trainer">
       </div>
+      <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group"><label>Date *</label><input type="date" id="bs_date" min="${today()}" value="${today()}" onchange="bsTrainerSlotChanged()"></div>
+        <div class="form-group"><label>Start *</label><input type="time" id="bs_start" onchange="bsTrainerSlotChanged()"></div>
+        <div class="form-group"><label>End *</label><input type="time" id="bs_end" onchange="bsTrainerSlotChanged()"></div>
+      </div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:-4px">Available trainers are filtered by session type, date and time — overlapping schedules are excluded.</div>
       <div id="bsAvailHint" class="sf-avail-hint" style="display:none"></div>
       <button class="btn-primary" onclick="bookSession()">Request Session</button>
       <div id="bsError" class="error-msg" style="display:none"></div>
@@ -6505,24 +6479,100 @@ function renderMySessions(){
 }
 function updateBsTrainerOptions(preferredId){
   const typeSel=document.getElementById('bs_type');
-  const trainerSel=document.getElementById('bs_trainer');
-  if(!typeSel||!trainerSel)return;
+  const hidden=document.getElementById('bs_trainer');
+  const search=document.getElementById('bs_trainerSearch');
+  if(!typeSel||!hidden||!search)return;
   const type=typeSel.value;
   const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
-  const trainers=trainersForSessionType(type);
-  const keep=preferredId||trainerSel.value;
-  if(!trainers.length){
-    trainerSel.innerHTML='<option value="">No trainers for this session type</option>';
-    trainerSel.value='';
-    updateBsAvailability();
-    return;
+  const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
+  const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
+  hidden.value='';
+  search.value='';
+  search.placeholder='Search available trainer...';
+  // Reschedule: keep the old trainer only if they are still free for this slot.
+  if(preferredId){
+    const preferred=Users.one(preferredId);
+    if(preferred&&isTrainerAvailable(preferred,type,date,start,end)){
+      hidden.value=preferred.id;
+      search.value=preferred.coachName||preferred.name;
+    }
   }
-  trainerSel.innerHTML='<option value="">Select trainer</option>'+trainers.map(function(t){
-    const av=trainerAvailabilityInfo(t,date);
-    return '<option value="'+t.id+'">'+esc(t.coachName||t.name)+' — '+esc(av.text)+'</option>';
-  }).join('');
-  if(keep&&trainers.some(function(t){return t.id===keep;}))trainerSel.value=keep;
-  else trainerSel.value=trainers[0].id;
+  updateBsAvailability();
+  bsFilterTrainers(search.value);
+}
+function bsFilterTrainers(q){
+  const list=document.getElementById('bs_trainerList');
+  const hidden=document.getElementById('bs_trainer');
+  const search=document.getElementById('bs_trainerSearch');
+  if(!list||!hidden||!search)return;
+  const currentId=hidden.value;
+  const current=currentId?Users.one(currentId):null;
+  const currentName=current?(current.coachName||current.name):'';
+  if(!currentId||String(q||'').trim()!==currentName)hidden.value='';
+  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
+  const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
+  const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
+  const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
+  if(!type){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">Select a session type first</div>';
+    list.style.display='block';return;
+  }
+  const trainers=availableTrainersFor(type,date,start,end);
+  const query=String(q||'').toLowerCase().trim();
+  const matches=query?trainers.filter(function(u){
+    const specs=trainerSpecList(u);
+    return (u.name||'').toLowerCase().includes(query)||(u.coachName||'').toLowerCase().includes(query)||specs.some(function(s){return s.toLowerCase().includes(query);});
+  }):trainers;
+  if(!matches.length){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">No available trainers for '+esc(type)+' on '+esc(date?formatDate(date):'the selected date')+'. Try another date or time.</div>';
+    list.style.display='block';return;
+  }
+  const hasSlot=!!(date&&start&&end);
+  list.innerHTML=hasSlot?'':'<div style="padding:6px 12px;font-size:10px;color:var(--gray-500);border-bottom:1px solid rgba(255,255,255,.05)">Pick start and end time to check exact slot availability.</div>';
+  matches.forEach(function(u){
+    const av=trainerAvailabilityInfo(u,date);
+    const booked=trainerBookedRanges(u.id,date);
+    const specs=trainerSpecList(u);
+    const slotText=hasSlot?'✓ Available for '+esc(start)+'–'+esc(end):'✓ Available on '+esc(av.dayAbbr||'this day');
+    const status='<span style="font-size:10px;color:var(--green)">'+slotText+'</span>'+(booked.length?'<span style="font-size:10px;color:var(--gray-500)">Other bookings: '+esc(booked.join(', '))+'</span>':'');
+    const div=document.createElement('div');
+    div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
+    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs.length?'<span style="font-size:10px;color:var(--orange)">'+specs.slice(0,3).map(esc).join(', ')+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ '+esc(av.text)+'</span>${status}`;
+    div.addEventListener('mousedown',function(){selectBsTrainer(u.id,u.coachName||u.name);});
+    div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
+    div.addEventListener('mouseout',function(){this.style.background='';});
+    list.appendChild(div);
+  });
+  list.style.display='block';
+}
+function bsTrainerSlotChanged(){
+  const hidden=document.getElementById('bs_trainer');
+  const search=document.getElementById('bs_trainerSearch');
+  const selected=hidden&&hidden.value?Users.one(hidden.value):null;
+  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
+  const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
+  const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
+  const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
+  if(selected&&!isTrainerAvailable(selected,type,date,start,end)){
+    hidden.value='';
+    if(search)search.value='';
+    toast('The selected trainer is no longer available for that slot. Please choose another available trainer.','info');
+  }
+  bsFilterTrainers(search?search.value:'');
+  updateBsAvailability();
+}
+function selectBsTrainer(id,name){
+  const hidden=document.getElementById('bs_trainer');if(hidden)hidden.value=id;
+  const search=document.getElementById('bs_trainerSearch');if(search)search.value=name;
+  const list=document.getElementById('bs_trainerList');if(list)list.style.display='none';
+  // If the selected trainer offers a different session type, switch to their
+  // first type so the saved session matches the trainer's specialization.
+  const trainer=Users.one(id);
+  const typeSel=document.getElementById('bs_type');
+  if(trainer&&typeSel&&!sessionTypesForTrainer(id).includes(typeSel.value)){
+    const types=sessionTypesForTrainer(id);
+    if(types.length)typeSel.value=types[0];
+  }
   updateBsAvailability();
 }
 function updateBsAvailability(){
@@ -6530,13 +6580,22 @@ function updateBsAvailability(){
   if(!hint)return;
   const trainerId=document.getElementById('bs_trainer')?document.getElementById('bs_trainer').value:'';
   const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
+  const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
+  const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
+  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
   const trainer=Users.one(trainerId);
   if(!trainer){hint.style.display='none';hint.innerHTML='';return;}
   const av=trainerAvailabilityInfo(trainer,date);
   const booked=trainerBookedRanges(trainer.id,date);
+  const specs=trainerSpecList(trainer);
   let html=`⏰ <strong>${esc(trainer.coachName||trainer.name)}</strong> available: ${esc(av.text)}`;
+  if(specs.length)html+=`<br>🏋️ ${specs.map(esc).join(', ')}`;
   if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} — choose another date.</span>`;
   if(booked.length)html+=`<br><span style="color:var(--gold)">Booked: ${esc(booked.join(', '))}</span>`;
+  if(date&&start&&end){
+    if(isTrainerAvailable(trainer,type,date,start,end))html+=`<br><span style="color:var(--green)">✓ ${esc(start)}–${esc(end)} is free.</span>`;
+    else html+=`<br><span style="color:var(--red)">✕ ${esc(start)}–${esc(end)} conflicts with this trainer's schedule or hours.</span>`;
+  }
   hint.innerHTML=html;hint.style.display='block';
 }
 function bookSession(){
@@ -6547,9 +6606,11 @@ function bookSession(){
   const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
   const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
   if(!trainerId||!date||!start||!end||!type){ if(err){err.textContent='Session type, trainer, date, start and end are required.';err.style.display='block';} return; }
+  if(date<today()){ if(err){err.textContent='Cannot request a session on a past date. Please choose today or a future date.';err.style.display='block';} return; }
   if(start>=end){ if(err){err.textContent='End time must be after start time.';err.style.display='block';} return; }
   const trainer=Users.one(trainerId);
   if(!trainer){ if(err){err.textContent='Trainer not found.';err.style.display='block';} return; }
+  if(!isBookableTrainer(trainer)){ if(err){err.textContent='That trainer is not available for booking right now. Please choose another trainer.';err.style.display='block';} return; }
   if(!sessionTypesForTrainer(trainerId).includes(type)){ if(err){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';} return; }
   const availErr=trainerAvailabilityError(trainer,date,start,end);
   if(availErr){ if(err){err.textContent=availErr;err.style.display='block';} return; }
@@ -6562,6 +6623,12 @@ function bookSession(){
   const trainerOverlap=trainerDay.some(s=> !(end<=s.start || start>=s.end) );
   if(trainerOverlap){ if(err){err.textContent='Trainer is already booked at that time — please choose another slot.';err.style.display='block';} return; }
   if(trainerDay.length>=8){ if(err){err.textContent='Trainer is fully booked on that date — please choose another day.';err.style.display='block';} return; }
+  if(sameDay.length>=3){ if(err){err.textContent='You can have at most 3 sessions per day.';err.style.display='block';} return; }
+  if(!isTrainerAvailable(trainer,type,date,start,end)){ if(err){err.textContent='That trainer is no longer available for the selected slot. Please choose another available trainer or time.';err.style.display='block';} return; }
+  const rlMid=String(mid);
+  if(!rateLimitOk('gms_rl_book_gap_'+rlMid,1,10000)||!rateLimitOk('gms_rl_book_'+rlMid,5,10*60*1000)){
+    if(err){err.textContent='Too many booking requests — please wait a few minutes.';err.style.display='block';} return;
+  }
   Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
   toast('Session request sent — awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
 }
@@ -6572,16 +6639,25 @@ function rescheduleSession(id){
     if(![...tp.options].some(o=>o.value===s.type))tp.insertAdjacentHTML('beforeend','<option value="'+esc(s.type)+'">'+esc(s.type)+'</option>');
     tp.value=s.type;
   }
-  const d=document.getElementById('bs_date'); if(d) d.value=s.date;
-  updateBsTrainerOptions(s.trainerId);
+  const d=document.getElementById('bs_date'); if(d) d.value=(s.date>=today()?s.date:today());
   const st=document.getElementById('bs_start'); if(st) st.value=s.start;
   const en=document.getElementById('bs_end'); if(en) en.value=s.end;
-  updateBsAvailability();
+  updateBsTrainerOptions(s.trainerId);
   window.scrollTo({top:0,behavior:'smooth'});
-  const el=document.getElementById('bs_trainer'); if(el) el.focus();
+  const el=document.getElementById('bs_trainerSearch'); if(el) el.focus();
   toast('Prefilled previous session — adjust time and request again.');
 }
-function acceptSession(id){ const all=Sessions.all(); const i=all.findIndex(s=>s.id===id); if(i<0) return; all[i]={...all[i],status:'Scheduled'}; Sessions.save(all); if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.sessions, all); toast('Session accepted.'); renderSchedule(); updateSchedPendingBadge(); }
+function acceptSession(id){
+  const all=Sessions.all(); const i=all.findIndex(s=>s.id===id); if(i<0)return;
+  const s=all[i];
+  const live=all.filter(x=>x.id!==id&&x.date===s.date&&x.status!=='Cancelled'&&x.status!=='Declined'&&x.status!=='Pending');
+  if(live.some(x=>x.trainerId===s.trainerId&&!(s.end<=x.start||s.start>=x.end))){toast('Cannot accept — this trainer already has a session at that time.','error');return;}
+  if(live.some(x=>x.memberId===s.memberId&&!(s.end<=x.start||s.start>=x.end))){toast('Cannot accept — this member already has a session at that time.','error');return;}
+  all[i]={...s,status:'Scheduled'};
+  Sessions.save(all);
+  if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.sessions, all);
+  toast('Session accepted.'); renderSchedule(); updateSchedPendingBadge();
+}
 function declineSession(id){ openConfirm('Decline Session','Decline this session request?',()=>{ const all=Sessions.all(); const i=all.findIndex(s=>s.id===id); if(i>=0){ all[i]={...all[i],status:'Declined'}; Sessions.save(all); if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.sessions, all); toast('Session declined.'); renderSchedule(); updateSchedPendingBadge(); } },'Decline','btn-danger'); }
 function updateSchedPendingBadge(){
   if(!currentUser||currentUser.role!=='trainer') return;
@@ -6730,6 +6806,8 @@ function saveAnnouncement(){
   const title=document.getElementById('an_title').value.trim();
   const text=document.getElementById('an_text').value.trim();
   if(!title||!text){err.textContent='Please fill in the title and message.';err.style.display='block';return;}
+  if(title.length>120){err.textContent='Title is too long — max 120 characters.';err.style.display='block';return;}
+  if(text.length>2000){err.textContent='Message is too long — max 2000 characters.';err.style.display='block';return;}
   Announcements.add({id:nextId(KEY.announcements,'ANN'),type:document.getElementById('an_type').value,date:document.getElementById('an_date').value,title:sanitizeText(title),text:sanitizeText(text),createdBy:currentUser.name||'Admin',createdAt:today(),time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})});
   logActivity('Posted','Announcement','"'+title+'"');
   closeModal('announceModal');
@@ -7607,7 +7685,8 @@ function renderTrainers(){
   }
   container.innerHTML=trainers.map((t,i)=>{
     const name=t.coachName||t.name;
-    const specs=(t.specializations&&t.specializations.length)?t.specializations.slice(0,3).map(esc).join(' · '):'Certified Trainer';
+    const _tSpecs=trainerSpecList(t);
+    const specs=_tSpecs.length?_tSpecs.slice(0,3).map(esc).join(' · '):'Certified Trainer';
     const days=(t.availableDays&&t.availableDays.length)?`<span>${iconSvg('calendar',12)} ${t.availableDays.map(esc).join(', ')}</span>`:'';
     const hours=(t.availableFrom&&t.availableTo)?`<span>${iconSvg('clock',12)} ${esc(t.availableFrom)} – ${esc(t.availableTo)}</span>`:'';
     return`<div class="trainer-card reveal reveal-d${i%4}">
@@ -8246,16 +8325,18 @@ function refreshUserTable(){
   const label={admin:'Admins',staff:'Staff',trainer:'Trainers'}[userRoleTab]||'Users';
   const singular={admin:'admin',staff:'staff',trainer:'trainer'}[userRoleTab]||'user';
   let data=Users.all().filter(u=>u.role===userRoleTab);
-  if(userSearch){const s=userSearch.toLowerCase();data=data.filter(u=>u.name.toLowerCase().includes(s)||u.username.toLowerCase().includes(s));}
+  if(userSearch){const s=userSearch.toLowerCase();data=data.filter(u=>(u.name||'').toLowerCase().includes(s)||(u.username||'').toLowerCase().includes(s)||String(u.authEmail||u.email||'').toLowerCase().includes(s));}
   const rows=data.length?data.map(u=>{
     const roleCls={admin:'badge-admin',staff:'badge-staff',trainer:'badge-trainer'}[u.role]||'';
     const statusCls=u.status==='locked'?'badge-locked':u.status==='pending'?'badge-pending':'badge-active';
     const statusLabel=u.status==='locked'?'Locked':u.status==='pending'?'Pending':'Active';
-    const trainerExtra=u.role==='trainer'&&u.specializations?`<div style="font-size:10px;color:var(--orange);margin-top:2px">🏋️ ${Array.isArray(u.specializations)?u.specializations.slice(0,2).map(esc).join(', ')+(u.specializations.length>2?' +more':''):''}</div>`:'';
+    const _uSpecs=trainerSpecList(u);
+    const trainerExtra=u.role==='trainer'&&_uSpecs.length?`<div style="font-size:10px;color:var(--orange);margin-top:2px">🏋️ ${_uSpecs.slice(0,2).map(esc).join(', ')+(_uSpecs.length>2?' +more':'')}</div>`:'';
     const trainerHours=u.role==='trainer'&&u.availableFrom?`<div style="font-size:10px;color:var(--gray-500);margin-top:1px">⏰ ${esc(u.availableFrom)}–${esc(u.availableTo||'')}</div>`:'';
     return`<tr>
       <td><div style="display:flex;align-items:center;gap:8px"><div class="user-avatar avatar-${u.role}" style="width:28px;height:28px;font-size:10px;${u.avatar?'padding:0;overflow:hidden':''}">${u.avatar?`<img src="${u.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(u.name))}</div><div><div>${esc(u.name)}${u.coachName&&u.coachName!==u.name?` <span style="font-size:10px;color:var(--gray-500)">(${esc(u.coachName)})</span>`:''}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace;margin-top:2px">${esc(u.contact||'—')}</div>${trainerExtra}${trainerHours}</div></div></td>
       <td>${esc(u.username)}</td>
+      <td style="font-size:11px">${esc(u.authEmail||u.email||'—')}</td>
       <td><span class="badge ${roleCls}">${esc(u.role)}</span></td>
       <td>${formatDate(u.createdAt||today())}</td>
       <td><span class="badge ${statusCls}">${statusLabel}</span></td>
@@ -8265,10 +8346,10 @@ function refreshUserTable(){
         ${u.status==='pending'?`<button class="btn-icon" title="Approve" style="color:var(--green)" onclick="approveUser('${u.id}')">✔</button>`:`<button class="btn-icon" title="${u.status==='locked'?'Unlock':'Lock'}" onclick="toggleUserLock('${u.id}')">${u.status==='locked'?'○':'●'}</button>`}
         ${u.id===currentUser.id?`<button class="btn-icon" title="Cannot delete your own account" style="opacity:.3;cursor:not-allowed;color:var(--gray-500);border-color:rgba(255,255,255,.08)" disabled>✕</button>`:`<button class="btn-icon" title="Delete User" style="color:var(--red);border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08)" onmouseover="this.style.background='var(--red)';this.style.color='#fff'" onmouseout="this.style.background='rgba(239,68,68,.08)';this.style.color='var(--red)'" onclick="deleteUser('${u.id}')">✕</button>`}
       </div></td>
-    </tr>`;}).join(''):`<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">—</div><p>No ${singular} found</p></div></td></tr>`;
+    </tr>`;}).join(''):`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">—</div><p>No ${singular} found</p></div></td></tr>`;
   document.getElementById('userTableCard').innerHTML=`
     <div class="table-header"><h3>${label}</h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Username</th><th>Email / Gmail</th><th>Role</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 let editingUserId=null;
 function toggleTrainerFields(){
@@ -8287,6 +8368,23 @@ function updateUfSpecChips(){
     return `<span class="uf-chip" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer" onclick="this.closest('.form-group').querySelectorAll('input[value=\"'+cb.value+'\"]')[0].checked=false;updateUfSpecChips()">${esc(cb.value)}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>`;
   }).join('');
 }
+// Live duplicate check for the Add/Edit User email field. This is only a
+// convenience guard; saveUser() re-checks and Firebase Auth rejects the real
+// duplicate at account-creation time.
+function checkUfEmail(val){
+  const errEl=document.getElementById('uf_email_error');
+  const email=String(val||'').trim().toLowerCase();
+  if(!errEl)return true;
+  if(!email){errEl.style.display='none';return true;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errEl.textContent='Please enter a valid email address.';errEl.style.display='block';return false;}
+  if(email.endsWith('@fitcoregym.local')){errEl.textContent='Please use a real email address (e.g. name@gmail.com).';errEl.style.display='block';return false;}
+  const dupUser=Users.all().find(u=>u.id!==editingUserId&&(String(u.authEmail||'').toLowerCase()===email||String(u.email||'').toLowerCase()===email));
+  if(dupUser){errEl.textContent='Email already exists — used by '+dupUser.name+'.';errEl.style.display='block';return false;}
+  const dupMember=Members.all().find(m=>String(m.email||'').toLowerCase()===email||String(m.authEmail||'').toLowerCase()===email);
+  if(dupMember){errEl.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';errEl.style.display='block';return false;}
+  errEl.style.display='none';
+  return true;
+}
 // Wire spec checkbox change events (once on load)
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('#ufSpecGrid input[type=checkbox]').forEach(cb=>{
@@ -8297,9 +8395,18 @@ function openUserModal(id=null){
   editingUserId=id;
   document.getElementById('userModalTitle').textContent=id?'Edit User':'Add User';
   document.getElementById('userFormError').style.display='none';
+  const ufEmailErr=document.getElementById('uf_email_error');
+  if(ufEmailErr)ufEmailErr.style.display='none';
   if(id){
     const u=Users.one(id);if(!u)return;
     document.getElementById('uf_name').value=u.name;document.getElementById('uf_contact').value=u.contact||'';document.getElementById('uf_user').value=u.username;
+    const emailEl=document.getElementById('uf_email');
+    if(emailEl){
+      const realEmail=u.authEmail&&!String(u.authEmail).endsWith('@fitcoregym.local')?u.authEmail:(u.email&&!String(u.email).endsWith('@fitcoregym.local')?u.email:'');
+      emailEl.value=realEmail||'';
+      emailEl.disabled=u.role==='admin';
+      emailEl.placeholder=u.role==='admin'?'Admin identity is managed in Firebase Console':'e.g. trainer@gmail.com';
+    }
     document.getElementById('uf_pass').value='';document.getElementById('uf_pass2').value='';
     document.getElementById('uf_pass').placeholder='Leave blank to keep current password';
     document.getElementById('uf_role').value=u.role;
@@ -8311,8 +8418,9 @@ function openUserModal(id=null){
     if(u.role==='trainer'){
       document.getElementById('uf_coachName').value=u.coachName||'';
       document.getElementById('uf_bio').value=u.bio||'';
-      // Check specialization boxes
-      document.querySelectorAll('#ufSpecGrid input[type=checkbox]').forEach(cb=>{cb.checked=(u.specializations||[]).includes(cb.value);});
+      // Check specialization boxes (legacy values may be comma-separated)
+      const _editSpecs=trainerSpecList(u);
+      document.querySelectorAll('#ufSpecGrid input[type=checkbox]').forEach(cb=>{cb.checked=_editSpecs.includes(cb.value);});
       // Check availability day boxes
       document.querySelectorAll('#ufAvailDays input[type=checkbox]').forEach(cb=>{cb.checked=(u.availableDays||[]).includes(cb.value);});
       // Set hours
@@ -8338,8 +8446,10 @@ function openUserModal(id=null){
       updateUfSpecChips();
     }
   } else {
-    ['uf_name','uf_contact','uf_user','uf_pass','uf_pass2'].forEach(id=>document.getElementById(id).value='');
+    ['uf_name','uf_contact','uf_user','uf_pass','uf_pass2','uf_email'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('uf_pass').placeholder='Minimum 8 characters';
+    const newEmailEl=document.getElementById('uf_email');
+    if(newEmailEl){newEmailEl.disabled=false;newEmailEl.placeholder='e.g. trainer@gmail.com';}
     document.getElementById('uf_role').value=userRoleTab;
     const roleRow=document.getElementById('uf_role_row');
     if(roleRow)roleRow.style.display='block';
@@ -8361,6 +8471,8 @@ async function saveUser(){
   const name=document.getElementById('uf_name').value.trim();
   const contact=document.getElementById('uf_contact').value.trim();
   const username=document.getElementById('uf_user').value.trim();
+  const emailEl=document.getElementById('uf_email');
+  const email=(emailEl?emailEl.value.trim().toLowerCase():'');
   const pass=document.getElementById('uf_pass').value;
   const pass2=document.getElementById('uf_pass2').value;
   const existingUser=editingUserId?Users.one(editingUserId):null;
@@ -8369,6 +8481,11 @@ async function saveUser(){
   const err=document.getElementById('userFormError');
   err.style.display='none';
   if(!name||!username||(!editingUserId&&!pass)||!role){err.textContent='Please fill in all required fields.';err.style.display='block';return;}
+  if(!editingUserId&&!email){err.textContent='Email / Gmail is required so the user can log in and reset their password.';err.style.display='block';return;}
+  if(email){
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Please enter a valid email address.';err.style.display='block';return;}
+    if(email.endsWith('@fitcoregym.local')&&role!=='admin'){err.textContent='Please use a real email address (e.g. name@gmail.com), not a staff-managed email.';err.style.display='block';return;}
+  }
   if(contact&&!/^09\d{9}$/.test(contact)){err.textContent='Please enter a valid 11-digit contact number (e.g. 09171234567).';err.style.display='block';return;}
   if(pass&&pass.length<8){err.textContent='Password must be at least 8 characters.';err.style.display='block';return;}
   if(pass&&pass!==pass2){err.textContent='Passwords do not match. Please re-enter your password correctly.';err.style.display='block';return;}
@@ -8377,8 +8494,8 @@ async function saveUser(){
   if(role==='trainer'){
     coachName=sanitizeText(document.getElementById('uf_coachName').value.trim());
     bio=sanitizeText(document.getElementById('uf_bio').value.trim());
-    document.querySelectorAll('#ufSpecGrid input[type=checkbox]:checked').forEach(cb=>specializations.push(cb.value));
-    document.querySelectorAll('#ufAvailDays input[type=checkbox]:checked').forEach(cb=>availableDays.push(cb.value));
+    document.querySelectorAll('#ufSpecGrid input[type=checkbox]').forEach(cb=>{if(cb.checked)specializations.push(cb.value);});
+    document.querySelectorAll('#ufAvailDays input[type=checkbox]').forEach(cb=>{if(cb.checked)availableDays.push(cb.value);});
     availableFrom=document.getElementById('ufAvailFrom').value;
     availableTo=document.getElementById('ufAvailTo').value;
     if(!specializations.length){err.textContent='Please select at least one specialization.';err.style.display='block';return;}
@@ -8389,15 +8506,62 @@ async function saveUser(){
   const users=Users.all();
   const dup=users.find(u=>u.username===username&&u.id!==editingUserId);
   if(dup){err.textContent='Username already taken. Please choose a different username.';err.style.display='block';return;}
-  // Online mode: new accounts get Firebase Auth credentials; admin-set passwords use the hash fallback.
-  let authEmail=null;
-  if(window.GMSFB&&GMSFB.enabled&&!editingUserId){
-    authEmail=GMSFB.authEmailFor({username:username});
-    const r=await GMSFB.createUserCreds(authEmail,pass,contact);
-    if(!r.ok){err.textContent=r.error;err.style.display='block';return;}
+  // One Auth identity per Gmail across users and members.
+  if(email){
+    const dupUser=users.find(u=>u.id!==editingUserId&&(String(u.authEmail||'').toLowerCase()===email||String(u.email||'').toLowerCase()===email));
+    if(dupUser){err.textContent='Email already exists — used by '+dupUser.name+'.';err.style.display='block';return;}
+    const dupMember=Members.all().find(m=>String(m.email||'').toLowerCase()===email||String(m.authEmail||'').toLowerCase()===email);
+    if(dupMember){err.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
   }
-  const doc={name,contact,username,role,status:'active',createdAt:today()};
-  if(authEmail)doc.authEmail=authEmail;
+  const oldAuthEmail=String((existingUser&&existingUser.authEmail)||'').toLowerCase();
+  let authEmail=oldAuthEmail;
+  let authChanged=false;
+  let resetSent=false, resetMsg='';
+  if(!existingUser){
+    // New account: the Gmail is the Firebase Auth identity so Forgot Password
+    // sends a real reset link. No synthetic .local address.
+    authEmail=email;
+    if(!(window.GMSFB&&GMSFB.enabled)){err.textContent='User accounts require an internet connection. Please connect and try again.';err.style.display='block';return;}
+    const r=await GMSFB.createUserCreds(authEmail,pass,contact);
+    if(!r.ok){
+      if(r.code==='auth/email-already-in-use'){
+        // Recover a half-finished earlier add: verify the password and attach
+        // the profile instead of silently failing (the old "trainer missing
+        // from Users" bug).
+        const si=await GMSFB.secSignIn(authEmail,pass);
+        if(!si.ok){err.textContent='Email already exists with a different password. Use Forgot Password or another Gmail.';err.style.display='block';return;}
+      } else {err.textContent=r.error;err.style.display='block';return;}
+    }
+    GMSFB.secondarySignOut();
+  } else if(role==='admin'){
+    // Never move the built-in admin identity from this form.
+    if(!authEmail)authEmail=GMSFB.adminAuthEmail;
+    if(pass)resetMsg='Admin password changes must be done in Firebase Console → Authentication.';
+  } else if(email&&email!==oldAuthEmail){
+    // Move a legacy synthetic account to a real Gmail identity.
+    if(!pass){err.textContent='Enter a password to set up the new Gmail login for this user.';err.style.display='block';return;}
+    if(!(window.GMSFB&&GMSFB.enabled)){err.textContent='Changing the login email needs an internet connection.';err.style.display='block';return;}
+    const r=await GMSFB.createUserCreds(email,pass,contact);
+    if(!r.ok){
+      if(r.code==='auth/email-already-in-use'){
+        const si=await GMSFB.secSignIn(email,pass);
+        if(!si.ok){err.textContent='Email already exists. Ask the user to use Forgot Password, or enter their existing password here.';err.style.display='block';return;}
+      } else {err.textContent=r.error;err.style.display='block';return;}
+    }
+    GMSFB.secondarySignOut();
+    authEmail=email;
+    authChanged=true;
+  } else if(pass){
+    // Same identity: send a secure Firebase reset link instead of storing a hash.
+    if(authEmail&&!authEmail.endsWith('@fitcoregym.local')&&window.GMSFB&&GMSFB.enabled&&GMSFB.auth){
+      try{ await GMSFB.auth.sendPasswordResetEmail(authEmail); resetSent=true; }
+      catch(e){ resetMsg='Could not send reset email: '+((e&&e.message)||'unknown error'); }
+    } else {
+      resetMsg='No real Gmail on file. Enter a Gmail above plus a password to enable Forgot Password.';
+    }
+  }
+  if(authEmail)authEmail=authEmail.toLowerCase();
+  const doc={name,contact,username,role,status:'active',createdAt:today(),authEmail,email:email||authEmail};
   // Profile photo (avatar) — optional for trainers
   let avatar='';
   if(role==='trainer'){
@@ -8408,23 +8572,28 @@ async function saveUser(){
   if(editingUserId){
     const idx=users.findIndex(u=>u.id===editingUserId);
     if(idx>-1){
-      Object.assign(users[idx],{name,contact,username,role});
-      if(pass){users[idx].passwordHash=hashPassword(pass);users[idx].passwordResetAt=new Date().toISOString();delete users[idx].password;}
+      Object.assign(users[idx],{name,contact,username,role,authEmail,email:email||authEmail});
+      if(authChanged||pass){
+        delete users[idx].passwordHash;
+        delete users[idx].passwordResetAt;
+        delete users[idx].password;
+      }
       if(role==='trainer'){Object.assign(users[idx],{coachName,specializations,availableDays,availableFrom,availableTo,bio,avatar});}
       else if(existingUser&&existingUser.role==='trainer'){delete users[idx].coachName;delete users[idx].specializations;delete users[idx].availableDays;delete users[idx].availableFrom;delete users[idx].availableTo;delete users[idx].bio;delete users[idx].avatar;}
     }
     Users.save(users);
     if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){
-      try{ await GMSFB.pushCollection(KEY.users, Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
+      try{ await GMSFB.pushCollection(KEY.users,Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
     }
-    toast(pass?'User updated. New password is active.':'User updated.');
+    if(pass&&!resetSent&&!authChanged) toast('User updated. '+resetMsg,'info');
+    else toast(resetSent?'User updated. Password reset link sent.':'User updated.','success');
   } else {
     users.push({id:uid(),...doc});
     Users.save(users);
     if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){
-      try{ await GMSFB.pushCollection(KEY.users, Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
+      try{ await GMSFB.pushCollection(KEY.users,Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
     }
-    toast(role==='trainer'?'Trainer account created — can log in immediately.':'User created.');
+    toast(role==='trainer'?'Trainer account created — login with the Gmail above.':'User created.','success');
   }
   userRoleTab=role;
   closeModal('userModal');renderUsers();updatePendingBadge();
@@ -8485,7 +8654,7 @@ function viewUser(id){
   // Trainer extra info — uses HTML placeholder in modal-body (not modal-foot)
   let trainerSection=document.getElementById('up_trainer_section');
   if(u.role==='trainer'&&(u.coachName||u.specializations||u.availableDays||u.bio)){
-    const specs=Array.isArray(u.specializations)?u.specializations:[];
+    const specs=trainerSpecList(u);
     const days=Array.isArray(u.availableDays)?u.availableDays:[];
     const hours=(u.availableFrom&&u.availableTo)?`${u.availableFrom} – ${u.availableTo}`:'—';
     trainerSection.style.display='block';
