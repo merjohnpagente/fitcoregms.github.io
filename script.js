@@ -4322,7 +4322,7 @@ function refreshBillingTable(){
     <td>${esc(p.recordedBy||'—')}</td><td>${esc(p.method||'—')}</td>
     <td><span class="badge badge-paid">Paid</span></td>
     <td>${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">—</span>'}</td>
-    <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button><button class="btn-icon" title="Delete Payment" onclick="deletePayment('${p.id}')" style="color:#ef4444">🗑</button></div></td>
+    <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button>${currentUser&&currentUser.role==='admin'?`<button class="btn-icon" title="Delete Payment" onclick="deletePayment('${p.id}')" style="color:#ef4444">🗑</button>`:''}</div></td>
   </tr>`).join(''):`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="billingPage=${billingPage-1};refreshBillingTable()" ${billingPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===billingPage?'active':''}" onclick="billingPage=${i+1};refreshBillingTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="billingPage=${billingPage+1};refreshBillingTable()" ${billingPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
   document.getElementById('billingTableCard').innerHTML=`
@@ -4438,6 +4438,7 @@ function savePayment(){
   },'Confirm','btn-primary');
 }
 async function deletePayment(id){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admin can delete payment records.','error');return;}
   const p=Payments.one(id);if(!p)return;
   openConfirm('Delete Payment',`Delete payment record ${p.id} for ${esc(p.memberName)}? This cannot be undone.`,async()=>{
     try{
@@ -4457,6 +4458,7 @@ async function deletePayment(id){
   });
 }
 function openEditPayment(id){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admin can edit payment records.','error');return;}
   const p=Payments.one(id);if(!p)return;
   document.getElementById('editPaymentError').style.display='none';
   document.getElementById('ep_id').value=p.id;
@@ -4482,6 +4484,7 @@ function onEditPlanChange(){
   if(plan)document.getElementById('ep_amount').value=plan.price;
 }
 async function saveEditPayment(){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admin can edit payment records.','error');return;}
   const id=document.getElementById('ep_id').value;
   const memberId=document.getElementById('ep_memberId').value;
   const planId=document.getElementById('ep_plan').value;
@@ -7164,7 +7167,7 @@ let _micoRepairDone=false,_micoRepairRunning=false,_micoRepairFailAt=0;
 async function repairMicoDuplicatePayments(){
   if(_micoRepairDone||_micoRepairRunning)return;
   if(Date.now()-_micoRepairFailAt<15000)return;
-  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+  if(!currentUser||currentUser.role!=='admin')return;
   if(!window.GMSFB||!GMSFB.enabled||!GMSFB.ready||!GMSFB.auth||!GMSFB.auth.currentUser)return;
   if(GMSFB._lastCloud.members===undefined||GMSFB._lastCloud.payments===undefined)return;
   const allMembers=Members.all();
