@@ -6182,7 +6182,7 @@ function openExerciseMedia(id){
   const isVideo=!!(media&&media.mp4);
   const isGif=!!(media&&media.gif&&!isVideo);
   const video=isVideo
-    ?`<div class="ex-player" id="exPlayer"><video id="exModalVideo" class="ex-video" src="${esc(media.mp4)}" playsinline muted loop autoplay preload="auto" aria-label="${esc(ex.name)} demonstration, silent loop"></video><div class="ex-player-loading" id="exPlayerLoading"><span class="ex-spinner"></span><span>Loading demo</span></div><button type="button" class="ex-player-start" id="exPlayerStart" hidden aria-label="Play ${esc(ex.name)} demonstration">${iconSvg('play',22)}<span>Play demo</span></button></div>`
+    ?`<div class="ex-player" id="exPlayer"><video id="exModalVideo" class="ex-video" src="${esc(media.mp4)}" playsinline muted loop autoplay preload="auto" aria-label="${esc(ex.name)} demonstration, silent loop"></video><div class="ex-player-loading" id="exPlayerLoading"><span class="ex-spinner"></span><span>Loading demo</span></div></div>`
     :isGif
       ?`<div class="ex-player ex-player-gif" id="exPlayer"><img id="exModalGif" class="ex-video ex-gif" src="${esc(media.gif)}" alt="${esc(ex.name)} animated demonstration" width="180" height="180" decoding="async"></div>`
       :`<div class="ex-player ex-player-empty"><span>${pending?'Video is still loading. Try again in a moment.':'Demo not available for this exercise.'}</span></div>`;
@@ -6202,14 +6202,13 @@ function openExerciseMedia(id){
   if(v){
     const wrap=document.getElementById('exPlayer');
     const loading=document.getElementById('exPlayerLoading');
-    const start=document.getElementById('exPlayerStart');
     const hideLoading=()=>{if(loading)loading.classList.add('is-hidden');};
     v.muted=true;
     v.defaultMuted=true;
     v.playsInline=true;
     v.setAttribute('playsinline','');
     v.setAttribute('webkit-playsinline','');
-    v.addEventListener('playing',()=>{hideLoading();if(start)start.hidden=true;if(wrap)wrap.dataset.looping='1';},{once:true});
+    v.addEventListener('playing',()=>{hideLoading();if(wrap)wrap.dataset.looping='1';},{once:true});
     // The demo is a loop, not a player: if anything pauses it, resume while open.
     v.addEventListener('pause',()=>{
       if(wrap&&wrap.dataset.looping==='1'&&!v.ended&&document.getElementById('exerciseMediaModal').classList.contains('open'))v.play().catch(()=>{});
@@ -6221,13 +6220,14 @@ function openExerciseMedia(id){
     const begin=()=>{
       v.muted=true;
       const p=v.play();
-      if(!p||typeof p.then!=='function'){if(start)start.hidden=true;return;}
-      p.then(()=>{if(wrap)wrap.dataset.looping='1';if(start)start.hidden=true;}).catch(()=>{if(start)start.hidden=false;});
+      if(!p||typeof p.then!=='function')return;
+      p.then(()=>{if(wrap)wrap.dataset.looping='1';}).catch(()=>{});
     };
-    v.addEventListener('click',begin);
+    if(wrap)wrap.addEventListener('click',begin);
     v.addEventListener('canplay',begin,{once:true});
+    v.addEventListener('canplaythrough',begin,{once:true});
+    v.addEventListener('loadedmetadata',begin,{once:true});
     v.addEventListener('loadeddata',()=>{hideLoading();begin();},{once:true});
-    if(start)start.addEventListener('click',begin);
     begin();
   }
   setTimeout(()=>{const btn=document.querySelector('#exerciseMediaModal .modal-close');if(btn)btn.focus({preventScroll:true});},0);
