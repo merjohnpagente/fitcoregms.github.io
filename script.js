@@ -5140,6 +5140,11 @@ function dateToDayAbbr(dateStr){
 }
 // Filter start/end dropdowns to the selected trainer's availableFrom–availableTo
 // and show the availability hint. Full range if trainer has no hours set.
+function onSessionDateChange(){
+  const s=document.getElementById('sf_start');
+  const e=document.getElementById('sf_end');
+  applyTrainerTimeWindow(s?s.value:'',e?e.value:'');
+}
 function applyTrainerTimeWindow(presetStart,presetEnd){
   const trainerId=document.getElementById('sf_trainer').value;
   const trainer=trainerId?Users.all().find(u=>u.id===trainerId):null;
@@ -5171,9 +5176,13 @@ function applyTrainerTimeWindow(presetStart,presetEnd){
   else if(endEl.options.length)endEl.value=endEl.options[endEl.options.length-1].value;
   if(hint){
     if(trainer){
-      const days=Array.isArray(trainer.availableDays)&&trainer.availableDays.length?trainer.availableDays.join(', '):'—';
-      const hours=hasWindow?`${trainer.availableFrom} – ${trainer.availableTo}`:'not set';
-      hint.innerHTML=`⏰ <strong>${esc(trainer.coachName||trainer.name)}</strong> available: ${esc(days)} · ${esc(hours)}`;
+      const date=document.getElementById('sf_date')?document.getElementById('sf_date').value:'';
+      const av=trainerAvailabilityInfo(trainer,date);
+      const booked=trainerBookedRanges(trainer.id,date);
+      let html=`⏰ <strong>${esc(trainer.coachName||trainer.name)}</strong> available: ${esc(av.text)}`;
+      if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} — choose another date.</span>`;
+      if(booked.length)html+=`<br><span style="color:var(--gold)">Booked: ${esc(booked.join(', '))}</span>`;
+      hint.innerHTML=html;
       hint.style.display='block';
     }else{hint.style.display='none';hint.innerHTML='';}
   }
@@ -5181,18 +5190,36 @@ function applyTrainerTimeWindow(presetStart,presetEnd){
 let editingSessionId=null;
 function filterSessionTrainer(val){
   const list=document.getElementById('sf_trainerList');
-  document.getElementById('sf_trainer').value='';
-  updateSessionTypesByTrainer();
-  const trainers=Users.all().filter(u=>u.role==='trainer'&&u.status!=='locked');
-  const matches=val?trainers.filter(u=>u.name.toLowerCase().includes(val.toLowerCase())||(u.coachName||'').toLowerCase().includes(val.toLowerCase())):trainers;
-  if(!matches.length){list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">No trainers found</div>';list.style.display='block';return;}
+  const currentId=document.getElementById('sf_trainer').value;
+  const current=currentId?Users.one(currentId):null;
+  const currentName=current?(current.coachName||current.name):'';
+  if(!currentId||(val||'').trim()!==currentName)document.getElementById('sf_trainer').value='';
+  const type=document.getElementById('sf_type')?document.getElementById('sf_type').value:'';
+  const date=document.getElementById('sf_date')?document.getElementById('sf_date').value:'';
+  const trainers=trainersForSessionType(type);
+  const q=(val||'').toLowerCase();
+  const matches=q?trainers.filter(u=>(u.name||'').toLowerCase().includes(q)||(u.coachName||'').toLowerCase().includes(q)):trainers;
+  if(!matches.length){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">'+(type?'No trainers available for '+esc(type):'No trainers found')+'</div>';
+    list.style.display='block';return;
+  }
   list.innerHTML='';
   matches.forEach(function(u){
+    const av=trainerAvailabilityInfo(u,date);
+    const booked=trainerBookedRanges(u.id,date);
     const specs=Array.isArray(u.specializations)&&u.specializations.length?u.specializations.slice(0,2).map(esc).join(', ')+(u.specializations.length>2?' +more':''):'';
+    const status=!av.dayOk
+      ?'<span style="font-size:10px;color:var(--red)">✕ Not available on '+esc(av.dayAbbr)+'</span>'
+      :(booked.length?'<span style="font-size:10px;color:var(--gold)">Booked: '+esc(booked.join(', '))+'</span>':'<span style="font-size:10px;color:var(--green)">✓ Available</span>');
     const div=document.createElement('div');
     div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
-    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">(${esc(u.coachName)})</span>':''}</span>${specs?`<span style="font-size:10px;color:var(--orange)">${specs}</span>`:''}`;
-    div.addEventListener('mousedown',function(){selectSessTrainer(u.id,u.coachName||u.name);});
+    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs?'<span style="font-size:10px;color:var(--orange)">'+specs+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ '+esc(av.text)+'</span>${status}`;
+    if(!av.dayOk){
+      div.style.opacity='.6';
+      div.addEventListener('mousedown',function(e){e.preventDefault();toast((u.coachName||u.name)+' is not available on '+av.dayAbbr+'.','error');});
+    }else{
+      div.addEventListener('mousedown',function(){selectSessTrainer(u.id,u.coachName||u.name);});
+    }
     div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
     div.addEventListener('mouseout',function(){this.style.background='';});
     list.appendChild(div);
@@ -5204,7 +5231,6 @@ function selectSessTrainer(id,name){
   document.getElementById('sf_trainer').value=id;
   document.getElementById('sf_trainerList').style.display='none';
   updateSessionTypesByTrainer();
-  applyTrainerTimeWindow();
 }
 // Close trainer list on outside click
 document.addEventListener('click',function(e){
@@ -5212,34 +5238,86 @@ document.addEventListener('click',function(e){
   const list=document.getElementById('sf_trainerList');
   if(wrap&&list&&!wrap.contains(e.target)&&!list.contains(e.target))list.style.display='none';
 });
+const DEFAULT_SESSION_TYPES=['Personal Training','Cardio','Strength Training','Flexibility','Assessment'];
+function isBookableTrainer(u){return !!u&&u.role==='trainer'&&u.status!=='locked'&&u.status!=='pending';}
+function trainerSpecs(u){
+  return Array.isArray(u&&u.specializations)&&u.specializations.length?u.specializations:DEFAULT_SESSION_TYPES;
+}
 function sessionTypesForTrainer(trainerId){
   const trainer=Users.all().find(u=>u.id===trainerId);
-  const specs=Array.isArray(trainer&&trainer.specializations)&&trainer.specializations.length?trainer.specializations:['Personal Training','Cardio','Strength Training','Flexibility','Assessment'];
-  const typeMap={'Personal Training':'Personal Training','Strength Training':'Strength Training','Cardio':'Cardio','Yoga':'Yoga','Zumba':'Zumba','HIIT':'HIIT','Flexibility':'Flexibility','CrossFit':'CrossFit','Body Building':'Body Building','Muay Thai':'Muay Thai','Boxing':'Boxing','Pilates':'Pilates'};
-  const types=specs.map(s=>typeMap[s]||s);
+  const types=(trainer?trainerSpecs(trainer):DEFAULT_SESSION_TYPES).slice();
   if(!types.includes('Assessment'))types.push('Assessment');
   return types;
 }
-function updateSessionTypesByTrainer(){
-  const trainerId=document.getElementById('sf_trainer').value;
-  const types=sessionTypesForTrainer(trainerId);
+function allSessionTypes(){
+  const set=new Set();
+  Users.all().filter(isBookableTrainer).forEach(function(t){
+    trainerSpecs(t).forEach(function(s){if(s)set.add(s);});
+    set.add('Assessment');
+  });
+  if(!set.size)DEFAULT_SESSION_TYPES.forEach(function(t){set.add(t);});
+  return [...set].sort(function(a,b){return a==='Assessment'?1:b==='Assessment'?-1:a.localeCompare(b);});
+}
+function trainerOffersType(trainer,type){
+  if(!type||type==='Assessment')return true;
+  return trainerSpecs(trainer).includes(type);
+}
+function trainersForSessionType(type){
+  return Users.all().filter(function(u){return isBookableTrainer(u)&&trainerOffersType(u,type);});
+}
+function trainerAvailabilityInfo(trainer,date){
+  const days=Array.isArray(trainer&&trainer.availableDays)&&trainer.availableDays.length?trainer.availableDays:[];
+  const dayAbbr=date?dateToDayAbbr(date):'';
+  const dayOk=!days.length||!dayAbbr||days.includes(dayAbbr);
+  const fromMin=trainer&&trainer.availableFrom?parseTimeToMin(trainer.availableFrom):null;
+  const toMin=trainer&&trainer.availableTo?parseTimeToMin(trainer.availableTo):null;
+  const hasHours=fromMin!=null&&toMin!=null&&toMin>fromMin;
+  const daysText=days.length?days.join(', '):'Any day';
+  const hoursText=hasHours?trainer.availableFrom+' – '+trainer.availableTo:'Any time';
+  return {days,dayAbbr,dayOk,fromMin,toMin,hasHours,daysText,hoursText,text:daysText+' · '+hoursText};
+}
+function trainerBookedRanges(trainerId,date){
+  if(!trainerId||!date)return [];
+  return Sessions.all().filter(function(s){return s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined';})
+    .sort(function(a,b){return (a.start||'').localeCompare(b.start||'');})
+    .map(function(s){return (s.start||'')+'–'+(s.end||'');});
+}
+function trainerAvailabilityError(trainer,date,start,end){
+  if(!trainer)return 'Trainer not found. Please choose another trainer.';
+  const av=trainerAvailabilityInfo(trainer,date);
+  const label=trainer.coachName||trainer.name;
+  if(!av.dayOk)return label+' is not available on '+av.dayAbbr+'. Available days: '+av.days.join(', ')+'.';
+  if(av.hasHours){
+    const sM=parseTimeToMin(start),eM=parseTimeToMin(end);
+    if(sM!=null&&eM!=null&&(sM<av.fromMin||eM>av.toMin))return 'Session must be within '+label+"'s available hours ("+trainer.availableFrom+' – '+trainer.availableTo+').';
+  }
+  return '';
+}
+function populateSessionTypeOptions(selected){
   const sel=document.getElementById('sf_type');
   if(!sel)return;
-  const prev=sel.value;
-  sel.innerHTML=`<option value="">Select type</option>`+types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  if(prev&&types.includes(prev))sel.value=prev;
-  else if(trainerId&&types.length)sel.value=types[0];
-  applyTrainerTimeWindow();
+  const types=allSessionTypes();
+  const keep=selected!==undefined?selected:sel.value;
+  sel.innerHTML='<option value="">Select type</option>'+types.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join('');
+  if(keep){
+    if(!types.includes(keep))sel.insertAdjacentHTML('beforeend','<option value="'+esc(keep)+'">'+esc(keep)+'</option>');
+    sel.value=keep;
+  }
 }
-function updateBsTypes(){
-  const trainerId=document.getElementById('bs_trainer')?document.getElementById('bs_trainer').value:'';
-  const sel=document.getElementById('bs_type');
+function onSessionTypeChange(){
+  document.getElementById('sf_trainer').value='';
+  document.getElementById('sf_trainerSearch').value='';
+  const hint=document.getElementById('sf_availHint');
+  if(hint){hint.style.display='none';hint.innerHTML='';}
+  filterSessionTrainer('');
+}
+function updateSessionTypesByTrainer(){
+  const trainerId=document.getElementById('sf_trainer').value;
+  const sel=document.getElementById('sf_type');
   if(!sel)return;
-  const types=sessionTypesForTrainer(trainerId);
-  const prev=sel.value;
-  sel.innerHTML=types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
-  if(prev&&types.includes(prev))sel.value=prev;
-  else if(types.length)sel.value=types[0];
+  populateSessionTypeOptions(sel.value);
+  if(!sel.value&&trainerId){const types=sessionTypesForTrainer(trainerId);if(types.length)sel.value=types[0];}
+  applyTrainerTimeWindow();
 }
 function openSessionModal(preDate){
   if(currentUser.role!=='staff'&&currentUser.role!=='admin'){toast('Only staff can create sessions.','error');return;}
@@ -5249,9 +5327,8 @@ function openSessionModal(preDate){
   document.getElementById('sf_trainerSearch').value='';
   document.getElementById('sf_trainer').value='';
   document.getElementById('sf_trainerList').style.display='none';
-  updateSessionTypesByTrainer();
+  populateSessionTypeOptions('');
   document.getElementById('sf_memberSearch').value='';document.getElementById('sf_memberId').value='';document.getElementById('sf_memberList').style.display='none';
-  document.getElementById('sf_type').value='';
   // No past dates for new sessions — min=today blocks earlier days in the picker
   const dateEl=document.getElementById('sf_date');
   dateEl.min=today();
@@ -5260,6 +5337,7 @@ function openSessionModal(preDate){
   document.getElementById('sf_start').innerHTML=timeOpts;document.getElementById('sf_end').innerHTML=timeOpts;
   document.getElementById('sf_start').value='08:00';document.getElementById('sf_end').value='09:00';
   document.getElementById('sf_notes').value='';
+  applyTrainerTimeWindow();
   openModal('sessionModal');
 }
 function editSession(id){
@@ -5268,6 +5346,7 @@ function editSession(id){
   editingSessionId=id;
   document.getElementById('sessionModalTitle').textContent='Edit Session';
   document.getElementById('sessionFormError').style.display='none';
+  populateSessionTypeOptions(s.type||'');
   const trainers=Users.all().filter(u=>u.role==='trainer');
   const trainerObj=trainers.find(u=>u.id===s.trainerId);
   document.getElementById('sf_trainerSearch').value=trainerObj?(trainerObj.coachName||trainerObj.name):'';
@@ -5275,8 +5354,6 @@ function editSession(id){
   document.getElementById('sf_trainerList').style.display='none';
   updateSessionTypesByTrainer();
   document.getElementById('sf_memberSearch').value=s.memberName||'';document.getElementById('sf_memberId').value=s.memberId||'';
-  const typeSel=document.getElementById('sf_type');
-  if(typeSel){ if([...typeSel.options].some(o=>o.value===s.type)) typeSel.value=s.type; else if(typeSel.options.length) typeSel.value=typeSel.options[0].value; }
   // Editing: keep original date if already past; otherwise block earlier than today
   const dateEl=document.getElementById('sf_date');
   dateEl.min=(s.date<today())?s.date:today();
@@ -5285,6 +5362,7 @@ function editSession(id){
   document.getElementById('sf_start').innerHTML=timeOpts;document.getElementById('sf_end').innerHTML=timeOpts;
   document.getElementById('sf_start').value=s.start;document.getElementById('sf_end').value=s.end;
   document.getElementById('sf_notes').value=s.notes||'';
+  applyTrainerTimeWindow(s.start,s.end);
   openModal('sessionModal');
 }
 function filterSessionMember(val){
@@ -5328,33 +5406,18 @@ function saveSession(){
   const memberCheck=Members.one(memberId);
   if(memberCheck&&memberCheck.status==='Expired'){err.textContent='Cannot schedule a session for '+memberCheck.name+'. Their membership has expired. Please renew their membership first.';err.style.display='block';return;}
   if(end<=start){err.textContent='Invalid time range. The end time must be after the start time.';err.style.display='block';return;}
-  // ---- Trainer availability: day + time window (skip if trainer has no data set) ----
+  if(!sessionTypesForTrainer(trainerId).includes(type)){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';return;}
   const trAvail=Users.all().find(u=>u.id===trainerId);
-  if(trAvail){
-    const dayAbbr=dateToDayAbbr(date);
-    const days=Array.isArray(trAvail.availableDays)?trAvail.availableDays:[];
-    if(days.length&&dayAbbr&&!days.includes(dayAbbr)){
-      err.textContent=`${trAvail.coachName||trAvail.name} is not available on ${dayAbbr} days. Available days: ${days.join(', ')}.`;
-      err.style.display='block';return;
-    }
-    const fMin=trAvail.availableFrom?parseTimeToMin(trAvail.availableFrom):null;
-    const tMin=trAvail.availableTo?parseTimeToMin(trAvail.availableTo):null;
-    const sM=parseTimeToMin(start),eM=parseTimeToMin(end);
-    if(fMin!=null&&tMin!=null&&tMin>fMin&&sM!=null&&eM!=null){
-      if(sM<fMin||eM>tMin){
-        err.textContent=`Session must be within ${trAvail.coachName||trAvail.name}'s available hours (${trAvail.availableFrom} – ${trAvail.availableTo}).`;
-        err.style.display='block';return;
-      }
-    }
-  }
+  const availErr=trainerAvailabilityError(trAvail,date,start,end);
+  if(availErr){err.textContent=availErr;err.style.display='block';return;}
   const sessions=Sessions.all();
   // Conflict: same trainer, same date, overlapping time
-  const trainerConflict=sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.id!==editingSessionId).find(s=>start<s.end&&end>s.start);
+  const trainerConflict=sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined'&&s.id!==editingSessionId).find(s=>start<s.end&&end>s.start);
   if(trainerConflict){err.textContent=`Schedule Conflict: This trainer already has a session from ${trainerConflict.start}–${trainerConflict.end} on this date. Please choose a different time.`;err.style.display='block';return;}
   // Conflict: same member assigned to another session at same time
-  const memberConflict=sessions.filter(s=>s.memberId===memberId&&s.date===date&&s.status!=='Cancelled'&&s.id!==editingSessionId).find(s=>start<s.end&&end>s.start);
+  const memberConflict=sessions.filter(s=>s.memberId===memberId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined'&&s.id!==editingSessionId).find(s=>start<s.end&&end>s.start);
   if(memberConflict){err.textContent=`Schedule Conflict: This member already has a session from ${memberConflict.start}–${memberConflict.end} on this date.`;err.style.display='block';return;}
-  if(sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled').length>=8){err.textContent='Trainer not available for the selected day.';err.style.display='block';return;}
+  if(sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined').length>=8){err.textContent='Trainer not available for the selected day.';err.style.display='block';return;}
   const trainer=Users.all().find(u=>u.id===trainerId);
   const member=Members.one(memberId);
   const data={trainerId,trainerName:trainer?trainer.name:'Unknown',memberId,memberName:member?member.name:'Unknown',type,date,start,end,notes:sanitizeText(document.getElementById('sf_notes').value.trim()),status:'Scheduled'};
@@ -6368,17 +6431,19 @@ function renderMySessions(){
   const mid=currentUser.memberId||currentUser.id;
   const mySessions=Sessions.all().filter(s=>s.memberId===mid).sort((a,b)=> (a.date||'').localeCompare(b.date||'') );
   const assignedTrainerId=(Members.one(mid)||{}).assignedTrainerId;
-  const trainers=Users.all().filter(u=>u.role==='trainer'&&u.status==='active');
+  const assignedTrainer=Users.all().find(u=>u.id===assignedTrainerId&&isBookableTrainer(u));
+  const defaultType=assignedTrainer?(sessionTypesForTrainer(assignedTrainer.id)[0]||allSessionTypes()[0]):allSessionTypes()[0];
   el.innerHTML=`
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Book a Session</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
-      <div class="form-group"><label>Trainer *</label><select id="bs_trainer" onchange="updateBsTypes()"><option value="">Select trainer</option>${trainers.map(t=>`<option value="${t.id}" ${t.id===assignedTrainerId?'selected':''}>${esc(t.coachName||t.name)} — ${(t.specializations||[]).join(', ')||'General'}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Session Type *</label><select id="bs_type" onchange="updateBsTrainerOptions()">${allSessionTypes().map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Trainer *</label><select id="bs_trainer" onchange="updateBsAvailability()"></select></div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-        <div class="form-group"><label>Date *</label><input type="date" id="bs_date" min="${today()}"></div>
+        <div class="form-group"><label>Date *</label><input type="date" id="bs_date" min="${today()}" onchange="updateBsAvailability()"></div>
         <div class="form-group"><label>Start *</label><input type="time" id="bs_start"></div>
         <div class="form-group"><label>End *</label><input type="time" id="bs_end"></div>
       </div>
-      <div class="form-group"><label>Session Type</label><select id="bs_type"></select></div>
+      <div id="bsAvailHint" class="sf-avail-hint" style="display:none"></div>
       <button class="btn-primary" onclick="bookSession()">Request Session</button>
       <div id="bsError" class="error-msg" style="display:none"></div>
       <div style="font-size:11px;color:var(--gray-500);line-height:1.5">Your request goes to the trainer as <strong>Pending</strong> — they will Accept or Decline. You can reschedule after decline.</div>
@@ -6392,7 +6457,45 @@ function renderMySessions(){
       return `<tr><td>${formatDate(s.date)}</td><td>${esc(s.start||'')}–${esc(s.end||'')}</td><td>${esc(tr? (tr.coachName||tr.name): s.trainerName||s.trainerId)}</td><td>${esc(s.type||'-')}</td><td><span class="badge" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:${statusColor}">${esc(s.status)}</span></td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.progressNotes||s.notes||'-')}</td><td>${actionBtn}</td></tr>`;
     }).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:30px"><div class="empty-icon">📅</div><p>No sessions yet — book one above</p></div>`}
   </div>`;
-  updateBsTypes();
+  const typeSel=document.getElementById('bs_type');
+  if(typeSel&&defaultType)typeSel.value=defaultType;
+  updateBsTrainerOptions(assignedTrainerId);
+}
+function updateBsTrainerOptions(preferredId){
+  const typeSel=document.getElementById('bs_type');
+  const trainerSel=document.getElementById('bs_trainer');
+  if(!typeSel||!trainerSel)return;
+  const type=typeSel.value;
+  const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
+  const trainers=trainersForSessionType(type);
+  const keep=preferredId||trainerSel.value;
+  if(!trainers.length){
+    trainerSel.innerHTML='<option value="">No trainers for this session type</option>';
+    trainerSel.value='';
+    updateBsAvailability();
+    return;
+  }
+  trainerSel.innerHTML='<option value="">Select trainer</option>'+trainers.map(function(t){
+    const av=trainerAvailabilityInfo(t,date);
+    return '<option value="'+t.id+'">'+esc(t.coachName||t.name)+' — '+esc(av.text)+'</option>';
+  }).join('');
+  if(keep&&trainers.some(function(t){return t.id===keep;}))trainerSel.value=keep;
+  else trainerSel.value=trainers[0].id;
+  updateBsAvailability();
+}
+function updateBsAvailability(){
+  const hint=document.getElementById('bsAvailHint');
+  if(!hint)return;
+  const trainerId=document.getElementById('bs_trainer')?document.getElementById('bs_trainer').value:'';
+  const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
+  const trainer=Users.one(trainerId);
+  if(!trainer){hint.style.display='none';hint.innerHTML='';return;}
+  const av=trainerAvailabilityInfo(trainer,date);
+  const booked=trainerBookedRanges(trainer.id,date);
+  let html=`⏰ <strong>${esc(trainer.coachName||trainer.name)}</strong> available: ${esc(av.text)}`;
+  if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} — choose another date.</span>`;
+  if(booked.length)html+=`<br><span style="color:var(--gold)">Booked: ${esc(booked.join(', '))}</span>`;
+  hint.innerHTML=html;hint.style.display='block';
 }
 function bookSession(){
   const err=document.getElementById('bsError'); if(err) err.style.display='none';
@@ -6400,9 +6503,14 @@ function bookSession(){
   const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
   const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
   const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
-  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'Personal Training';
-  if(!trainerId||!date||!start||!end){ if(err){err.textContent='Trainer, date, start and end are required.';err.style.display='block';} return; }
+  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
+  if(!trainerId||!date||!start||!end||!type){ if(err){err.textContent='Session type, trainer, date, start and end are required.';err.style.display='block';} return; }
   if(start>=end){ if(err){err.textContent='End time must be after start time.';err.style.display='block';} return; }
+  const trainer=Users.one(trainerId);
+  if(!trainer){ if(err){err.textContent='Trainer not found.';err.style.display='block';} return; }
+  if(!sessionTypesForTrainer(trainerId).includes(type)){ if(err){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';} return; }
+  const availErr=trainerAvailabilityError(trainer,date,start,end);
+  if(availErr){ if(err){err.textContent=availErr;err.style.display='block';} return; }
   const mid=currentUser.memberId||currentUser.id; const mem=Members.one(mid);
   // conflict check: same member same date overlap + trainer double-booking
   const sameDay=Sessions.all().filter(s=>s.memberId===mid&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined');
@@ -6411,18 +6519,22 @@ function bookSession(){
   const trainerDay=Sessions.all().filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined');
   const trainerOverlap=trainerDay.some(s=> !(end<=s.start || start>=s.end) );
   if(trainerOverlap){ if(err){err.textContent='Trainer is already booked at that time — please choose another slot.';err.style.display='block';} return; }
-  const trainer=Users.one(trainerId);
+  if(trainerDay.length>=8){ if(err){err.textContent='Trainer is fully booked on that date — please choose another day.';err.style.display='block';} return; }
   Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
   toast('Session request sent — awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
 }
 function rescheduleSession(id){
   const s=Sessions.one(id); if(!s) return;
-  const tr=document.getElementById('bs_trainer'); if(tr) tr.value=s.trainerId;
-  updateBsTypes();
+  const tp=document.getElementById('bs_type');
+  if(tp){
+    if(![...tp.options].some(o=>o.value===s.type))tp.insertAdjacentHTML('beforeend','<option value="'+esc(s.type)+'">'+esc(s.type)+'</option>');
+    tp.value=s.type;
+  }
   const d=document.getElementById('bs_date'); if(d) d.value=s.date;
+  updateBsTrainerOptions(s.trainerId);
   const st=document.getElementById('bs_start'); if(st) st.value=s.start;
   const en=document.getElementById('bs_end'); if(en) en.value=s.end;
-  const tp=document.getElementById('bs_type'); if(tp&&[...tp.options].some(o=>o.value===s.type)) tp.value=s.type;
+  updateBsAvailability();
   window.scrollTo({top:0,behavior:'smooth'});
   const el=document.getElementById('bs_trainer'); if(el) el.focus();
   toast('Prefilled previous session — adjust time and request again.');

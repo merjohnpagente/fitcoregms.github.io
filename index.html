@@ -2193,6 +2193,8 @@
 
       <div id="sessionFormError" class="error-msg"></div>
 
+      <div class="form-group"><label>Session Type *</label><select id="sf_type" onchange="onSessionTypeChange()"><option value="">Select type</option></select></div>
+
       <div class="form-row">
 
         <div class="form-group">
@@ -2201,7 +2203,7 @@
 
           <input type="text" id="sf_trainerSearch" placeholder="Search trainer..." oninput="filterSessionTrainer(this.value)" onclick="filterSessionTrainer(this.value)" autocomplete="off">
 
-          <div id="sf_trainerList" style="background:var(--navy-700);border:1px solid var(--navy-600);border-radius:8px;max-height:160px;overflow-y:auto;display:none;position:relative;z-index:20"></div>
+          <div id="sf_trainerList" style="background:var(--navy-700);border:1px solid var(--navy-600);border-radius:8px;max-height:220px;overflow-y:auto;display:none;position:relative;z-index:20"></div>
 
           <input type="hidden" id="sf_trainer">
 
@@ -2219,11 +2221,11 @@
 
       </div>
 
-      <div class="form-group"><label>Session Type *</label><select id="sf_type"><option value="">Select type</option><option>Personal Training</option><option>Cardio</option><option>Strength</option><option>Flexibility</option><option>Assessment</option></select></div>
+      <div id="sf_availHint" class="sf-avail-hint" style="display:none"></div>
 
       <div class="form-row cols-3">
 
-        <div class="form-group"><label>Date *</label><input type="date" id="sf_date"></div>
+        <div class="form-group"><label>Date *</label><input type="date" id="sf_date" onchange="onSessionDateChange()"></div>
 
         <div class="form-group"><label>Start Time *</label><select id="sf_start"></select></div>
 
@@ -2232,8 +2234,6 @@
       </div>
 
         <div class="form-group"><label>Notes</label><textarea id="sf_notes" rows="2"></textarea></div>
-
-        <div id="sf_availHint" class="sf-avail-hint" style="display:none"></div>
 
     </div>
 
@@ -3028,7 +3028,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=38"></script>
+<script src="script.js?v=39"></script>
 
 </body>
 
