@@ -16,4 +16,4 @@ The 12 built-in starter exercises have no match in the WorkoutX 50. Their local 
 ## Data storage and Activity Log
 
 - All business collections are stored in Firestore. `localStorage` is only a cache/offline fallback; failed cloud writes are retried when the device reconnects or a user signs in.
-- The Activity Log is internal-only (admin, staff, trainer). Member actions are excluded from every view and rejected by `docs/firestore.rules`. Publish the updated rules in Firebase Console after pulling changes.
+- The Activity Log is internal-only (admin and staff; trainers cannot see it). Member actions are excluded from every view and rejected by `docs/firestore.rules`. Publish the updated rules in Firebase Console after pulling changes.

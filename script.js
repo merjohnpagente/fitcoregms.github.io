@@ -615,7 +615,7 @@ function newestPaymentFirst(a,b){
 function nextMemberId(){const n=Members.all().filter(m=>m.status!=='Archived').length;return 'MEM-'+String(n+1).padStart(4,'0');}
 function addDays(dateStr,days){const d=new Date(dateStr);d.setDate(d.getDate()+days);return d.toISOString().split('T')[0];}
 function addMonths(dateStr,months){const d=new Date(dateStr);d.setMonth(d.getMonth()+months);return d.toISOString().split('T')[0];}
-function today(){return new Date().toISOString().split('T')[0];}
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysUntil(dateStr){const ms=new Date(dateStr)-new Date(today());return Math.ceil(ms/(1000*60*60*24));}
 // Expired member check for login gate + session force-logout.
 // pending_payment and Archived are intentionally excluded — they have their own flows
@@ -2605,7 +2605,7 @@ function buildSidebar(){
     {id:'announcements',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg>`,label:'Announcements',roles:['admin']},
     {id:'plans',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,label:'Membership Plans',roles:['admin','staff']},
     {id:'reports',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,label:'Reports',roles:['admin']},
-    {id:'activityLog',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,label:'Activity Log',roles:['admin','staff','trainer']},
+    {id:'activityLog',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,label:'Activity Log',roles:['admin','staff']},
     {id:'users',group:'Administration',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,label:'User Management',roles:['admin'],badge:'pendingBadge'}
   ];
   const visible=items.filter(i=>i.roles.includes(u.role));
@@ -2654,7 +2654,7 @@ function startClock(){
   _clockInterval=setInterval(tick,1000);
 }
 let _lastPanel=null;
-const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff','trainer'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
+const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
 function navigate(panel){
   // ── ACTIVATION GATE: block pending/archived members on every navigation ──
   // This is the route guard that prevents bypassing the pendingGate via
@@ -8014,7 +8014,8 @@ function deletePlan(id){
 // ======================================================================
 let reportType='revenue';
 function renderActivityLog(){
-  // Internal audit trail for admin/staff/trainer. Member activity is private.
+  if(!currentUser||(currentUser.role!=="admin"&&currentUser.role!=="staff"))return;
+  // Internal audit trail for admin/staff only (trainers cannot see it). Member activity is private.
   const el=document.getElementById('panelActivityLog');
   if(!el) return;
   pruneMemberActivity();
@@ -8055,6 +8056,7 @@ function printActivityLog(){
   doc.close(); setTimeout(()=>frame.contentWindow.print(),300);
 }
 function exportActivityLogCSV(){
+  if(!currentUser||(currentUser.role!=="admin"&&currentUser.role!=="staff"))return;
   let log=(ActivityLog.all()||[]).filter(e=>!_isMemberActivity(e));
   if(!log.length){toast('No internal activity to export.','error');return;}
   const csv='Action,Category,Detail,Extra,Done By,Role,Date\n' + log.map(e=> `${e.action},${e.category},"${(e.detail||'').replace(/"/g,'""')}","${(e.extra||'').replace(/"/g,'""')}",${e.by},${e.byRole},${e.at}`).join('\n');
@@ -9296,6 +9298,7 @@ function updateHeroMemberCount(){
   el.dataset.counted='1';
   animateCount(el,count,700,from);
 }
+
 
 function bsTrainerReason(u,type,date,start,end){
   if(!trainerOffersType(u,type))return 'Does not offer '+type;
