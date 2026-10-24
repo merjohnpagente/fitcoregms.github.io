@@ -6668,51 +6668,6 @@ function updateBsTrainerOptions(preferredId){
   updateBsAvailability();
   bsFilterTrainers(search.value);
 }
-function bsFilterTrainers(q){
-  const list=document.getElementById('bs_trainerList');
-  const hidden=document.getElementById('bs_trainer');
-  const search=document.getElementById('bs_trainerSearch');
-  if(!list||!hidden||!search)return;
-  const currentId=hidden.value;
-  const current=currentId?Users.one(currentId):null;
-  const currentName=current?(current.coachName||current.name):'';
-  if(!currentId||String(q||'').trim()!==currentName)hidden.value='';
-  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
-  const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
-  const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
-  const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
-  if(!type){
-    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">Select a session type first</div>';
-    list.style.display='block';return;
-  }
-  const trainers=availableTrainersFor(type,date,start,end);
-  const query=String(q||'').toLowerCase().trim();
-  const matches=query?trainers.filter(function(u){
-    const specs=trainerSpecList(u);
-    return (u.name||'').toLowerCase().includes(query)||(u.coachName||'').toLowerCase().includes(query)||specs.some(function(s){return s.toLowerCase().includes(query);});
-  }):trainers;
-  if(!matches.length){
-    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">No available trainers for '+esc(type)+' on '+esc(date?formatDate(date):'the selected date')+'. Try another date or time.</div>';
-    list.style.display='block';return;
-  }
-  const hasSlot=!!(date&&start&&end);
-  list.innerHTML=hasSlot?'':'<div style="padding:6px 12px;font-size:10px;color:var(--gray-500);border-bottom:1px solid rgba(255,255,255,.05)">Pick start and end time to check exact slot availability.</div>';
-  matches.forEach(function(u){
-    const av=trainerAvailabilityInfo(u,date);
-    const booked=trainerBookedRanges(u.id,date);
-    const specs=trainerSpecList(u);
-    const slotText=hasSlot?'✓ Available for '+esc(start)+'–'+esc(end):'✓ Available on '+esc(av.dayAbbr||'this day');
-    const status='<span style="font-size:10px;color:var(--green)">'+slotText+'</span>'+(booked.length?'<span style="font-size:10px;color:var(--gray-500)">Other bookings: '+esc(booked.join(', '))+'</span>':'');
-    const div=document.createElement('div');
-    div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
-    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs.length?'<span style="font-size:10px;color:var(--orange)">'+specs.slice(0,3).map(esc).join(', ')+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ ${esc(av.text)}</span>${status}`;
-    div.addEventListener('mousedown',function(){selectBsTrainer(u.id,u.coachName||u.name);});
-    div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
-    div.addEventListener('mouseout',function(){this.style.background='';});
-    list.appendChild(div);
-  });
-  list.style.display='block';
-}
 function bsTrainerSlotChanged(){
   const hidden=document.getElementById('bs_trainer');
   const search=document.getElementById('bs_trainerSearch');
@@ -9340,4 +9295,81 @@ function updateHeroMemberCount(){
   el.setAttribute('data-count',count);
   el.dataset.counted='1';
   animateCount(el,count,700,from);
+}
+
+function bsTrainerReason(u,type,date,start,end){
+  if(!trainerOffersType(u,type))return 'Does not offer '+type;
+  const av=trainerAvailabilityInfo(u,date);
+  if(date&&!av.dayOk)return 'Not available on '+av.dayAbbr+' (works '+av.daysText+')';
+  if(date&&start&&end){
+    const sM=parseTimeToMin(start),eM=parseTimeToMin(end);
+    if(sM==null||eM==null||sM>=eM)return 'Check start and end time';
+    if(av.hasHours&&(sM<av.fromMin||eM>av.toMin))return 'Outside available hours ('+av.hoursText+')';
+    const clash=Sessions.all().some(function(s){return s.trainerId===u.id&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined'&&!(end<=s.start||start>=s.end);});
+    if(clash)return 'Already booked at that time';
+  }
+  return isTrainerAvailable(u,type,date,start,end)?'':'Fully booked that day';
+}
+function bsFilterTrainers(q){
+  const list=document.getElementById('bs_trainerList');
+  const hidden=document.getElementById('bs_trainer');
+  const search=document.getElementById('bs_trainerSearch');
+  if(!list||!hidden||!search)return;
+  const currentId=hidden.value;
+  const current=currentId?Users.one(currentId):null;
+  const currentName=current?(current.coachName||current.name):'';
+  if(!currentId||String(q||'').trim()!==currentName)hidden.value='';
+  const type=document.getElementById('bs_type')?document.getElementById('bs_type').value:'';
+  const date=document.getElementById('bs_date')?document.getElementById('bs_date').value:'';
+  const start=document.getElementById('bs_start')?document.getElementById('bs_start').value:'';
+  const end=document.getElementById('bs_end')?document.getElementById('bs_end').value:'';
+  if(!type){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">Select a session type first</div>';
+    list.style.display='block';return;
+  }
+  const fb=window.GMSFB;
+  if(fb&&fb.enabled&&fb.ready&&fb._lastCloud&&fb._lastCloud.users===undefined){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">Loading trainers...</div>';
+    list.style.display='block';return;
+  }
+  const query=String(q||'').toLowerCase().trim();
+  const all=Users.all().filter(isBookableTrainer).filter(function(u){
+    if(!query)return true;
+    const specs=trainerSpecList(u);
+    return (u.name||'').toLowerCase().includes(query)||(u.coachName||'').toLowerCase().includes(query)||specs.some(function(s){return s.toLowerCase().includes(query);});
+  }).map(function(u){return {u:u,reason:bsTrainerReason(u,type,date,start,end)};});
+  all.sort(function(a,b){
+    if(!a.reason!==!b.reason)return a.reason?1:-1;
+    return String(a.u.coachName||a.u.name||'').localeCompare(String(b.u.coachName||b.u.name||''));
+  });
+  if(!all.length){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">No trainers found.</div>';
+    list.style.display='block';return;
+  }
+  const hasSlot=!!(date&&start&&end);
+  list.innerHTML=hasSlot?'':'<div style="padding:6px 12px;font-size:10px;color:var(--gray-500);border-bottom:1px solid rgba(255,255,255,.05)">Pick start and end time to check exact slot availability.</div>';
+  all.forEach(function(item){
+    const u=item.u,reason=item.reason;
+    const av=trainerAvailabilityInfo(u,date);
+    const booked=trainerBookedRanges(u.id,date);
+    const specs=trainerSpecList(u);
+    const ok=!reason;
+    const slotText=hasSlot?'✓ Available for '+esc(start)+'–'+esc(end):'✓ Available on '+esc(av.dayAbbr||'this day');
+    const status=ok
+      ?'<span style="font-size:10px;color:var(--green)">'+slotText+'</span>'
+      :'<span style="font-size:10px;color:var(--red)">✕ '+esc(reason)+'</span>';
+    const other=booked.length?'<span style="font-size:10px;color:var(--gray-500)">Other bookings: '+esc(booked.join(', '))+'</span>':'';
+    const nick=(u.coachName&&u.coachName!==u.name)?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':'';
+    const specHtml=specs.length?'<span style="font-size:10px;color:var(--orange)">'+specs.slice(0,3).map(esc).join(', ')+'</span>':'';
+    const div=document.createElement('div');
+    div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);display:flex;flex-direction:column;gap:2px;'+(ok?'cursor:pointer':'cursor:not-allowed;opacity:.55');
+    div.innerHTML='<span style="font-weight:600;color:var(--white)">'+esc(u.coachName||u.name)+nick+'</span>'+specHtml+'<span style="font-size:10px;color:var(--gray-500)">⏰ '+esc(av.text)+'</span>'+status+other;
+    if(ok){
+      div.addEventListener('mousedown',function(){selectBsTrainer(u.id,u.coachName||u.name);});
+      div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
+      div.addEventListener('mouseout',function(){this.style.background='';});
+    }
+    list.appendChild(div);
+  });
+  list.style.display='block';
 }
