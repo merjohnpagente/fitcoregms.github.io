@@ -5206,18 +5206,34 @@ document.addEventListener('click',function(e){
   const list=document.getElementById('sf_trainerList');
   if(wrap&&list&&!wrap.contains(e.target)&&!list.contains(e.target))list.style.display='none';
 });
-function updateSessionTypesByTrainer(){
-  const trainerId=document.getElementById('sf_trainer').value;
+function sessionTypesForTrainer(trainerId){
   const trainer=Users.all().find(u=>u.id===trainerId);
   const specs=Array.isArray(trainer&&trainer.specializations)&&trainer.specializations.length?trainer.specializations:['Personal Training','Cardio','Strength Training','Flexibility','Assessment'];
   const typeMap={'Personal Training':'Personal Training','Strength Training':'Strength Training','Cardio':'Cardio','Yoga':'Yoga','Zumba':'Zumba','HIIT':'HIIT','Flexibility':'Flexibility','CrossFit':'CrossFit','Body Building':'Body Building','Muay Thai':'Muay Thai','Boxing':'Boxing','Pilates':'Pilates'};
   const types=specs.map(s=>typeMap[s]||s);
   if(!types.includes('Assessment'))types.push('Assessment');
+  return types;
+}
+function updateSessionTypesByTrainer(){
+  const trainerId=document.getElementById('sf_trainer').value;
+  const types=sessionTypesForTrainer(trainerId);
   const sel=document.getElementById('sf_type');
+  if(!sel)return;
   const prev=sel.value;
-  sel.innerHTML=`<option value="">Select type</option>`+types.map(t=>`<option value="${t}">${t}</option>`).join('');
+  sel.innerHTML=`<option value="">Select type</option>`+types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
   if(prev&&types.includes(prev))sel.value=prev;
+  else if(trainerId&&types.length)sel.value=types[0];
   applyTrainerTimeWindow();
+}
+function updateBsTypes(){
+  const trainerId=document.getElementById('bs_trainer')?document.getElementById('bs_trainer').value:'';
+  const sel=document.getElementById('bs_type');
+  if(!sel)return;
+  const types=sessionTypesForTrainer(trainerId);
+  const prev=sel.value;
+  sel.innerHTML=types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  if(prev&&types.includes(prev))sel.value=prev;
+  else if(types.length)sel.value=types[0];
 }
 function openSessionModal(preDate){
   if(currentUser.role!=='staff'&&currentUser.role!=='admin'){toast('Only staff can create sessions.','error');return;}
@@ -5253,7 +5269,8 @@ function editSession(id){
   document.getElementById('sf_trainerList').style.display='none';
   updateSessionTypesByTrainer();
   document.getElementById('sf_memberSearch').value=s.memberName||'';document.getElementById('sf_memberId').value=s.memberId||'';
-  document.getElementById('sf_type').value=s.type;
+  const typeSel=document.getElementById('sf_type');
+  if(typeSel){ if([...typeSel.options].some(o=>o.value===s.type)) typeSel.value=s.type; else if(typeSel.options.length) typeSel.value=typeSel.options[0].value; }
   // Editing: keep original date if already past; otherwise block earlier than today
   const dateEl=document.getElementById('sf_date');
   dateEl.min=(s.date<today())?s.date:today();
@@ -6349,13 +6366,13 @@ function renderMySessions(){
   el.innerHTML=`
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Book a Session</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
-      <div class="form-group"><label>Trainer *</label><select id="bs_trainer"><option value="">Select trainer</option>${trainers.map(t=>`<option value="${t.id}" ${t.id===assignedTrainerId?'selected':''}>${esc(t.coachName||t.name)} — ${(t.specializations||[]).join(', ')||'General'}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Trainer *</label><select id="bs_trainer" onchange="updateBsTypes()"><option value="">Select trainer</option>${trainers.map(t=>`<option value="${t.id}" ${t.id===assignedTrainerId?'selected':''}>${esc(t.coachName||t.name)} — ${(t.specializations||[]).join(', ')||'General'}</option>`).join('')}</select></div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <div class="form-group"><label>Date *</label><input type="date" id="bs_date" min="${today()}"></div>
         <div class="form-group"><label>Start *</label><input type="time" id="bs_start"></div>
         <div class="form-group"><label>End *</label><input type="time" id="bs_end"></div>
       </div>
-      <div class="form-group"><label>Session Type</label><select id="bs_type"><option>Personal Training</option><option>Strength</option><option>Cardio</option><option>Assessment</option></select></div>
+      <div class="form-group"><label>Session Type</label><select id="bs_type"></select></div>
       <button class="btn-primary" onclick="bookSession()">Request Session</button>
       <div id="bsError" class="error-msg" style="display:none"></div>
       <div style="font-size:11px;color:var(--gray-500);line-height:1.5">Your request goes to the trainer as <strong>Pending</strong> — they will Accept or Decline. You can reschedule after decline.</div>
@@ -6369,6 +6386,7 @@ function renderMySessions(){
       return `<tr><td>${formatDate(s.date)}</td><td>${esc(s.start||'')}–${esc(s.end||'')}</td><td>${esc(tr? (tr.coachName||tr.name): s.trainerName||s.trainerId)}</td><td>${esc(s.type||'-')}</td><td><span class="badge" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:${statusColor}">${esc(s.status)}</span></td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.progressNotes||s.notes||'-')}</td><td>${actionBtn}</td></tr>`;
     }).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:30px"><div class="empty-icon">📅</div><p>No sessions yet — book one above</p></div>`}
   </div>`;
+  updateBsTypes();
 }
 function bookSession(){
   const err=document.getElementById('bsError'); if(err) err.style.display='none';
@@ -6394,10 +6412,11 @@ function bookSession(){
 function rescheduleSession(id){
   const s=Sessions.one(id); if(!s) return;
   const tr=document.getElementById('bs_trainer'); if(tr) tr.value=s.trainerId;
+  updateBsTypes();
   const d=document.getElementById('bs_date'); if(d) d.value=s.date;
   const st=document.getElementById('bs_start'); if(st) st.value=s.start;
   const en=document.getElementById('bs_end'); if(en) en.value=s.end;
-  const tp=document.getElementById('bs_type'); if(tp) tp.value=s.type||'Personal Training';
+  const tp=document.getElementById('bs_type'); if(tp&&[...tp.options].some(o=>o.value===s.type)) tp.value=s.type;
   window.scrollTo({top:0,behavior:'smooth'});
   const el=document.getElementById('bs_trainer'); if(el) el.focus();
   toast('Prefilled previous session — adjust time and request again.');
