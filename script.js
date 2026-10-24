@@ -6549,7 +6549,7 @@ function renderWorkoutBuilder(){
   el.innerHTML=`
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Create Workout Plan</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
-      <div class="form-group"><label>Select Member *</label><select id="wb_member">${members.map(m=>`<option value="${m.id}">${esc(m.name)} — ${esc(m.id)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Select Member *</label><input type="text" id="wb_memberSearch" placeholder="Search assigned member..." oninput="wbFilterMembers(this.value)" onclick="wbFilterMembers(this.value)" autocomplete="off"><div id="wb_memberList" style="background:var(--navy-700);border:1px solid var(--navy-600);border-radius:8px;max-height:220px;overflow-y:auto;display:none;position:relative;z-index:20"></div><input type="hidden" id="wb_member"></div>
       <div class="form-group"><label>Plan Name *</label><input type="text" id="wb_name" placeholder="e.g. 4-week Strength Foundation"></div>
       <div class="form-group">
         <label>Exercises *</label>
@@ -9376,3 +9376,53 @@ function bsFilterTrainers(q){
   });
   list.style.display='block';
 }
+
+// Workout Builder: searchable member picker limited to members who have a
+// live session with this trainer (booked/pending, accepted, scheduled, completed).
+function wbAssignedMembers(){
+  const tid=currentUser&&currentUser.id;
+  const ok=['Pending','Accepted','Scheduled','Completed'];
+  const ids=new Set(Sessions.all().filter(function(s){return s.trainerId===tid&&ok.includes(s.status);}).map(function(s){return s.memberId;}));
+  return Members.all().filter(function(m){return m&&m.status!=='Archived'&&ids.has(m.id);});
+}
+function wbFilterMembers(q){
+  const list=document.getElementById('wb_memberList');
+  const hidden=document.getElementById('wb_member');
+  if(!list||!hidden)return;
+  const cur=hidden.value?Members.one(hidden.value):null;
+  if(!cur||String(q||'').trim()!==cur.name)hidden.value='';
+  const fb=window.GMSFB;
+  if(fb&&fb.enabled&&fb.ready&&fb._lastCloud&&(fb._lastCloud.sessions===undefined||fb._lastCloud.members===undefined)){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">Loading members...</div>';
+    list.style.display='block';return;
+  }
+  const query=String(q||'').toLowerCase().trim();
+  const ms=wbAssignedMembers().filter(function(m){
+    return !query||(m.name||'').toLowerCase().includes(query)||String(m.id).toLowerCase().includes(query);
+  });
+  if(!ms.length){
+    list.innerHTML='<div style="padding:10px 14px;color:var(--gray-500);font-size:13px">'+(query?'No assigned member matches your search.':'No assigned members yet. Members appear here after they book a session with you.')+'</div>';
+    list.style.display='block';return;
+  }
+  list.innerHTML='';
+  ms.forEach(function(m){
+    const div=document.createElement('div');
+    div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
+    div.innerHTML='<span style="font-weight:600;color:var(--white)">'+esc(m.name)+'</span><span style="font-size:10px;color:var(--gray-500)">'+esc(m.id)+'</span>';
+    div.addEventListener('mousedown',function(){wbSelectMember(m.id);});
+    div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
+    div.addEventListener('mouseout',function(){this.style.background='';});
+    list.appendChild(div);
+  });
+  list.style.display='block';
+}
+function wbSelectMember(id){
+  const m=Members.one(id);
+  const hidden=document.getElementById('wb_member');if(hidden)hidden.value=id;
+  const search=document.getElementById('wb_memberSearch');if(search)search.value=m?m.name:'';
+  const list=document.getElementById('wb_memberList');if(list)list.style.display='none';
+}
+document.addEventListener('click',function(e){
+  const s=document.getElementById('wb_memberSearch'),l=document.getElementById('wb_memberList');
+  if(s&&l&&!s.contains(e.target)&&!l.contains(e.target))l.style.display='none';
+});
