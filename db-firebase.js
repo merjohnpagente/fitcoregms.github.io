@@ -28,6 +28,9 @@
     enabled:true, ready:false, _applying:false,
     _lastCloud:{}, _listeners:[], _syncErr:{}, _listenersStarted:false, _unsubs:[],
     _pendingPushes:{}, _flushTimer:null,
+    // Short-lived local doc patches. A stale snapshot must not undo a payment
+    // confirmation that has already been committed to Firestore.
+    _localPatches:{},
     // ---------- bootstrap ----------
     init:function(){
       try{
@@ -129,12 +132,57 @@
       var col=COLMAP[storageKey];
       var map={};
       arr.forEach(function(v){map[v.id]=v;});
+      // Overlay just-committed local patches. Firestore can deliver a cached
+      // snapshot from before a write; without this the Payment Queue card
+      // reappears right after "Confirm Payment" until the server catches up.
+      var patches=this._localPatches[col]||{};
+      Object.keys(patches).forEach(function(id){
+        var p=patches[id];
+        if(!p){return;}
+        if(Date.now()-p.ts>60000){delete patches[id];return;}
+        var doc=map[id];
+        if(!doc){return;}
+        var same=true;
+        Object.keys(p.patch).forEach(function(k){
+          if(JSON.stringify(doc[k])!==JSON.stringify(p.patch[k]))same=false;
+        });
+        if(same){delete patches[id];return;}
+        map[id]=Object.assign({},doc,p.patch);
+      });
       this._applying=true; // prevent DB.set→pushCollection loop during notify
       this._lastCloud[col]=map;
       // also store by storageKey alias for waitForSnap flexibility
       this._lastCloud[storageKey]=map;
       this._notify(storageKey);
       this._applying=false;
+    },
+    // Keeps a confirmed field (member status, QR, etc.) visible even if an
+    // older snapshot arrives. Removed automatically once a snapshot matches.
+    applyLocalPatch:function(storageKey,id,patch){
+      var col=COLMAP[storageKey];if(!col||!id||!patch)return;
+      var bucket=this._localPatches[col]||(this._localPatches[col]={});
+      var cur=bucket[id]||{patch:{},ts:0};
+      cur.patch=Object.assign({},cur.patch,patch);
+      cur.ts=Date.now();
+      bucket[id]=cur;
+      var self=this;
+      [col,storageKey].forEach(function(k){
+        if(self._lastCloud[k]&&self._lastCloud[k][id])self._lastCloud[k][id]=Object.assign({},self._lastCloud[k][id],patch);
+      });
+    },
+    clearLocalPatch:function(storageKey,id){
+      var col=COLMAP[storageKey];if(!col)return;
+      if(this._localPatches[col])delete this._localPatches[col][id];
+    },
+    // Roll back an optimistic patch after a failed cloud commit, without
+    // pushing the old value back to Firestore.
+    revertLocalPatch:function(storageKey,id,doc){
+      var col=COLMAP[storageKey];if(!col||!id||!doc)return;
+      this.clearLocalPatch(storageKey,id);
+      var self=this;
+      [col,storageKey].forEach(function(k){
+        if(self._lastCloud[k]&&self._lastCloud[k][id])self._lastCloud[k][id]=Object.assign({},doc);
+      });
     },
     _notify:function(storageKey){
       try{
@@ -162,6 +210,29 @@
         if(typeof updatePendingBadge==='function')updatePendingBadge();
         if(typeof scanRenewals==='function')scanRenewals();
       }catch(e){console.warn('[GMSFB] notify',e);}
+    },
+    // ---------- direct atomic writes ----------
+    // Used for money/activation changes: the UI must only say "confirmed"
+    // after Firestore has acknowledged the member + payment docs.
+    // ops: [{col, id, data, merge}]
+    commitDocs:function(ops){
+      if(!this.ready||!this.db)return Promise.resolve({ok:false,reason:'not-ready'});
+      if(!this.auth||!this.auth.currentUser)return Promise.resolve({ok:false,reason:'no-auth'});
+      if(!ops||!ops.length)return Promise.resolve({ok:true,ops:0});
+      var batch=this.db.batch(),self=this;
+      try{
+        ops.forEach(function(op){
+          batch.set(self.db.collection(op.col).doc(op.id),self._clean(op.data||{}),{merge:!!op.merge});
+        });
+      }catch(e){
+        return Promise.resolve({ok:false,error:(e&&e.code)||'batch-build'});
+      }
+      return batch.commit().then(function(){
+        return {ok:true,ops:ops.length};
+      }).catch(function(e){
+        console.warn('[GMSFB] commitDocs',e&&e.code,e);
+        return {ok:false,error:(e&&e.code)||'commit-failed'};
+      });
     },
     // ---------- cache → Firestore (diff batch) ----------
     // Returns a Promise that resolves when the batch commits (or immediately if no ops).
@@ -191,6 +262,7 @@
       return batch.commit().then(function(){
         // Merge push result into _lastCloud instead of replacing —
         // this preserves cloud-only docs that haven't synced to local yet.
+        self._lastCloud[col]=self._lastCloud[col]||{};
         Object.keys(next).forEach(function(id){self._lastCloud[col][id]=next[id];});
         self._lastCloud[storageKey]=self._lastCloud[col];
         delete self._pendingPushes[storageKey];

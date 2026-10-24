@@ -43,6 +43,12 @@ verified with `node --check` plus an assert harness for session availability.
    `isTrainerAvailable()` predicate guards booking saves and admin edits.
    Accepting a pending session and toggling a session back to `Scheduled` also
    reject trainer/member overlaps.
+10. **Payment confirmation is committed before the UI says "confirmed".**
+    `confirmPayment()` writes the member activation and the payment in one
+    Firestore batch (`GMSFB.commitDocs`). It only removes the Payment Queue card
+    after the batch is acknowledged; a failed or unauthenticated write shows an
+    error and leaves the member pending. A short-lived local patch keeps a stale
+    cached snapshot from bringing the card back while the server catches up.
 
 ## Residual risks / open items
 

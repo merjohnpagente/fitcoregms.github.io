@@ -2837,13 +2837,15 @@ function openConfirm(title,msg,onOk,btnLabel='Delete',btnClass='btn-danger'){
 
 // ============================= RENEWALS SCAN =============================
 function scanRenewals(){
-  const members=Members.all().filter(m=>m.status==='Active'||m.status==='Expiring Soon');
-  const expiring=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=0&&d<=3;});
-  // Update statuses
+  // Update statuses in place, but only save when something actually changed.
+  // The old unconditional save ran on every Firestore snapshot and could push
+  // a stale members array back over a just-confirmed activation.
   const all=Members.all();
+  let changed=false;
   all.forEach(m=>{
     if(m.status==='Archived')return;
-    m.status=Member.wrap(m).computeStatus();
+    const next=Member.wrap(m).computeStatus();
+    if(m.status!==next){m.status=next;changed=true;}
   });
   // Auto-archive unpaid sign-ups older than PENDING_ARCHIVE_DAYS
   const now=Date.now();
@@ -2851,11 +2853,11 @@ function scanRenewals(){
     if(m.status!=='pending_payment')return;
     const created=new Date(m.createdAt||now).getTime();
     if(now-created>PENDING_ARCHIVE_DAYS*86400000){
-      m.status='Archived';
+      m.status='Archived';changed=true;
       resolveNotifsForMember(m.id);
     }
   });
-  Members.save(all);
+  if(changed)Members.save(all);
   const badge=document.getElementById('notifBadge');
   if(badge){const c=Members.all().filter(m=>m.status!=='Archived'&&(m.status==='Expiring Soon'||m.status==='Expired')&&!_dismissedIds.has(m.id)).length;badge.textContent=c;badge.style.display=c>0?'flex':'none';}
   updateQueueBadge();
@@ -6999,13 +7001,22 @@ async function confirmSelectedPayments(){
     `Confirm ${ids.length} payment${ids.length!==1?'s':''}?`,
     `Mark <strong>${esc(names.length>2?names.slice(0,2).join(', ')+' +'+(names.length-2)+' more':names.join(', '))}</strong> as paid (₱${totalAmt.toLocaleString()})?<br><span style="font-size:12px;color:var(--gray-500)">Each member's QR activates immediately on any device.</span>`,
     async ()=>{
-      // disable quickly to avoid double-click
+      let done=0;const failed=[];
       for(const id of ids){
-        const m=Members.one(id);const p=m&&m.planId?Plans.one(m.planId):null;
-        await applyPaymentConfirmation(id,p?Number(p.price):0,'Cash','');
+        const m=Members.one(id);
+        if(!m){failed.push(id);continue;}
+        const p=m.planId?Plans.one(m.planId):null;
+        try{
+          await applyPaymentConfirmation(id,p?Number(p.price):0,'Cash','');
+          done++;
+        }catch(e){
+          failed.push(m.name);
+          console.warn('[confirmSelectedPayments]',id,e);
+        }
       }
       _queueSelected.clear();
-      toast(`${ids.length} payment${ids.length!==1?'s':''} confirmed. Members can now log in on any device.`);
+      if(done)toast(`${done} payment${done!==1?'s':''} confirmed and saved. Members can now log in on any device.`,'success');
+      if(failed.length)toast('Not confirmed: '+failed.join(', ')+'. Please try again.','error');
       updateQueueBadge();
       renderQueue();
       scanRenewals();
@@ -7058,37 +7069,47 @@ async function applyPaymentConfirmation(memberId,amount,method,reference){
   const start=today();
   const newExpiry=addMonths(start,plan?plan.duration:1);
   const now=new Date();
-  // Use the same source as the Billing table. The cloud mirror can retain
-  // just-deleted docs, which made the first real payment start at PAY-0004.
   const newId=nextId(KEY.payments,'PAY');
-  const payments=Payments.all();
-  payments.push({id:newId,memberId,memberName:member.name,planId:member.planId,planName:plan?plan.name:'Unknown',amount:amount|| (plan?Number(plan.price):0),date:start,newExpiry,method:method||'Cash',reference:reference||'',notes:'',recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:'activation',timestamp:now.getTime(),createdAt:start});
-  Payments.save(payments);
-  // Atomic single update — avoids double pushCollection race and lost QR nonce
+  const payment={id:newId,memberId,memberName:member.name,planId:member.planId,planName:plan?plan.name:'Unknown',amount:amount|| (plan?Number(plan.price):0),date:start,newExpiry,method:method||'Cash',reference:reference||'',notes:'',recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:'activation',timestamp:now.getTime(),createdAt:start};
   const nonce=newQrNonce(memberId);
-  // need nonce persisted first so qrTokenFor reads correct nonce; compute token directly
-  const token=qrSig(memberId,start,nonce,getQrSecret()).slice? 'FCG.'+memberId+'.'+start.replace(/-/g,'')+'.'+qrSig(memberId,start,nonce,getQrSecret()).slice(0,16) : qrTokenFor(memberId,start);
-  // Use single atomic update for all activation fields
-  Members.update(memberId,{status:'Active',planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token});
-  resolveNotifsForMember(memberId);
-  _queueSelected.delete(memberId);
-  // Log activation to Activity Log
-  logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'—')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
-  // Ensure cloud sync completes before UI says "confirmed" (cross-device fix)
-  // Push current arrays and wait briefly so admin doesn't close tab before commit
-  try{
-    if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){
-      // pushCollection now returns Promise; await both
-      await Promise.all([
-        GMSFB.pushCollection(KEY.payments, Payments.all()),
-        GMSFB.pushCollection(KEY.members, Members.all()),
-        GMSFB.pushCollection(KEY.notifications, Notifications.all())
-      ]);
-      // also ensure at least one snapshot cycle has run (helps flaky networks)
-      await new Promise(r=>setTimeout(r,400));
+  const token='FCG.'+memberId+'.'+start.replace(/-/g,'')+'.'+qrSig(memberId,start,nonce,getQrSecret());
+  // Fields that unlock the member. Written in the same atomic batch as the
+  // payment so the queue cannot say "confirmed" before Firestore has them.
+  const activation={status:'Active',planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token};
+  const openNotifs=Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open');
+  if(window.GMSFB&&GMSFB.enabled){
+    if(!GMSFB.auth||!GMSFB.auth.currentUser){
+      throw new Error('Firebase session expired — please log out and log in again before confirming payments.');
     }
-  }catch(e){ console.warn('[applyPaymentConfirmation] sync',e); }
-  return member;
+    // Overlay first so a cached snapshot cannot flash the pending card back
+    // while the batch is in flight; cleared again if the commit fails.
+    GMSFB.applyLocalPatch(KEY.members,memberId,activation);
+    const ops=[
+      {col:'members',id:memberId,data:activation,merge:true},
+      {col:'payments',id:newId,data:payment,merge:false}
+    ];
+    openNotifs.forEach(n=>ops.push({col:'notifications',id:n.id,data:{status:'resolved',resolvedAt:new Date().toISOString()},merge:true}));
+    let res;
+    try{ res=await GMSFB.commitDocs(ops); }
+    catch(e){ res={ok:false,error:e&&e.message}; }
+    if(!res||!res.ok){
+      if(typeof GMSFB.revertLocalPatch==='function')GMSFB.revertLocalPatch(KEY.members,memberId,member);
+      else GMSFB.clearLocalPatch(KEY.members,memberId);
+      throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+'). Please check your connection and try again.');
+    }
+  }
+  // Local caches now mirror the committed docs.
+  const payments=Payments.all();
+  payments.push(payment);
+  Payments.save(payments);
+  const updated=Members.update(memberId,activation);
+  resolveNotifsForMember(memberId);
+  if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.applyLocalPatch==='function'){
+    GMSFB.applyLocalPatch(KEY.members,memberId,activation);
+  }
+  _queueSelected.delete(memberId);
+  logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'—')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
+  return updated||{...member,...activation};
 }
 async function confirmPayment(){
   const memberId=document.getElementById('cpm_memberId').value;
@@ -7116,8 +7137,10 @@ async function confirmPayment(){
     renderQueue();
     scanRenewals();
   }catch(e){
-    err.textContent='Sync failed — please check internet and try again.';
+    err.textContent=(e&&e.message)?e.message:'Sync failed — please check internet and try again.';
     err.style.display='block';
+    updateQueueBadge();
+    renderQueue();
     console.error(e);
   }finally{
     if(btn){btn.disabled=false; btn.textContent='Confirm Payment';}
