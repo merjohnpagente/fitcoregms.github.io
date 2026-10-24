@@ -6348,22 +6348,6 @@ function _exMediaFor(e){
   if(key&&_exDefaultDemos[key]) return _exDefaultDemos[key];
   return (e.name&&_wxMediaByName&&_wxMediaByName[key])||null;
 }
-function _exCardHtml(e){
-  const media=_exMediaFor(e);
-  const hasMedia=!!(media&&(media.mp4||media.gif));
-  const isGif=!!(media&&media.gif&&!media.mp4);
-  const poster=hasMedia?esc(media.poster||media.gif):'';
-  const mc=_wbMuscleColors[e.muscle]||'m-default';
-  const pending=!!(e.apiId&&_wxMediaLoading&&!_wxMediaMap);
-  const mediaHtml=hasMedia
-    ? `<span class="ex-card-media${isGif?' is-gif':''}"><img class="ex-card-poster" src="${poster}" alt="" loading="lazy" decoding="async" width="300" height="360">${isGif?'<span class="ex-card-wm">Animated</span>':(media.watermarked?'<span class="ex-card-wm">Preview</span>':'')}${isGif?'':`<span class="ex-card-play" aria-hidden="true"></span>`}</span>`
-    : `<span class="ex-card-media ${pending?'is-loading':'is-no-media'}"><span class="ex-card-noMedia" aria-hidden="true">${pending?'Loading demo':'No demo'}</span></span>`;
-  return `<button type="button" class="ex-card${hasMedia?' is-video':' is-no-media'}" data-ex-id="${esc(e.id)}" aria-haspopup="dialog" aria-label="${esc(e.name)}, ${esc(e.muscle||'Exercise')}, ${hasMedia?(isGif?'animated demonstration':'video demonstration'):'details only'}">${mediaHtml}<span class="ex-card-body"><span class="ex-card-title">${esc(e.name)}</span><span class="ex-card-tags"><span class="wb-muscle-pill ${mc}">${esc(e.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(e.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(e.level||'Intermediate')}</span></span><span class="ex-card-desc">${esc(e.desc||'')}</span></span></button>`;
-}
-function _exGridHtml(list){
-  if(!list.length) return '<div class="ex-empty"><p>No exercises match.</p></div>';
-  return list.map(_exCardHtml).join('');
-}
 async function loadWorkoutXMedia(force){
   if(_wxMediaLoading) return;
   if(_wxMediaMap&&!force) return;
@@ -9426,3 +9410,47 @@ document.addEventListener('click',function(e){
   const s=document.getElementById('wb_memberSearch'),l=document.getElementById('wb_memberList');
   if(s&&l&&!s.contains(e.target)&&!l.contains(e.target))l.style.display='none';
 });
+
+// Exercise Library: video cards autoplay (muted loop) while visible - no play button.
+function _exCardHtml(e){
+  const media=_exMediaFor(e);
+  const hasMedia=!!(media&&(media.mp4||media.gif));
+  const isGif=!!(media&&media.gif&&!media.mp4);
+  const poster=hasMedia?esc(media.poster||media.gif):'';
+  const mc=_wbMuscleColors[e.muscle]||'m-default';
+  const pending=!!(e.apiId&&_wxMediaLoading&&!_wxMediaMap);
+  const wm=isGif?'<span class="ex-card-wm">Animated</span>':(media&&media.watermarked?'<span class="ex-card-wm">Preview</span>':'');
+  const vid=(media&&media.mp4)?'<video class="ex-card-video" data-src="'+esc(media.mp4)+'" poster="'+poster+'" muted loop playsinline preload="none" disablepictureinpicture tabindex="-1" aria-hidden="true"></video>':'';
+  const mediaHtml=hasMedia
+    ? '<span class="ex-card-media'+(isGif?' is-gif':'')+'"><img class="ex-card-poster" src="'+poster+'" alt="" loading="lazy" decoding="async" width="300" height="360">'+vid+wm+'</span>'
+    : '<span class="ex-card-media '+(pending?'is-loading':'is-no-media')+'"><span class="ex-card-noMedia" aria-hidden="true">'+(pending?'Loading demo':'No demo')+'</span></span>';
+  return `<button type="button" class="ex-card${hasMedia?' is-video':' is-no-media'}" data-ex-id="${esc(e.id)}" aria-haspopup="dialog" aria-label="${esc(e.name)}, ${esc(e.muscle||'Exercise')}, ${hasMedia?(isGif?'animated demonstration':'video demonstration'):'details only'}">${mediaHtml}<span class="ex-card-body"><span class="ex-card-title">${esc(e.name)}</span><span class="ex-card-tags"><span class="wb-muscle-pill ${mc}">${esc(e.muscle||'Other')}</span><span class="wb-muscle-pill m-default">${esc(e.equipment||'Bodyweight')}</span><span class="wb-muscle-pill ex-tag-level">${esc(e.level||'Intermediate')}</span></span><span class="ex-card-desc">${esc(e.desc||'')}</span></span></button>`;
+}
+function _exGridHtml(list){
+  if(!list.length) return '<div class="ex-empty"><p>No exercises match.</p></div>';
+  setTimeout(_exInitCardVideos,0); // runs after the grid HTML is inserted
+  return list.map(_exCardHtml).join('');
+}
+function _exInitCardVideos(){
+  const vids=document.querySelectorAll('.ex-card-video');
+  if(window._exVidObs){try{window._exVidObs.disconnect();}catch(e){}window._exVidObs=null;}
+  if(!vids.length)return;
+  const start=function(v){
+    if(!v.getAttribute('src')&&v.dataset.src)v.src=v.dataset.src;
+    v.muted=true;
+    const p=v.play();
+    if(p&&p.catch)p.catch(function(){});
+  };
+  if('IntersectionObserver' in window){
+    window._exVidObs=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting)start(en.target);else en.target.pause();
+      });
+    },{rootMargin:'100px',threshold:0.2});
+  }
+  vids.forEach(function(v){
+    v.addEventListener('playing',function(){v.classList.add('is-playing');});
+    v.addEventListener('error',function(){v.classList.remove('is-playing');});
+    if(window._exVidObs)window._exVidObs.observe(v);else start(v);
+  });
+}

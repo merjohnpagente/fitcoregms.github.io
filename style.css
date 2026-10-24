@@ -1707,3 +1707,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 #memberSignup .login-footer-muted{margin-top:10px}
 #memberSignup .login-footer-muted a{font-size:11px;font-weight:500}
 @media(max-width:520px){#memberSignup .login-card{padding:22px 16px}#memberSignup .ms-step-head h1,#registerForm .login-logo h1{font-size:18px;letter-spacing:1px}}
+
+/* Exercise cards: autoplaying muted loop on top of the poster */
+.ex-card-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .25s ease;pointer-events:none}
+.ex-card-video.is-playing{opacity:1}
