@@ -5337,7 +5337,7 @@ function filterSessionTrainer(val){
     const status='<span style="font-size:10px;color:var(--green)">'+slotText+'</span>'+(booked.length?'<span style="font-size:10px;color:var(--gray-500)">Other bookings: '+esc(booked.join(', '))+'</span>':'');
     const div=document.createElement('div');
     div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
-    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs?'<span style="font-size:10px;color:var(--orange)">'+specs+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ '+esc(av.text)+'</span>${status}`;
+    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs?'<span style="font-size:10px;color:var(--orange)">'+specs+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ ${esc(av.text)}</span>${status}`;
     div.addEventListener('mousedown',function(){selectSessTrainer(u.id,u.coachName||u.name);});
     div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
     div.addEventListener('mouseout',function(){this.style.background='';});
@@ -6705,7 +6705,7 @@ function bsFilterTrainers(q){
     const status='<span style="font-size:10px;color:var(--green)">'+slotText+'</span>'+(booked.length?'<span style="font-size:10px;color:var(--gray-500)">Other bookings: '+esc(booked.join(', '))+'</span>':'');
     const div=document.createElement('div');
     div.style.cssText='padding:9px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;display:flex;flex-direction:column;gap:2px';
-    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs.length?'<span style="font-size:10px;color:var(--orange)">'+specs.slice(0,3).map(esc).join(', ')+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ '+esc(av.text)+'</span>${status}`;
+    div.innerHTML=`<span style="font-weight:600;color:var(--white)">${esc(u.coachName||u.name)}${u.coachName&&u.coachName!==u.name?' <span style="font-size:11px;color:var(--gray-500)">('+esc(u.name)+')</span>':''}</span>${specs.length?'<span style="font-size:10px;color:var(--orange)">'+specs.slice(0,3).map(esc).join(', ')+'</span>':''}<span style="font-size:10px;color:var(--gray-500)">⏰ ${esc(av.text)}</span>${status}`;
     div.addEventListener('mousedown',function(){selectBsTrainer(u.id,u.coachName||u.name);});
     div.addEventListener('mouseover',function(){this.style.background='rgba(179,188,181,.1)';});
     div.addEventListener('mouseout',function(){this.style.background='';});
