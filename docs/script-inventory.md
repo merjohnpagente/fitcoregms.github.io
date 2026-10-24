@@ -12,7 +12,7 @@ showLandingSection, doLogin, confirmLogout, doLogout, showLoginError, togglePw, 
 resetRegisterForm, selectRegRole, regStep1Next, regGoStep1, regGoStep2, regStep2Next, onRegRoleChange, doRegister, regDoneBack, showRegTab, updateStrength, _resetPwVis, showRegTab, regGoMember
 
 ## Member Signup (3-step + plans)
-populateMsPlanSelect, pickMsPlan, updateMsPlanCard, startMemberSignup, msBackToLogin, msStep1Next, msStep2Next, msGoStep1, msGoStep2, resetMemberSignupForm, updateMsStrength, msStep3Next, msValidateCredentials, submitMemberSignup, onMsDobChange, onMfDobChange, dobPolicy, calcAge
+populateMsPlanSelect, pickMsPlan, updateMsPlanCard, startMemberSignup, msBackToLogin, msStep1Next, msStep2Next, msGoStep1, msGoStep2, msGoStep3, resetMemberSignupForm, updateMsStrength, msStep3Next, msValidateCredentials, submitMemberSignup, onMsDobChange, onMfDobChange, dobPolicy, calcAge
 
 ## Forgot Password + OTP (EmailJS)
 clearFpVerified, showFpStep, getFpOtp, setFpOtp, initFpOtp, onFpOtpPaste, openForgotModal, fpBackToLogin, fpBackToStep1, toggleFpMethod, updateFpVerifyBtnState, onFpCodeInput, sendForgotCode, fpBackToLoginAlias, resendForgotCode, startFpResendCooldown, updateFpStrength, fpSubmitCode, fpVerifyCode, handleForgotVerify, verifyForgotCode, submitForgotPassword, confirmForgotPassword

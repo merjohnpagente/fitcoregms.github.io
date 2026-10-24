@@ -1092,7 +1092,7 @@
 
         <div id="msStep1">
 
-          <div class="ms-step-progress"><span class="ms-step-num active">1</span><span class="ms-step-line"></span><span class="ms-step-num">2</span><span class="ms-step-line"></span><span class="ms-step-num">3</span><span class="ms-step-line"></span><span class="ms-step-num">4</span></div>
+          <div class="ms-step-progress"><span class="ms-step-num active">1</span><span class="ms-step-line"></span><span class="ms-step-num">2</span><span class="ms-step-line"></span><span class="ms-step-num">3</span><span class="ms-step-line"></span><span class="ms-step-num">4</span><span class="ms-step-line"></span><span class="ms-step-num">5</span></div>
 
           <div class="ms-step-head">
 
@@ -1118,11 +1118,11 @@
 
 
 
-        <!-- STEP 2: Personal Details -->
+        <!-- 2. Personal Details -->
 
         <div id="msStep2" style="display:none">
 
-          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num active">2</span><span class="ms-step-line"></span><span class="ms-step-num">3</span><span class="ms-step-line"></span><span class="ms-step-num">4</span></div>
+          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num active">2</span><span class="ms-step-line"></span><span class="ms-step-num">3</span><span class="ms-step-line"></span><span class="ms-step-num">4</span><span class="ms-step-line"></span><span class="ms-step-num">5</span></div>
 
           <div class="ms-step-head">
 
@@ -1177,6 +1177,32 @@
 
             <div class="form-group"><label for="msEmail">Email *</label><input type="email" id="msEmail" placeholder="e.g. juan@gmail.com" autocomplete="email" inputmode="email" required></div>
 
+          <button type="button" class="btn-primary btn-cta" onclick="msStep2Next()">Continue →</button>
+
+          <div class="login-footer login-footer-muted"><a onclick="msGoStep1()">← Back</a></div>
+
+        </div>
+
+
+
+        <!-- 3. Date of Birth & Address -->
+
+        <div id="msStep3" style="display:none">
+
+          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num done">2</span><span class="ms-step-line done"></span><span class="ms-step-num active">3</span><span class="ms-step-line"></span><span class="ms-step-num">4</span><span class="ms-step-line"></span><span class="ms-step-num">5</span></div>
+
+          <div class="ms-step-head">
+
+            <div class="ms-step-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+
+            <h1>YOUR <span>DETAILS</span></h1>
+
+            <p>Date of birth &amp; address</p>
+
+          </div>
+
+          <div id="msStep3Error" class="error-msg"></div>
+
             <div class="form-row cols-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
               <div class="form-group"><label>Date of Birth *</label><input type="date" id="msDob" onchange="onMsDobChange()" oninput="onMsDobChange()"><div id="msAgeHint" style="display:none;margin-top:6px;font-size:11px;line-height:1.4"></div></div>
@@ -1202,19 +1228,19 @@
               <label class="ms-guardian-check" id="msGuardianCheck1617" style="display:none"><input type="checkbox" id="msConsentWritten"> I confirm parental/guardian written consent has been signed on file (ages 16–17)</label>
             </div>
 
-          <button type="button" class="btn-primary btn-cta" onclick="msStep2Next()">Continue →</button>
+          <button type="button" class="btn-primary btn-cta" onclick="msStep3Next()">Continue →</button>
 
-          <div class="login-footer login-footer-muted"><a onclick="msGoStep1()">← Back</a></div>
+          <div class="login-footer login-footer-muted"><a onclick="msGoStep2()">← Back</a></div>
 
         </div>
 
 
 
-        <!-- STEP 3: Login Credentials -->
+        <!-- 4. Login Credentials -->
 
-        <div id="msStep3" style="display:none">
+        <div id="msStep4" style="display:none">
 
-          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num done">2</span><span class="ms-step-line done"></span><span class="ms-step-num active">3</span><span class="ms-step-line"></span><span class="ms-step-num">4</span></div>
+          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num done">2</span><span class="ms-step-line done"></span><span class="ms-step-num done">3</span><span class="ms-step-line done"></span><span class="ms-step-num active">4</span><span class="ms-step-line"></span><span class="ms-step-num">5</span></div>
 
           <div class="ms-step-head">
 
@@ -1266,7 +1292,7 @@
 
           <button type="button" class="btn-primary btn-cta" id="msSubmitBtn" onclick="submitMemberSignup()"><span id="msSubmitText">Create My Account</span><span id="msSubmitSpinner" style="display:none;margin-left:8px;width:14px;height:14px;border:2px solid rgba(10,10,10,.2);border-top:2px solid #0a0a0a;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px"></span></button>
 
-          <div class="login-footer login-footer-muted"><a onclick="msGoStep2()">← Back</a></div>
+          <div class="login-footer login-footer-muted"><a onclick="msGoStep3()">← Back</a></div>
 
           <p class="ms-note">After registering, please pay at the front desk (Cash or GCash). Our staff will activate your account once payment is confirmed — you can log in then.</p>
 
@@ -1274,11 +1300,11 @@
 
 
 
-        <!-- STEP 4: Done / Pending payment -->
+        <!-- 5. Done / Pending payment -->
 
-        <div id="msDone" style="display:none">
+        <div id="msStep5" style="display:none">
 
-          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num done">2</span><span class="ms-step-line done"></span><span class="ms-step-num done">3</span><span class="ms-step-line done"></span><span class="ms-step-num active">4</span></div>
+          <div class="ms-step-progress"><span class="ms-step-num done">1</span><span class="ms-step-line done"></span><span class="ms-step-num done">2</span><span class="ms-step-line done"></span><span class="ms-step-num done">3</span><span class="ms-step-line done"></span><span class="ms-step-num done">4</span><span class="ms-step-line done"></span><span class="ms-step-num active">5</span></div>
 
           <div class="ms-step-head">
 
@@ -3002,7 +3028,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=37"></script>
+<script src="script.js?v=38"></script>
 
 </body>
 

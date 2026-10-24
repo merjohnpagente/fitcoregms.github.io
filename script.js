@@ -2060,60 +2060,42 @@ function msStep1Next(){
 }
 function msStep2Next(){
   const firstName=(document.getElementById('firstName')?document.getElementById('firstName').value.trim():'');
-  const middleName=(document.getElementById('middleName')?document.getElementById('middleName').value.trim():'');
   const lastName=(document.getElementById('lastName')?document.getElementById('lastName').value.trim():'');
-  const suffix=(document.getElementById('suffix')?document.getElementById('suffix').value.trim():'');
-  const msAddr=getAddressParts('ms');
-  const legacyNameEl=document.getElementById('msName');
-  let name='';
-  if(firstName||lastName){ name=(sanitizeText(firstName)+(middleName?' '+sanitizeText(middleName):'')+' '+sanitizeText(lastName)+(suffix?' '+sanitizeText(suffix):'')).replace(/\s+/g,' ').trim(); } else if(legacyNameEl){ name=legacyNameEl.value.trim(); }
-  if(!firstName||!lastName){const e=document.getElementById('msStep2Error'); if(e){e.textContent='Please fill in First Name and Last Name.';e.style.display='block';} return;}
-  if(!msAddr.complete){const e=document.getElementById('msStep2Error'); if(e){e.textContent='Please fill in your complete address (Province, City, Barangay, Street).';e.style.display='block';} return;}
   const contact=document.getElementById('msContact').value.trim();
   const email=document.getElementById('msEmail').value.trim();
-  const dob=document.getElementById('msDob')?document.getElementById('msDob').value.trim():'';
-  const sexEl=document.getElementById('msSex');
-  const sex=sexEl?sexEl.value:'';
   const err=document.getElementById('msStep2Error');
   if(err)err.style.display='none';
-  if(!contact||!email||!dob){if(err){err.textContent='Please fill in all required fields (including Date of Birth).';err.style.display='block';}return;}
+  if(!firstName||!lastName){if(err){err.textContent='Please fill in First Name and Last Name.';err.style.display='block';}return;}
+  if(!contact||!email){if(err){err.textContent='Please fill in your contact number and email.';err.style.display='block';}return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(err){err.textContent='Please enter a valid email address.';err.style.display='block';}return;}
-  const age=calcAge(dob);
-  const pol=dobPolicy(age);
-  if(isNaN(age)){if(err){err.textContent='Please enter a valid date of birth.';err.style.display='block';}return;}
-  if(!pol.ok){if(err){err.textContent=pol.msg+' Please check the Age Policy.';err.style.display='block';}return;}
-  // ── Guardian consent enforcement (ages 13-17) ──
-  if(age>=13&&age<=17){
-    const gName=(document.getElementById('msGuardianName')?document.getElementById('msGuardianName').value.trim():'');
-    if(!gName){if(err){err.textContent='Please enter your Parent/Guardian name (required for ages 13-17).';err.style.display='block';}return;}
-    if(age<=15){
-      const wc=document.getElementById('msConsentWaiver');
-      if(!wc||!wc.checked){if(err){err.textContent='Please confirm that a parent/guardian will be present during all visits.';err.style.display='block';}return;}
-    }
-    if(age>=16&&age<=17){
-      const cc=document.getElementById('msConsentWritten');
-      if(!cc||!cc.checked){if(err){err.textContent='Please confirm parental/guardian written consent has been signed on file.';err.style.display='block';}return;}
-    }
-  }
   const msDial=(document.getElementById('msPhoneDialCode')?document.getElementById('msPhoneDialCode').textContent.trim():'+63');
   if(!validatePhone(contact,msDial)){if(err){err.textContent=phoneErrorMsg(msDial);err.style.display='block';}return;}
   if(Members.all().find(m=>m.email&&m.email.toLowerCase()===email.toLowerCase())){if(err){err.textContent='Email already registered. Please log in instead.';err.style.display='block';}return;}
-  // ── Contact duplicate check (moved to Step 2 for early detection) ──
   const normContact2=normalizeContact(contact,msDial);
   if(Members.all().find(m=>m.contact===normContact2)){if(err){err.textContent='Phone number already registered. Please log in or use another number.';err.style.display='block';}return;}
+  const err3=document.getElementById('msStep3Error');if(err3)err3.style.display='none';
   document.getElementById('msStep2').style.display='none';
   document.getElementById('msStep3').style.display='block';
 }
 function msGoStep1(){
   document.getElementById('msStep2').style.display='none';
   document.getElementById('msStep3').style.display='none';
+  document.getElementById('msStep4').style.display='none';
+  document.getElementById('msStep5').style.display='none';
   document.getElementById('msStep1').style.display='block';
   const suc=document.getElementById('msSuccess');if(suc)suc.style.display='none';
   const e=document.getElementById('msError');if(e)e.style.display='none';
 }
 function msGoStep2(){
   document.getElementById('msStep3').style.display='none';
+  document.getElementById('msStep4').style.display='none';
   document.getElementById('msStep2').style.display='block';
+  const suc=document.getElementById('msSuccess');if(suc)suc.style.display='none';
+  const e=document.getElementById('msError');if(e)e.style.display='none';
+}
+function msGoStep3(){
+  document.getElementById('msStep4').style.display='none';
+  document.getElementById('msStep3').style.display='block';
   const suc=document.getElementById('msSuccess');if(suc)suc.style.display='none';
   const e=document.getElementById('msError');if(e)e.style.display='none';
 }
@@ -2132,9 +2114,11 @@ function resetMemberSignupForm(){
   const s1=document.getElementById('msStep1');if(s1)s1.style.display='block';
   const s2=document.getElementById('msStep2');if(s2)s2.style.display='none';
   const s3=document.getElementById('msStep3');if(s3)s3.style.display='none';
-  const done=document.getElementById('msDone');if(done)done.style.display='none';
+  const s4=document.getElementById('msStep4');if(s4)s4.style.display='none';
+  const done=document.getElementById('msStep5');if(done)done.style.display='none';
   const se=document.getElementById('msStep1Error');if(se)se.style.display='none';
   const se2=document.getElementById('msStep2Error');if(se2)se2.style.display='none';
+  const se3=document.getElementById('msStep3Error');if(se3)se3.style.display='none';
   const msuc=document.getElementById('msSuccess');if(msuc)msuc.style.display='none';
   const merr=document.getElementById('msError');if(merr)merr.style.display='none';
   resetPhAddress('ms');
@@ -2161,9 +2145,30 @@ function updateMsStrength(val){
   window._msPwScore=score;
 }
 function msStep3Next(){
-  const v=msValidateCredentials(document.getElementById('msError'));
-  if(!v)return;
-  submitMemberSignup();
+  const msAddr=getAddressParts('ms');
+  const dob=document.getElementById('msDob')?document.getElementById('msDob').value.trim():'';
+  const err=document.getElementById('msStep3Error');
+  if(err)err.style.display='none';
+  if(!msAddr.complete){if(err){err.textContent='Please fill in your complete address (Province, City, Barangay, Street).';err.style.display='block';}return;}
+  if(!dob){if(err){err.textContent='Please enter your Date of Birth.';err.style.display='block';}return;}
+  const age=calcAge(dob);
+  if(isNaN(age)){if(err){err.textContent='Please enter a valid date of birth.';err.style.display='block';}return;}
+  const pol=dobPolicy(age);
+  if(!pol.ok){if(err){err.textContent=pol.msg+' Please check the Age Policy.';err.style.display='block';}return;}
+  if(age>=13&&age<=17){
+    const gName=(document.getElementById('msGuardianName')?document.getElementById('msGuardianName').value.trim():'');
+    if(!gName){if(err){err.textContent='Please enter your Parent/Guardian name (required for ages 13-17).';err.style.display='block';}return;}
+    if(age<=15){
+      const wc=document.getElementById('msConsentWaiver');
+      if(!wc||!wc.checked){if(err){err.textContent='Please confirm that a parent/guardian will be present during all visits.';err.style.display='block';}return;}
+    }
+    if(age>=16&&age<=17){
+      const cc=document.getElementById('msConsentWritten');
+      if(!cc||!cc.checked){if(err){err.textContent='Please confirm parental/guardian written consent has been signed on file.';err.style.display='block';}return;}
+    }
+  }
+  document.getElementById('msStep3').style.display='none';
+  document.getElementById('msStep4').style.display='block';
 }
 function msValidateCredentials(err){
   const fail=msg=>{if(err){err.textContent=msg;err.style.display='block';}return null;};
@@ -2278,7 +2283,8 @@ async function submitMemberSignup(){
   restoreBtn();
   _memberSignupPlanId=null;
   document.getElementById('msStep3').style.display='none';
-  const done=document.getElementById('msDone');
+  document.getElementById('msStep4').style.display='none';
+  const done=document.getElementById('msStep5');
   const msg=document.getElementById('msDoneMsg');
   if(msg)msg.textContent='Account registered! Please pay at the front desk (Cash or GCash) to activate your membership. You can log in once our staff confirms your payment.';
   if(done)done.style.display='block';
