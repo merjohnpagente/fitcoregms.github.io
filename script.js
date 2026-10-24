@@ -4054,9 +4054,10 @@ function viewMember(id){
       ${m.bgCheckDate?`<span style="font-size:11px;color:var(--gray-500)">${formatDate(m.bgCheckDate)} · by ${esc(m.bgCheckBy||'—')}</span>`:''}
     </div>
     ${m.bgCheckNotes?`<div class="profile-field"><label>Notes</label><p>${esc(m.bgCheckNotes)}</p></div>`:''}
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn-sm" style="background:rgba(127,250,136,.15);color:var(--green);border:1px solid rgba(127,250,136,.4)" onclick="setBgCheck('${id}','Cleared')">✓ Cleared</button>
       <button class="btn-sm" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.4)" onclick="setBgCheck('${id}','Flagged')">⚑ Flagged</button>
+      <button class="btn-sm btn-secondary" onclick="setBgCheck('${id}','Pending')">↺ Pending</button>
     </div>
   </div>
   ${currentUser&&currentUser.role==='admin'?`<div class="profile-section">
@@ -4084,6 +4085,26 @@ function viewMember(id){
   openModal('profileModal');
   const cm=document.getElementById('profileQrCanvas');
   if(cm)renderQrTo(cm,qrTokenFor(m.id,today()),4);
+}
+function setBgCheck(id,status){
+  const m=Members.one(id);
+  if(!m){toast('Member not found.','error');return;}
+  if(!['Pending','Cleared','Flagged'].includes(status))return;
+  const msg=status==='Cleared'
+    ?`Mark <strong>${esc(m.name)}</strong> as <strong style="color:var(--green)">Cleared</strong>? This confirms the background check passed.`
+    :status==='Flagged'
+      ?`Mark <strong>${esc(m.name)}</strong> as <strong style="color:var(--red)">Flagged</strong>? This records that the background check needs review.`
+      :`Reset <strong>${esc(m.name)}</strong>'s background check to <strong>Pending</strong>?`;
+  openConfirm('Background Check — '+status,msg,()=>{
+    const members=Members.all();
+    const idx=members.findIndex(x=>x.id===id);
+    if(idx<0){toast('Member not found.','error');return;}
+    members[idx]={...members[idx],bgCheckStatus:status,bgCheckDate:status==='Pending'?'':today(),bgCheckBy:status==='Pending'?'':currentUser.name};
+    Members.save(members);
+    logActivity('Background Check','Member',m.name,'Status: '+status);
+    toast('Background check marked as '+status+'.');
+    viewMember(id);
+  },status==='Cleared'?'Mark Cleared':status==='Flagged'?'Flag Member':'Reset to Pending',status==='Flagged'?'btn-danger':'btn-primary');
 }
 function openEditFromProfile(){
   if(currentUser && currentUser.role==='staff'){toast('Only admin can edit members.','error');return;}

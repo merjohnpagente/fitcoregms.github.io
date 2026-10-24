@@ -21,7 +21,7 @@ clearFpVerified, showFpStep, getFpOtp, setFpOtp, initFpOtp, onFpOtpPaste, openFo
 refreshCurrentPanel, initScrollRefresh, loadApp, buildSidebar, renderTopbar, startClock, navigate, renderPanel, greet, dashHero, renderDashboard, buildAdminDashboard, buildStaffDashboard, buildTrainerDashboard, buildMemberDashboard, scanRenewals, updatePendingBadge, updateSchedPendingBadge, updateQueueBadge, ensureSyncWarnEl, updateSyncWarning
 
 ## Members
-renderMembers, refreshMemberTable, openMemberModal, saveMember, deleteMember, renumberMembers, resetAllMembers, viewMember, openEditFromProfile, adminResetMemberPassword, openMemberProfileEdit, saveMemberProfileEdit, refreshMemberHome, copyMemberToken, profileCheckIn, nextMemberId, nextId, uid, isMemberExpired, renderHistory, refreshHistoryTable, renderMemberLogs
+renderMembers, refreshMemberTable, openMemberModal, saveMember, deleteMember, renumberMembers, resetAllMembers, viewMember, setBgCheck, openEditFromProfile, adminResetMemberPassword, openMemberProfileEdit, saveMemberProfileEdit, refreshMemberHome, copyMemberToken, profileCheckIn, nextMemberId, nextId, uid, isMemberExpired, renderHistory, refreshHistoryTable, renderMemberLogs
 
 ## Billing + Payments + Receipts
 renderBilling, refreshBillingTable, openPaymentModal, togglePfReference, openPaymentForMember, filterMemberDropdown, selectPayMember, onPayPlanChange, savePayment, deletePayment, openEditPayment, onEditPlanChange, saveEditPayment, viewRenewalReceipt, viewReceipt, openConfirmPayment, toggleCpmReference, applyPaymentConfirmation, confirmPayment, confirmSelectedPayments, confirmRenew, dismissRenewal, dismissAllRenewals, renderRenewed, showRenewedPage, backToRenewals, printReceipt, formatPeso, signupRateCheck, pushPendingPaymentNotif
