@@ -6204,8 +6204,12 @@ function openExerciseMedia(id){
     const loading=document.getElementById('exPlayerLoading');
     const start=document.getElementById('exPlayerStart');
     const hideLoading=()=>{if(loading)loading.classList.add('is-hidden');};
-    v.addEventListener('loadeddata',hideLoading,{once:true});
-    v.addEventListener('playing',hideLoading,{once:true});
+    v.muted=true;
+    v.defaultMuted=true;
+    v.playsInline=true;
+    v.setAttribute('playsinline','');
+    v.setAttribute('webkit-playsinline','');
+    v.addEventListener('playing',()=>{hideLoading();if(start)start.hidden=true;if(wrap)wrap.dataset.looping='1';},{once:true});
     // The demo is a loop, not a player: if anything pauses it, resume while open.
     v.addEventListener('pause',()=>{
       if(wrap&&wrap.dataset.looping==='1'&&!v.ended&&document.getElementById('exerciseMediaModal').classList.contains('open'))v.play().catch(()=>{});
@@ -6214,10 +6218,17 @@ function openExerciseMedia(id){
       if(wrap){wrap.classList.add('is-error');wrap.innerHTML='<div class="ex-player-error"><strong>Demo unavailable</strong><span>Refresh the page to reload the demo.</span></div>';}
       const cap=document.getElementById('exPlayerCaption');if(cap){cap.innerHTML='<span class="ex-loop-dot is-off" aria-hidden="true"></span>Demo unavailable';}
     },{once:true});
-    const begin=()=>{v.play().then(()=>{if(wrap)wrap.dataset.looping='1';if(start)start.hidden=true;}).catch(()=>{if(start)start.hidden=false;});};
-    if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){if(start)start.hidden=false;}
-    else begin();
+    const begin=()=>{
+      v.muted=true;
+      const p=v.play();
+      if(!p||typeof p.then!=='function'){if(start)start.hidden=true;return;}
+      p.then(()=>{if(wrap)wrap.dataset.looping='1';if(start)start.hidden=true;}).catch(()=>{if(start)start.hidden=false;});
+    };
+    v.addEventListener('click',begin);
+    v.addEventListener('canplay',begin,{once:true});
+    v.addEventListener('loadeddata',()=>{hideLoading();begin();},{once:true});
     if(start)start.addEventListener('click',begin);
+    begin();
   }
   setTimeout(()=>{const btn=document.querySelector('#exerciseMediaModal .modal-close');if(btn)btn.focus({preventScroll:true});},0);
 }
