@@ -2528,7 +2528,7 @@ function loadApp(){
     // Re-validate staff/trainer/admin sessions against the Users table so demoted,
     // locked or deleted accounts lose access immediately on the next load.
     const live=Users.one(currentUser.id);
-    if(!live||live.status==='locked'||live.status==='pending'){
+    if(_usersSnapLoaded()&&(!live||live.status==="locked"||live.status==="pending")){
       doLogout();
       return;
     }
@@ -9065,7 +9065,7 @@ document.addEventListener('keydown',e=>{
   initCursorGlow();
   initProgressBar();
   const sess=getSession();
-  if(sess){currentUser=sess;loadApp();}
+  if(sess){restoreSession(sess);}
 })();
 
 // ======================================================================
@@ -9452,5 +9452,26 @@ function _exInitCardVideos(){
     v.addEventListener('playing',function(){v.classList.add('is-playing');});
     v.addEventListener('error',function(){v.classList.remove('is-playing');});
     if(window._exVidObs)window._exVidObs.observe(v);else start(v);
+  });
+}
+
+// Session restore on refresh: wait for Firebase Auth + the cloud users/members
+// snapshot before validating the saved session (it is empty right after a reload).
+function _usersSnapLoaded(){
+  const fb=window.GMSFB;
+  if(!(fb&&fb.enabled&&fb._lastCloud))return true;
+  return fb._lastCloud.users!==undefined;
+}
+function restoreSession(sess){
+  currentUser=sess;
+  const fb=window.GMSFB;
+  if(!(fb&&fb.enabled&&fb.ready&&fb.auth)){loadApp();return;}
+  let done=false;
+  const unsub=fb.auth.onAuthStateChanged(function(user){
+    if(done)return;done=true;
+    try{unsub();}catch(e){}
+    if(!user){clearSession();currentUser=null;return;} // no cloud login left: show the login page
+    const key=sess.role==='member'?'gms_members':'gms_users';
+    fb.waitForSnap(key,10000).then(function(){if(currentUser)loadApp();});
   });
 }
