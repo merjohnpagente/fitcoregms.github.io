@@ -3831,6 +3831,10 @@ async function saveMember(){
     ecName:sanitizeText(ecNameVal),ecNum:sanitizeText(ecNumVal),
     notes:sanitizeText(document.getElementById('mf_notes').value.trim()),status:'Active'
   };
+  if(editingMemberId){
+    const existing=members.find(m=>m.id===editingMemberId);
+    if(bgCheckBlocksActivation(existing))data.status=existing.status;
+  }
   if(uname)data.username=uname;
   // Online mode: member login credentials live in Firebase Auth
   let memberAuthEmail=null;
@@ -4053,6 +4057,7 @@ function viewMember(id){
       <span class="badge ${bgBadgeCls}">${esc(m.bgCheckStatus||'Pending')}</span>
       ${m.bgCheckDate?`<span style="font-size:11px;color:var(--gray-500)">${formatDate(m.bgCheckDate)} · by ${esc(m.bgCheckBy||'—')}</span>`:''}
     </div>
+    ${bgCheckFlagged(m)?`<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;color:var(--red);font-size:12px;margin-bottom:10px">⚠ Flagged — entry and activation are blocked until cleared.</div>`:''}
     ${m.bgCheckNotes?`<div class="profile-field"><label>Notes</label><p>${esc(m.bgCheckNotes)}</p></div>`:''}
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn-sm" style="background:rgba(127,250,136,.15);color:var(--green);border:1px solid rgba(127,250,136,.4)" onclick="setBgCheck('${id}','Cleared')">✓ Cleared</button>
@@ -4086,6 +4091,10 @@ function viewMember(id){
   const cm=document.getElementById('profileQrCanvas');
   if(cm)renderQrTo(cm,qrTokenFor(m.id,today()),4);
 }
+// Background check lifecycle: Pending → Cleared/Flagged. Flagged blocks
+// entry, and blocks activation unless the member is already active.
+function bgCheckFlagged(m){return !!m&&(m.bgCheckStatus||'Pending')==='Flagged';}
+function bgCheckBlocksActivation(m){return bgCheckFlagged(m)&&!['Active','Expiring Soon'].includes(m.status);}
 function setBgCheck(id,status){
   const m=Members.one(id);
   if(!m){toast('Member not found.','error');return;}
@@ -4227,6 +4236,7 @@ function profileCheckIn(id){
   if(!m){show('Member not found',false);return;}
   if(m.status==='pending_payment'){show(m.name+' has NOT paid yet — send to the counter first.',false);return;}
   if(m.status==='Archived'){show('Account archived — entry blocked.',false);return;}
+  if(bgCheckFlagged(m)){show(m.name+' has a Flagged background check — entry blocked. Clear it in the member profile first.',false);return;}
   if(daysUntil(m.expiryDate)<0){show('Plan expired on '+formatDate(m.expiryDate)+' — renew at the counter, entry blocked.',false);return;}
   const now=new Date();
   const last=Attendance.all().filter(a=>a.memberId===m.id).slice(-1)[0];
@@ -4408,6 +4418,11 @@ function savePayment(){
   if(method==='GCash'&&!reference){err.textContent='Please enter the GCash reference number.';err.style.display='block';return;}
   const member=Members.one(memberId);
   const plan=Plans.one(planId);
+  if(bgCheckBlocksActivation(member)){
+    err.textContent='Background check is Flagged — clear it in the member profile before activating this member.';
+    err.style.display='block';
+    return;
+  }
   const newExpiry=addMonths(date,plan?plan.duration:1);
   const fromRenewal=document.getElementById('paymentModal').dataset.fromRenewal==='1';
   const confirmTitle=fromRenewal?'🔄 Confirm Renewal Payment':'💳 Confirm Payment';
@@ -4504,7 +4519,13 @@ function saveEditPayment(){
   Payments.save(payments);
   // Update member plan and expiry
   const members=Members.all();const midx=members.findIndex(m=>m.id===memberId);
-  if(midx>-1){members[midx].planId=planId;members[midx].expiryDate=newExpiry;members[midx].status='Active';members[midx].planStart=date;members[midx].qrNonce=newQrNonce(memberId);}
+  if(midx>-1){
+    members[midx].planId=planId;
+    members[midx].expiryDate=newExpiry;
+    if(!bgCheckBlocksActivation(members[midx]))members[midx].status='Active';
+    members[midx].planStart=date;
+    members[midx].qrNonce=newQrNonce(memberId);
+  }
   Members.save(members);
   const live=Members.one(memberId);
   if(live)Members.update(memberId,{qrToken:qrTokenFor(memberId,today())});
@@ -6771,7 +6792,7 @@ function renderQueue(){
       <div class="queue-main">
         <div class="queue-avatar" style="${m.avatar?'padding:0;overflow:hidden':''}">${m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m.name))}</div>
         <div class="queue-info">
-          <div class="queue-name">${esc(m.name)}${urgent?'<span class="badge badge-expired" style="margin-left:6px">auto-archive soon</span>':''}${m.createdBy==='Self'?'<span class="badge badge-pending" style="margin-left:6px">Self-Registered</span>':''}</div>
+          <div class="queue-name">${esc(m.name)}${bgCheckFlagged(m)?'<span class="badge badge-suspended" style="margin-left:6px">BG Flagged</span>':''}${urgent?'<span class="badge badge-expired" style="margin-left:6px">auto-archive soon</span>':''}${m.createdBy==='Self'?'<span class="badge badge-pending" style="margin-left:6px">Self-Registered</span>':''}</div>
           <div class="queue-meta"><span class="queue-meta-id">${esc(m.id)}</span></div>
           <div class="queue-meta"><span class="queue-ico">${iconSvg('mail',12)}</span><span>${esc(m.email||'no email')}</span></div>
           <div class="queue-meta"><span class="queue-ico">${iconSvg('phone',12)}</span><span>${esc(m.contact||'—')}</span></div>
@@ -6893,6 +6914,8 @@ async function confirmSelectedPayments(){
   const ids=[..._queueSelected].filter(id=>Members.one(id));
   if(!ids.length){toast('No members selected.','error');return;}
   const names=ids.map(id=>Members.one(id).name);
+  const flagged=ids.filter(id=>bgCheckBlocksActivation(Members.one(id)));
+  if(flagged.length){toast('Clear the background check first: '+flagged.map(id=>Members.one(id).name).join(', '),'error');return;}
   const totalAmt=ids.reduce((s,id)=>{const m=Members.one(id);const p=m.planId?Plans.one(m.planId):null;return s+(p?Number(p.price):0);},0);
   openConfirm(
     `Confirm ${ids.length} payment${ids.length!==1?'s':''}?`,
@@ -6920,6 +6943,11 @@ function openConfirmPayment(memberId){
   const plan=m.planId?Plans.one(m.planId):null;
   document.getElementById('cpm_memberId').value=memberId;
   document.getElementById('confirmPaymentError').style.display='none';
+  if(bgCheckBlocksActivation(m)){
+    const err=document.getElementById('confirmPaymentError');
+    err.textContent='Background check is Flagged — clear it in the member profile before activating.';
+    err.style.display='block';
+  }
   document.getElementById('cpm_summary').innerHTML=`
     <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:12px">
       <div class="user-avatar" style="width:40px;height:40px;background:rgba(251,191,36,.15);color:var(--gold);flex-shrink:0">${esc(initials(m.name))}</div>
@@ -6995,6 +7023,11 @@ async function confirmPayment(){
   if(!memberId||!amount||!method){err.textContent='Please fill in all required fields.';err.style.display='block';return;}
   if(amount<=0){err.textContent='Invalid payment amount.';err.style.display='block';return;}
   if(method==='GCash'&&!reference){err.textContent='Please enter the GCash reference number.';err.style.display='block';return;}
+  if(bgCheckBlocksActivation(Members.one(memberId))){
+    err.textContent='Background check is Flagged — clear it in the member profile before activating.';
+    err.style.display='block';
+    return;
+  }
   if(btn){btn.disabled=true; btn.textContent='Confirming…';}
   try{
     const member=await applyPaymentConfirmation(memberId,amount,method,reference);
@@ -7150,9 +7183,10 @@ function processQrToken(token){
     setTimeout(()=>{_scanLocked=false;},4000);
     return;
   }
-  // Entry-block checks (only when checking IN — pending/archived/expired block entry)
+  // Entry-block checks (only when checking IN — pending/archived/expired/flagged block entry)
   if(member.status==='pending_payment'){showScanResult('blocked','Payment Pending',member.name+' has not paid yet — send to the counter.');return;}
   if(member.status==='Archived'){showScanResult('blocked','Account Archived','Member account is archived.');return;}
+  if(bgCheckFlagged(member)){showScanResult('blocked','Background Check Flagged',member.name+' is flagged — entry blocked. Clear it in the member profile.');return;}
   if(daysUntil(member.expiryDate)<0){showScanResult('blocked','Plan Expired',member.name+'\'s plan expired on '+formatDate(member.expiryDate)+'. Renew at the counter — entry blocked.');return;}
   Attendance.add({id:uid(),memberId:member.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'qr'});
   showScanResult('granted','Entry Granted',member.name+' ('+member.id+') — logged at '+time);
@@ -8541,6 +8575,8 @@ function doCheckin(){
   const err=document.getElementById('checkinError');
   err.style.display='none';
   if(!memberId){err.textContent='Please search and select a member first.';err.style.display='block';return;}
+  const member=Members.one(memberId);
+  if(bgCheckFlagged(member)){err.textContent='Background check is Flagged — entry blocked. Clear it in the member profile first.';err.style.display='block';return;}
   const today_=today();
   const attendance=Attendance.all();
   const existing=attendance.find(a=>a.memberId===memberId&&a.date===today_);
