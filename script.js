@@ -102,6 +102,12 @@ const Payments=new Repository(KEY.payments);
 const Sessions=new Repository(KEY.sessions);
 const Plans=new Repository(KEY.plans);
 const Attendance=new Repository(KEY.attendance);
+// One visit per member per day: no code path (profile, QR scan, manual, first visit) can add a 2nd record for the same day.
+Attendance.add=function(item){
+  const arr=this.all();
+  if(item&&item.memberId&&arr.some(a=>a.memberId===item.memberId&&a.date===item.date))return null;
+  arr.push(item);this.save(arr);return item;
+};
 const Walkins=new Repository(KEY.walkins);
 const Notifications=new Repository(KEY.notifications);
 const Messages=new Repository(KEY.messages);
@@ -4059,7 +4065,7 @@ function viewMember(id){
          <p style="font-size:12px;color:var(--gray-500)">Member forgot their phone? Show this QR or check them in manually from the front desk.</p>
          <input type="text" id="profileQrToken" readonly style="width:100%;font-family:monospace;font-size:11px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:8px 10px;color:var(--gray-400);cursor:pointer" onclick="this.select()" placeholder="QR token">
          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-           <button class="btn-sm btn-primary" style="height:32px" onclick="profileCheckIn('${id}')">✓ Check In</button>
+           <button id="profileCheckBtn" class="btn-sm btn-primary" style="height:32px" onclick="profileCheckIn('${id}')">${profileCheckBtnLabel(id)}</button>
            <button class="btn-sm btn-secondary" style="height:32px" onclick="copyMemberToken('${id}')">Copy Token</button>
          </div>
          <div id="profileQrStatus" style="font-size:12px;margin-top:8px;min-height:16px"></div>
@@ -4354,30 +4360,92 @@ function copyMemberToken(id){
   try{navigator.clipboard.writeText(t);toast('QR token copied to clipboard.');}
   catch(e){try{prompt('Copy the member QR token:',t);}catch(_){}}
 }
+function profileTodayRecord(memberId){
+  const t=today();
+  const rows=Attendance.all().filter(a=>a.memberId===memberId&&a.date===t);
+  return rows.find(a=>!a.checkOut)||rows[rows.length-1]||null;
+}
+function profileCheckBtnLabel(memberId){
+  const r=profileTodayRecord(memberId);
+  if(!r)return '✓ Check In';
+  if(!r.checkOut)return '🚪 Check Out';
+  return '✔ Done for today';
+}
+function refreshProfileCheckBtn(memberId){
+  const b=document.getElementById('profileCheckBtn'); if(!b)return;
+  b.textContent=profileCheckBtnLabel(memberId);
+  b.disabled=false;
+}
+let _profileCheckBusy=false;
+// Same rule as the QR scan: 1st = check in, 2nd = check out, after that blocked (one visit per day).
 async function profileCheckIn(id){
+  if(_profileCheckBusy)return;
   const m=Members.one(id);
   const st=document.getElementById('profileQrStatus');
   const show=(msg,ok)=>{if(st){st.innerHTML='<span style="color:'+(ok?'var(--green)':'var(--red)')+'">'+msg+'</span>';}};
   if(!m){show('Member not found',false);return;}
-  if(m.status==='pending_payment'){show(m.name+' has NOT paid yet — send to the counter first.',false);return;}
-  if(m.status==='Archived'){show('Account archived — entry blocked.',false);return;}
-  if(bgCheckFlagged(m)){show(m.name+' has a Flagged background check — entry blocked. Clear it in the member profile first.',false);return;}
-  if(daysUntil(m.expiryDate)<0){show('Plan expired on '+formatDate(m.expiryDate)+' — renew at the counter, entry blocked.',false);return;}
   const now=new Date();
-  const last=Attendance.all().filter(a=>a.memberId===m.id).slice(-1)[0];
-  if(last&&last.date===today()&&last.checkInTs&&(now.getTime()-last.checkInTs)<QR_SCAN_DUP_WINDOW_MIN*60000){show(m.name+' already checked in at '+last.checkIn+' — duplicate blocked.',false);return;}
   const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  Attendance.add({id:uid(),memberId:m.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'});
-  show('Saving check-in online…',true);
-  // Only report success once Firestore has actually accepted the write.
-  const cloud=await confirmCloudPush(KEY.attendance);
-  if(!cloud.ok){
-    show('⚠ '+m.name+' is NOT saved online yet — '+cloud.reason+'. It will keep retrying; keep this page open.',false);
-    toast('Check-in not saved online yet.','error');
+  const rec=profileTodayRecord(m.id);
+
+  // Already checked out today -> block (no second check-in)
+  if(rec&&rec.checkOut){
+    show(m.name+' already checked out at '+rec.checkOut+' (duration: '+(rec.duration||'—')+'). No second check-in today.',false);
+    toast('Already checked out — '+m.name,'error');
+    refreshProfileCheckBtn(m.id);
     return;
   }
-  show(m.name+' checked in at '+time+' (saved online).',true);
-  toast(m.name+' checked in.');
+
+  _profileCheckBusy=true;
+  try{
+    if(rec){
+      // Checked in already -> this click is the CHECK-OUT
+      const ts=now.getTime();
+      const inTs=rec.checkInTs||ts;
+      const durMins=Math.max(0,Math.round((ts-inTs)/60000));
+      const hrs=Math.floor(durMins/60);const mins=durMins%60;
+      const duration=hrs>0?(hrs+'h '+mins+'m'):(mins+'m');
+      const attendance=Attendance.all();
+      const idx=attendance.findIndex(a=>a.id===rec.id);
+      if(idx<0){show('Attendance record not found.',false);return;}
+      attendance[idx].checkOut=time;
+      attendance[idx].checkOutTs=ts;
+      attendance[idx].duration=duration;
+      attendance[idx].recordedBy=currentUser.name;
+      Attendance.save(attendance);
+      show('Saving check-out online…',true);
+      const cloud=await confirmCloudPush(KEY.attendance);
+      if(!cloud.ok){
+        show('⚠ Check-out for '+m.name+' is NOT saved online yet — '+cloud.reason+'. It will keep retrying; keep this page open.',false);
+        toast('Check-out not saved online yet.','error');
+      }else{
+        show(m.name+' checked out at '+time+' · Duration: '+duration+' (saved online).',true);
+        toast('Check-out recorded — '+m.name+' · '+duration,'success');
+      }
+      refreshProfileCheckBtn(m.id);
+      return;
+    }
+
+    // No record today -> CHECK-IN (entry rules)
+    if(m.status==='pending_payment'){show(m.name+' has NOT paid yet — send to the counter first.',false);return;}
+    if(m.status==='Archived'){show('Account archived — entry blocked.',false);return;}
+    if(bgCheckFlagged(m)){show(m.name+' has a Flagged background check — entry blocked. Clear it in the member profile first.',false);return;}
+    if(daysUntil(m.expiryDate)<0){show('Plan expired on '+formatDate(m.expiryDate)+' — renew at the counter, entry blocked.',false);return;}
+    Attendance.add({id:uid(),memberId:m.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'});
+    refreshProfileCheckBtn(m.id); // flips to "Check Out" right away so a double-click cannot add a duplicate
+    show('Saving check-in online…',true);
+    // Only report success once Firestore has actually accepted the write.
+    const cloud=await confirmCloudPush(KEY.attendance);
+    if(!cloud.ok){
+      show('⚠ '+m.name+' is NOT saved online yet — '+cloud.reason+'. It will keep retrying; keep this page open.',false);
+      toast('Check-in not saved online yet.','error');
+      return;
+    }
+    show(m.name+' checked in at '+time+' (saved online). Click again to check out.',true);
+    toast(m.name+' checked in.');
+  }finally{
+    _profileCheckBusy=false;
+  }
 }
 // Awaits a real Firestore push for one collection and explains why it failed.
 async function confirmCloudPush(storageKey){
