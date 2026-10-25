@@ -51,6 +51,8 @@ module.exports = async function handler(req, res) {
     if (code === 7 || code === 'permission-denied' || code === 'PERMISSION_DENIED') return send(res, 500, { ok: false, error: 'Server setup error: the Firebase service account has no permission for Firestore (enable Cloud Firestore API / give it the Firebase Admin role).' });
     if (code === 5 || code === 'NOT_FOUND') return send(res, 500, { ok: false, error: 'Server setup error: Firestore database was not found for the project in FIREBASE_SERVICE_ACCOUNT. Make sure the service account belongs to the same Firebase project as the app.' });
     if (e && /DECODER routines|PEM|private key|invalid_grant|Credential implementation/i.test(e.message || '')) return send(res, 500, { ok: false, error: 'Server setup error: FIREBASE_SERVICE_ACCOUNT private key is invalid. Generate a new key in Firebase Console and paste the full JSON in Vercel.' });
-    return send(res, 500, { ok: false, error: 'Server error. Please try again in a moment.' });
+    // Short, non-secret hint (error code/name + first words) so a setup problem can be identified from the screen.
+    const hint = String((e && (e.code || e.name)) || 'error').slice(0, 40) + ': ' + String((e && e.message) || '').replace(/[\r\n]+/g, ' ').replace(/(-----BEGIN[\s\S]*)/,'[key]').slice(0, 120);
+    return send(res, 500, { ok: false, error: 'Server error (' + hint + '). Please try again in a moment.' });
   }
 };
