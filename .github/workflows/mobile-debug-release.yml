@@ -59,12 +59,13 @@ jobs:
       - name: Publish debug pre-release
         uses: softprops/action-gh-release@v2
         with:
-          name: FitCore GMS ${{ github.ref_name }} (debug)
+          name: FitCore GMS ${{ github.ref_name }} — Debug APK
           files: mobile/build/app/outputs/flutter-apk/app-debug.apk
           prerelease: true
-          generate_release_notes: true
           body: |
-            Unsigned debug build of the FitCore GMS Flutter app.
+            Debug APK built by GitHub Actions for testing. It is signed with the
+            Android debug keystore, so it is not Play Store-ready.
 
-            Install `app-debug.apk` on an Android device. Firebase login still needs
-            `android/app/google-services.json` from the FitCore Firebase project.
+            Install `app-debug.apk` on an Android device. Firebase login needs the
+            Android app registered in the FitCore Firebase project and
+            `android/app/google-services.json` added to the mobile app.
