@@ -1,5 +1,5 @@
 # Local-only source files (public site serves obfuscated builds from the repo root)
-src/
+/src/
 node_modules/
 .env
 .env.*
