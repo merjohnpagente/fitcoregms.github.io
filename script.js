@@ -4123,14 +4123,12 @@ function setBgCheck(id,status){
     :status==='Flagged'
       ?`Mark <strong>${esc(m.name)}</strong> as <strong style="color:var(--red)">Flagged</strong>? This records that the background check needs review.`
       :`Reset <strong>${esc(m.name)}</strong>'s background check to <strong>Pending</strong>?`;
-  openConfirm('Background Check — '+status,msg,()=>{
-    const members=Members.all();
-    const idx=members.findIndex(x=>x.id===id);
-    if(idx<0){toast('Member not found.','error');return;}
-    const cur=members[idx];
+  openConfirm('Background Check — '+status,msg,async ()=>{
+    const cur=Members.one(id);
+    if(!cur){toast('Member not found.','error');return;}
     let nextStatus=cur.status, prevStatus=cur.statusBeforeFlag||'';
     if(status==='Flagged'){
-      // Persist "Flagged" as the member's status in the database; remember the old one so Clear can restore it.
+      // "Flagged" becomes the member's status in the database; remember the old one so Clear can restore it.
       if(cur.status!=='Flagged') prevStatus=cur.status;
       nextStatus='Flagged';
     }else if(cur.status==='Flagged'){
@@ -4140,11 +4138,25 @@ function setBgCheck(id,status){
       nextStatus=(prevStatus&&prevStatus!=='Flagged')?prevStatus:fallback;
       prevStatus='';
     }
-    members[idx]={...cur,status:nextStatus,statusBeforeFlag:prevStatus,bgCheckStatus:status,bgCheckDate:status==='Pending'?'':today(),bgCheckBy:status==='Pending'?'':currentUser.name};
-    Members.save(members);
-    logActivity('Background Check','Member',m.name,'Status: '+status);
-    toast('Background check marked as '+status+'.');
-    viewMember(id);
+    const patch={status:nextStatus,statusBeforeFlag:prevStatus,bgCheckStatus:status,bgCheckDate:status==='Pending'?'':today(),bgCheckBy:status==='Pending'?'':currentUser.name};
+    try{
+      if(window.GMSFB&&GMSFB.enabled){
+        // Write straight to Firestore and wait for it to confirm. Nothing is kept locally.
+        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+        const res=await GMSFB.commitDocs([{col:'members',id,data:patch,merge:true}]);
+        if(!res||!res.ok)throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
+      }else{
+        const members=Members.all();
+        const idx=members.findIndex(x=>x.id===id);
+        if(idx<0){toast('Member not found.','error');return;}
+        members[idx]={...members[idx],...patch};
+        Members.save(members);
+      }
+      logActivity('Background Check','Member',cur.name,'Status: '+status);
+      toast('Background check marked as '+status+' and saved to Firebase.');
+      viewMember(id);
+      try{refreshMemberTable();}catch(e){}
+    }catch(e){toast((e&&e.message)||'Could not save the background check.','error');console.warn('[setBgCheck]',e);}
   },status==='Cleared'?'Mark Cleared':status==='Flagged'?'Flag Member':'Reset to Pending',status==='Flagged'?'btn-danger':'btn-primary');
 }
 function openEditFromProfile(){
