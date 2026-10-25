@@ -1,4 +1,4 @@
-const { sendCode, verifyCode, resetPassword, isEmail } = require('../server/passwordReset');
+const { sendCode, verifyCode, resetPassword, changeEmail, isEmail } = require('../server/passwordReset');
 
 // Browsers allowed to call this API. Add your own origins via ALLOWED_ORIGINS (comma-separated).
 const DEFAULT_ORIGINS = ['https://merjohnpagente.github.io'];
@@ -36,10 +36,12 @@ module.exports = async function handler(req, res) {
     if (body.action === 'send') r = await sendCode(email);
     else if (body.action === 'verify') r = await verifyCode(email, String(body.code || ''));
     else if (body.action === 'reset') r = await resetPassword(email, String(body.resetToken || ''), body.newPassword);
+    else if (body.action === 'change-email') r = await changeEmail(body.idToken, String(body.kind || ''), String(body.id || ''), email);
     else r = { status: 400, body: { ok: false, error: 'Unknown action.' } };
     return send(res, r.status, r.body);
   } catch (e) {
     console.error('[password-reset]', body.action, e && e.message);
+    if (e && /Missing server env var/.test(e.message || '')) return send(res, 500, { ok: false, error: 'Email service is not set up on the server yet (missing ' + e.message.split(': ').pop() + ' in Vercel Environment Variables).' });
     return send(res, 500, { ok: false, error: 'Server error. Please try again in a moment.' });
   }
 };

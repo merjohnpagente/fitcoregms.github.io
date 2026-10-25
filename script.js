@@ -3195,7 +3195,7 @@ function renderMyAssigned(){
     const upcoming=mySessions.filter(s=>s.status==='Scheduled'&&s.date>=today()).length;
     const totalAtt=Attendance.all().filter(a=>a.memberId===id).length;
     const sessLimit=plan&&plan.sessions!=='Unlimited'?Number(plan.sessions):null;
-    const left=sessLimit===null?'∞':Math.max(0,sessLimit-totalAtt);
+    const left=sessLimit===null?'∞':Math.max(0,sessLimit-memberSessionsUsed(id));
     const statusCls=m&&(m.status==='Active'||m.status==='Expiring Soon')?'badge-active':m&&m.status==='Expired'?'badge-inactive':'badge-pending';
     return`<tr>
       <td><div style="display:flex;align-items:center;gap:10px"><div class="user-avatar avatar-trainer" style="width:32px;height:32px;font-size:11px;flex-shrink:0;${m&&m.avatar?'padding:0;overflow:hidden':''}">${m&&m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m?m.name:'?'))}</div><div><div style="font-weight:600;color:var(--white)">${esc(m?m.name:'Unknown member')}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace">${esc(m?m.id:'—')}</div></div></div></td>
@@ -3289,7 +3289,7 @@ function buildMemberDashboard(){
         <a class="btn-secondary btn-sm" href="sms:+639150435696">💬 Message Front Desk</a>
       </div>
     </div>`:'';
-  const sessLeft=locked?'—':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-totalAtt)):'—');
+  const sessLeft=locked?'—':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-memberSessionsUsed(mem.id))):'—');
   const workoutCta=locked?'':`<div class="mb-grid" style="margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
     <button class="btn-secondary btn-sm" onclick="navigate('myWorkoutPlan')" style="display:flex;align-items:center;gap:8px;padding:14px 16px;background:rgba(127,255,136,.06);border:1px solid rgba(127,255,136,.18);border-radius:12px;color:var(--green);font-weight:700;font-size:13px;cursor:pointer;transition:all .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5l11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/></svg>My Workout Plan</button>
     <button class="btn-secondary btn-sm" onclick="navigate('myWorkouts')" style="display:flex;align-items:center;gap:8px;padding:14px 16px;background:rgba(127,255,136,.06);border:1px solid rgba(127,255,136,.18);border-radius:12px;color:var(--green);font-weight:700;font-size:13px;cursor:pointer;transition:all .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Log Workout</button>
@@ -4130,6 +4130,81 @@ async function adminResetMemberPassword(memberId){
     toast('Could not send the reset email: '+((e&&e.message)||'unknown error'),'error');
   }
 }
+// ============================= EDIT PROFILE — CHANGE EMAIL =============================
+// Shared by the member, staff/admin and trainer Edit Profile modals.
+// The server verifies the user's Firebase ID token and updates the Firebase Auth
+// login email + the Firestore profile, so the change is saved online.
+// Trainer sessions a member has used in the current plan period.
+// A session is only deducted once the trainer marks it Completed (Done).
+function memberSessionsUsed(memberId){
+  const m=Members.one(memberId);
+  const since=(m&&(m.planStart||m.startDate))||'';
+  return Sessions.all().filter(function(x){
+    if(x.memberId!==memberId||x.status!=='Completed')return false;
+    const d=x.date||x.createdAt||'';
+    return !since||!d||d>=since;
+  }).length;
+}
+function realEmailOf(u){
+  if(!u)return '';
+  const a=String(u.email||'').trim();
+  if(a&&!a.toLowerCase().endsWith('@fitcoregym.local'))return a;
+  const b=String(u.authEmail||'').trim();
+  return (b&&!b.toLowerCase().endsWith('@fitcoregym.local'))?b:'';
+}
+function setupEmailField(prefix,current){
+  const inp=document.getElementById(prefix+'_email');
+  if(!inp)return;
+  const wrap=document.getElementById(prefix+'_curpass_wrap');
+  const pw=document.getElementById(prefix+'_curpass');
+  inp.value=current||'';
+  inp.dataset.orig=(current||'').toLowerCase();
+  if(pw)pw.value='';
+  if(wrap)wrap.style.display='none';
+  inp.oninput=function(){
+    if(wrap)wrap.style.display=(inp.value.trim().toLowerCase()!==inp.dataset.orig)?'block':'none';
+  };
+}
+async function applyEmailChange(prefix){
+  const inp=document.getElementById(prefix+'_email');
+  if(!inp)return {ok:true,changed:false};
+  const newEmail=inp.value.trim().toLowerCase();
+  const oldEmail=String(inp.dataset.orig||'').toLowerCase();
+  if(newEmail===oldEmail)return {ok:true,changed:false};
+  if(!newEmail)return {ok:false,error:'Email cannot be empty.'};
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail))return {ok:false,error:'Please enter a valid email address.'};
+  if(newEmail.endsWith('@fitcoregym.local'))return {ok:false,error:'Please use a real email address (e.g. name@gmail.com).'};
+  const au=(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)?GMSFB.auth.currentUser:null;
+  if(!au||!au.email)return {ok:false,error:'Changing your email needs an internet connection and an active login. Please log in again.'};
+  const pwd=(document.getElementById(prefix+'_curpass')||{}).value||'';
+  if(!pwd)return {ok:false,error:'Enter your current password to change your email.'};
+  try{
+    const cred=firebase.auth.EmailAuthProvider.credential(au.email,pwd);
+    await au.reauthenticateWithCredential(cred);
+  }catch(e){
+    return {ok:false,error:'Current password is incorrect.'};
+  }
+  let idToken;
+  try{ idToken=await au.getIdToken(true); }catch(e){ return {ok:false,error:'Session expired. Please log in again.'}; }
+  const isMember=currentUser.role==='member';
+  const kind=isMember?'members':'users';
+  const id=isMember?(currentUser.memberId||currentUser.id):currentUser.id;
+  const r=await fpApi('change-email',{email:newEmail,idToken:idToken,kind:kind,id:id});
+  if(!r||!r.ok)return {ok:false,error:(r&&r.error)||'Could not change email. Please try again.'};
+  try{
+    const patch=r.authChanged?{email:newEmail,authEmail:newEmail}:{email:newEmail};
+    (isMember?Members:Users).update(id,patch);
+  }catch(e){}
+  currentUser={...currentUser,email:newEmail};
+  try{ setSession(currentUser); }catch(e){}
+  inp.dataset.orig=newEmail;
+  return {ok:true,changed:true,authChanged:!!r.authChanged,email:newEmail};
+}
+function finishEmailChange(ec){
+  if(ec&&ec.changed&&ec.authChanged){
+    setTimeout(function(){ toast('Email changed to '+ec.email+'. Please log in again with your new email.','success'); doLogout(); },900);
+  }
+}
 function openMemberProfileEdit(){
   const m=Members.one(currentUser.memberId||currentUser.id);
   if(!m){toast('Member record not found.','error');return;}
@@ -4139,6 +4214,7 @@ function openMemberProfileEdit(){
   document.getElementById('mep_name').value=m.name||currentUser.name||'';
   document.getElementById('mep_contact').value=m.contact||'';
   document.getElementById('mep_address').value=m.address||'';
+  setupEmailField('mep',realEmailOf(m));
   const err=document.getElementById('mepError');if(err){err.textContent='';err.style.display='none';}
   openModal('memberProfileEditModal');
 }
@@ -4162,6 +4238,8 @@ function saveMemberProfileEdit(){
     const cleanName=sanitizeText(name);
     const patch={avatar:a||'',name:cleanName,contact:contact,address:sanitizeText(address)};
     try{
+      const ec=await applyEmailChange('mep');
+      if(!ec.ok){showErr(ec.error);return;}
       if(window.GMSFB&&GMSFB.enabled){
         if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
         const res=await GMSFB.commitDocs([{col:'members',id:m.id,data:patch,merge:true}]);
@@ -4174,6 +4252,7 @@ function saveMemberProfileEdit(){
       closeModal('memberProfileEditModal');
       refreshMemberHome();
       toast('Profile updated and saved to Firebase.','success');
+      finishEmailChange(ec);
     }catch(e){
       showErr((e&&e.message)||'Could not save your profile. Please try again.');
       console.error('[saveMemberProfileEdit]',e);
@@ -4718,6 +4797,7 @@ function openTrainerEditModal(){
   document.getElementById('tep_from').value=u.availableFrom||'';
   document.getElementById('tep_to').value=u.availableTo||'';
   document.getElementById('tepError').style.display='none';
+  setupEmailField('tep',realEmailOf(u));
   openModal('trainerEditProfileModal');
 }
 async function saveTrainerProfile(){
@@ -4733,7 +4813,10 @@ async function saveTrainerProfile(){
   errEl.style.display='none';
   if(!fullname){errEl.textContent='Full name is required.';errEl.style.display='block';return;}
   const patch={name:fullname,coachName:coachname||fullname,bio:bio,specializations:specs,availableDays:days,availableFrom:from,availableTo:to,avatar:avatar||''};
+  let ecT={ok:true,changed:false};
   try{
+    ecT=await applyEmailChange('tep');
+    if(!ecT.ok){errEl.textContent=ecT.error;errEl.style.display='block';return;}
     if(window.GMSFB&&GMSFB.enabled){
       if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
       const res=await GMSFB.commitDocs([{col:'users',id:currentUser.id,data:patch,merge:true}]);
@@ -4760,6 +4843,7 @@ async function saveTrainerProfile(){
   closeModal('trainerEditProfileModal');
   toast('Profile updated successfully!','success');
   renderSchedule();
+  finishEmailChange(ecT);
 }
 function updateSepAvatar(name){
   const av=document.getElementById('sep_avatar_initials');
@@ -4823,6 +4907,7 @@ function openStaffEditModal(){
   const badge=document.getElementById('sep_role_badge');
   if(badge){badge.textContent=u.role==='admin'?'Admin':'Staff';badge.style.background=u.role==='admin'?'rgba(179,188,181,.22)':'rgba(127,250,136,.18)';badge.style.color=u.role==='admin'?'var(--orange)':'#d7ddd8';}
   document.getElementById('sepError').style.display='none';
+  setupEmailField('sep',realEmailOf(u));
   openModal('staffEditProfileModal');
 }
 async function saveStaffProfile(){
@@ -4844,6 +4929,8 @@ async function saveStaffProfile(){
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';}
     return;
   }
+  const ecS=await applyEmailChange('sep');
+  if(!ecS.ok){errEl.textContent=ecS.error;errEl.style.display='block';if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';}return;}
   const users=Users.all();
   const idx=users.findIndex(x=>x.id===currentUser.id);
   if(idx<0){errEl.textContent='User not found.';errEl.style.display='block'; if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';} return;}
@@ -4880,6 +4967,7 @@ async function saveStaffProfile(){
   toast('Profile updated successfully!','success');
   if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';}
   buildSidebar(); renderTopbar();
+  finishEmailChange(ecS);
 }
 function getSchedSessions(){
   let s=Sessions.all();
@@ -5163,10 +5251,22 @@ function renderListView(){
     <div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Time</th><th>Trainer</th><th>Member</th><th>Type</th><th>Status</th><th>Created / Edited By</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
+// A session can only be completed once its scheduled day/time has arrived.
+function sessionNotStartedYet(s){
+  if(!s||!s.date)return false;
+  const t=today();
+  if(s.date>t)return true;
+  if(s.date<t)return false;
+  const startMin=parseTimeToMin(s.start);
+  if(startMin===null)return false;
+  const now=new Date();
+  return (now.getHours()*60+now.getMinutes())<startMin;
+}
 function confirmCompleteSession(id){
   const s=Sessions.one(id);
   if(!s)return;
   if(currentUser.role==='trainer'&&s.trainerId!==currentUser.id){toast('You can only update your own sessions.','error');return;}
+  if(sessionNotStartedYet(s)){toast('You can only complete this session on '+formatDate(s.date)+' at '+s.start+'. It has not started yet.','error');return;}
   const detail=`<div style="margin-top:12px;background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'—')}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'—')}</strong></div>
@@ -5211,6 +5311,7 @@ function markSessionDone(id){
   const idx=sessions.findIndex(s=>s.id===id);
   if(idx<0)return;
   if(sessions[idx].trainerId!==currentUser.id){toast('You can only mark your own sessions as done.','error');return;}
+  if(sessionNotStartedYet(sessions[idx])){toast('This session has not started yet — it can only be completed on its scheduled date and time.','error');return;}
   const prevStatus=sessions[idx].status;
   // Immutable replace — never mutate the object in place (sync bug fix)
   sessions[idx]={...sessions[idx],status:'Completed',completedAt:today(),completedBy:currentUser.username,statusLog:[...(sessions[idx].statusLog||[]),{from:prevStatus,to:'Completed',by:currentUser.name,byUsername:currentUser.username,byRole:currentUser.role,at:new Date().toISOString()}]};
@@ -7277,6 +7378,16 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
   // payment so the queue cannot say "confirmed" before Firestore has them.
   const activation={status:'Active',planId,planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token};
   const openNotifs=Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open');
+  // First activation of a newly registered member = 1 visit right away
+  // (no prior payment and no attendance on file). Saved in the same batch.
+  let firstVisit=null;
+  const isFirstActivation=(opts.source||'activation')==='activation'
+    &&!Payments.all().some(p=>p.memberId===memberId)
+    &&!Attendance.all().some(a=>a.memberId===memberId);
+  if(isFirstActivation){
+    const vt=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    firstVisit={id:uid(),memberId,date:start,time:vt,checkIn:vt,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'};
+  }
   if(window.GMSFB&&GMSFB.enabled){
     if(!GMSFB.auth||!GMSFB.auth.currentUser){
       throw new Error('Firebase session expired — please log out and log in again before confirming payments.');
@@ -7289,6 +7400,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
       {col:'payments',id:newId,data:payment,merge:false}
     ];
     openNotifs.forEach(n=>ops.push({col:'notifications',id:n.id,data:{status:'resolved',resolvedAt:new Date().toISOString()},merge:true}));
+    if(firstVisit)ops.push({col:'attendance',id:firstVisit.id,data:firstVisit,merge:false});
     let res;
     try{ res=await GMSFB.commitDocs(ops); }
     catch(e){ res={ok:false,error:e&&e.message}; }
@@ -7306,6 +7418,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
     payments.push(payment);
     Payments.save(payments);
     Members.update(memberId,activation);
+    if(firstVisit)Attendance.add(firstVisit);
   }
   resolveNotifsForMember(memberId);
   if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.applyLocalPatch==='function'){
