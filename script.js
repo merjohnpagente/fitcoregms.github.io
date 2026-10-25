@@ -3560,7 +3560,7 @@ function renderMembers(){
         <option value="All">All Plans</option>${planOpts}
       </select>
     </div>
-    <button class="btn-primary" onclick="openMemberModal()">+ Add New Member</button>
+    <button class="btn-primary btn-inline" onclick="openMemberModal()">+ Add New Member</button>
     <button class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;padding:0 18px;height:46px;border:1.8px solid #7ffa88;color:#fff;background:rgba(127,250,136,.12);border-radius:14px;font-weight:800;letter-spacing:.6px;flex-shrink:0;box-shadow:0 0 0 1px rgba(127,250,136,.15) inset" onclick="renumberMembers()" title="Purge archived members and renumber IDs sequentially (MEM-0001, MEM-0002, …)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> RENUMBER</button>
     <button class="btn-danger" style="width:46px;height:46px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" onclick="resetAllMembers()" title="Delete ALL members — empty member list"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
   </div>
@@ -6533,7 +6533,7 @@ function renderMyProgress(){
         <div class="form-group"><label>Muscle Mass (kg)</label><input type="number" id="ms_muscle" placeholder="35" step="0.1"></div>
       </div>
       <div class="form-group"><label>Date *</label><input type="date" id="ms_mdate" value="${today()}" max="${today()}"></div>
-      <button class="btn-primary" onclick="addMeasurement()">Save Measurement</button>
+      <button class="btn-primary btn-inline" onclick="addMeasurement()">Save Measurement</button>
       <div id="msMError" class="error-msg" style="display:none"></div>
     </div>
   </div>
@@ -6816,7 +6816,7 @@ function renderWorkoutBuilder(){
         <div class="form-group"><label>Reps</label><input type="number" id="wb_reps" placeholder="10"></div>
       </div>
       <div class="form-group"><label>Notes</label><input type="text" id="wb_notes" placeholder="Focus on form, rest 60s"></div>
-      <button class="btn-primary" onclick="createWorkoutPlan()">Assign Plan to Member</button>
+      <button class="btn-primary btn-inline" onclick="createWorkoutPlan()">Assign Plan to Member</button>
       <div id="wbError" class="error-msg" style="display:none"></div>
     </div>
   </div>
@@ -6881,7 +6881,7 @@ function renderMySessions(){
       </div>
       <div style="font-size:11px;color:var(--gray-500);margin-top:-4px">Available trainers are filtered by session type, date and time — overlapping schedules are excluded.</div>
       <div id="bsAvailHint" class="sf-avail-hint" style="display:none"></div>
-      <button class="btn-primary" onclick="bookSession()">Request Session</button>
+      <button class="btn-primary btn-inline" onclick="bookSession()">Request Session</button>
       <div id="bsError" class="error-msg" style="display:none"></div>
       <div style="font-size:11px;color:var(--gray-500);line-height:1.5">Your request goes to the trainer as <strong>Pending</strong> — they will Accept or Decline. You can reschedule after decline.</div>
     </div>
@@ -7171,7 +7171,7 @@ function renderAnnouncements(){
     <div class="table-controls">
       <span style="font-size:11px;color:var(--gray-500)">Post gym closures, events and anniversaries — members see these on their dashboard</span>
     </div>
-    <button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px" onclick="openAnnounceModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg> Post Announcement</button>
+    <button class="btn-primary btn-inline" style="display:inline-flex;align-items:center;gap:8px" onclick="openAnnounceModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg> Post Announcement</button>
   </div>
   <div class="table-card">
     <div class="table-header"><h3>Announcements <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${all.length} total</span></h3></div>
@@ -7853,7 +7853,7 @@ function renderWalkin(){
       <input class="search-input" placeholder="Search visitor name…" value="${esc(walkinSearch)}" oninput="walkinSearch=this.value;walkinPage=1;refreshWalkinTable()">
       ${currentUser.role==='admin'?`<button class="btn-secondary" onclick="openWalkinSettingsModal()">⚙ Walk-In Price: ₱${getWalkinFee().toLocaleString()}</button>`:''}
     </div>
-    <button class="btn-primary" onclick="openWalkinModal()">🚶 Register Walk-In</button>
+    <button class="btn-primary btn-inline" onclick="openWalkinModal()">🚶 Register Walk-In</button>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px" id="walkinStats"></div>
   <div class="table-card" id="walkinTableCard"></div>`;
@@ -8113,7 +8113,7 @@ function renderPlans(){
         </div>
       </div>
     </div>`:'<div></div>'}
-    ${!isStaff?`<button class="btn-primary" onclick="openPlanModal()">+ Add New Plan</button>`:''}
+    ${!isStaff?`<button class="btn-primary btn-inline" onclick="openPlanModal()">+ Add New Plan</button>`:''}
   </div>
   <div class="plan-grid">${cards||`<div class="empty-state"><div class="empty-icon">📋</div><p>No plans created yet</p></div>`}</div>`;
 }
@@ -8374,7 +8374,7 @@ function renderReports(){
     ${reportType==='trainer'?`<div class="form-group"><label>Search Trainer</label><div style="position:relative"><input type="text" id="rpt_trainer_search" class="search-input" placeholder="Type trainer name…" oninput="filterTrainerReportList(this.value)" autocomplete="off" style="width:100%"><div id="rpt_trainer_drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--navy-800);border:1.5px solid var(--orange);border-radius:8px;z-index:200;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)">${Users.all().filter(u=>u.role==='trainer').map(u=>`<div class="country-item" onclick="selectTrainerReport('${u.id}','${esc(u.name).replace(/'/g,"&#39;")}')"><span>${esc(u.name)}</span></div>`).join('')}</div></div><input type="hidden" id="rpt_trainer_filter" value="all"></div>`:''}
 
     ${reportType==='activity'?`<div class="form-group"><label>Category</label><select id="rpt_act_cat" class="filter-sel"><option value="all">All</option><option value="Member">Member</option><option value="Session">Session</option></select></div><div class="form-group"><label>Action</label><select id="rpt_act_action" class="filter-sel"><option value="all">All Actions</option><option value="Added">Added</option><option value="Edited">Edited</option><option value="Deleted">Deleted</option><option value="Status Changed">Status Changed</option></select></div>`:''}
-    <div class="form-group" style="align-self:end"><button class="btn-primary" onclick="generateReport()">Generate Report</button></div>
+    <div class="form-group" style="align-self:end"><button class="btn-primary btn-inline" onclick="generateReport()">Generate Report</button></div>
   </div>
   <div class="report-output" id="reportOutput"></div>`;
 }
