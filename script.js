@@ -6072,15 +6072,15 @@ function renderRenewed(){
     ${tab('Expired','expired',counts.expired)}
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    <div class="renew-mini-stat">🔄 ${monthRenewals} renewal${monthRenewals!==1?'s':''} this month</div>
-    <div class="renew-mini-stat">🆕 ${monthPays.length-monthRenewals} new sign-up${monthPays.length-monthRenewals!==1?'s':''}</div>
-    <div class="renew-mini-stat">💰 ₱${monthRev.toLocaleString()} collected</div>
+    <div class="renew-mini-stat">${iconSvg('refresh',14)} ${monthRenewals} renewal${monthRenewals!==1?'s':''} this month</div>
+    <div class="renew-mini-stat">${iconSvg('userPlus',14)} ${monthPays.length-monthRenewals} new sign-up${monthPays.length-monthRenewals!==1?'s':''}</div>
+    <div class="renew-mini-stat">${iconSvg('money',14)} ₱${monthRev.toLocaleString()} collected</div>
   </div>
   <div class="table-card">
     <div class="table-header"><h3>Renewal Records <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${filtered.length} shown</span></h3></div>
     ${filtered.length?`<div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Type</th><th>Paid on</th><th>Expires</th><th>Status now</th></tr></thead><tbody>
     ${filtered.map(r=>`<tr><td>${esc(r.p.memberName)}</td><td>${esc(r.p.planName)}</td><td>₱${Number(r.p.amount).toLocaleString()}</td><td><span class="badge ${r.p.source==='renewal'?'badge-expiring':'badge-active'}">${r.p.source==='renewal'?'Renewal':'New'}</span></td><td>${formatDate(r.p.date)}</td><td>${r.m&&r.m.expiryDate?formatDate(r.m.expiryDate):'—'}</td><td>${statusCell(r)}</td></tr>`).join('')}
-    </tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">🔄</div><p>No renewal records in this category.</p></div>`}
+    </tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">${iconSvg('refresh',22)}</div><p>No renewal records in this category.</p></div>`}
   </div>`;
 }
 

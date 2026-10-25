@@ -1851,3 +1851,6 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 .modal-close:hover{background:rgba(239,68,68,.22);border-color:rgba(239,68,68,.6)}
 .modal-close:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .badge-urgent{background:rgba(251,146,60,.16);color:#fb923c}
+
+.renew-mini-stat{display:inline-flex;align-items:center;gap:8px;color:var(--white)}
+.renew-mini-stat svg{color:var(--green)}
