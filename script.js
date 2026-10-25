@@ -8795,8 +8795,8 @@ function openUserModal(id=null){
     if(emailEl){
       const realEmail=u.authEmail&&!String(u.authEmail).endsWith('@fitcoregym.local')?u.authEmail:(u.email&&!String(u.email).endsWith('@fitcoregym.local')?u.email:'');
       emailEl.value=realEmail||'';
-      emailEl.disabled=u.role==='admin';
-      emailEl.placeholder=u.role==='admin'?'Admin identity is managed in Firebase Console':'e.g. trainer@gmail.com';
+      emailEl.disabled=false;
+      emailEl.placeholder=u.role==='admin'?'Admin contact email (used for Forgot Password)':'e.g. trainer@gmail.com';
     }
     document.getElementById('uf_pass').value='';document.getElementById('uf_pass2').value='';
     document.getElementById('uf_pass').placeholder='Leave blank to keep current password';
@@ -8918,6 +8918,19 @@ async function saveUser(){
       } else {err.textContent=r.error;err.style.display='block';return;}
     }
     GMSFB.secondarySignOut();
+  } else if(email&&email!==String(realEmailOf(existingUser)||'').toLowerCase()){
+    // Admin changes this user's email. The server verifies the caller is an admin,
+    // then updates the Firebase Auth login (trainer/staff) or only the profile email
+    // (admin, whose login identity stays fixed). No password needed.
+    const au=(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)?GMSFB.auth.currentUser:null;
+    if(!au){err.textContent='Changing an email needs an internet connection and an active login. Please log in again.';err.style.display='block';return;}
+    let idToken;
+    try{ idToken=await au.getIdToken(true); }catch(e){ err.textContent='Session expired. Please log in again.';err.style.display='block';return; }
+    const r=await fpApi('admin-change-email',{email:email,idToken:idToken,id:editingUserId});
+    if(!r||!r.ok){err.textContent=(r&&r.error)||'Could not change email. Please try again.';err.style.display='block';return;}
+    if(r.authChanged){authEmail=email;authChanged=true;}
+    else if(role==='admin'&&!authEmail){authEmail=GMSFB.adminAuthEmail;}
+    if(pass)resetMsg='Email changed. Password was not changed; save again to send a reset link.';
   } else if(role==='admin'){
     // Never move the built-in admin identity from this form.
     if(!authEmail)authEmail=GMSFB.adminAuthEmail;

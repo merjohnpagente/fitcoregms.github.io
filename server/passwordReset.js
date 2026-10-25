@@ -200,4 +200,57 @@ async function changeEmail(idToken, kind, id, newEmail) {
   return { status: 200, body: { ok: true, authChanged: true } };
 }
 
-module.exports = { sendCode, verifyCode, resetPassword, changeEmail, isEmail };
+// Admin edits ANOTHER user's email (trainer / staff / admin profile).
+// Caller is verified by their Firebase ID token AND must have an active admin profile.
+// Trainer/staff: the Firebase Auth login email AND the profile are changed in place
+// (same uid, so no orphaned account). Admin target: only the profile email (used for
+// Forgot Password) changes, so the fixed admin login identity keeps working.
+async function adminChangeUserEmail(idToken, targetId, newEmail) {
+  const ctx = init();
+  const bad = (msg, status) => ({ status: status || 400, body: { ok: false, error: msg } });
+  if (!isEmail(newEmail) || newEmail.endsWith('@fitcoregym.local')) return bad('Please enter a valid, real email address.');
+  let decoded;
+  try { decoded = await ctx.auth.verifyIdToken(String(idToken || ''), true); } catch (e) { return bad('Session expired. Please log in again.', 401); }
+  const callerEmail = String(decoded.email || '').toLowerCase();
+  if (!callerEmail) return bad('Session expired. Please log in again.', 401);
+  const cq = await ctx.db.collection('users').where('authEmail', '==', callerEmail).limit(1).get();
+  const caller = cq.empty ? null : cq.docs[0].data();
+  if (!caller || caller.role !== 'admin' || caller.status === 'locked') return bad('Only an administrator can change another user\'s email.', 403);
+
+  const ref = ctx.db.collection('users').doc(String(targetId || ''));
+  const snap = await ref.get();
+  if (!snap.exists) return bad('Profile not found.', 404);
+  const prof = snap.data();
+  if (prof.role !== 'admin' && prof.role !== 'staff' && prof.role !== 'trainer') return bad('Invalid request.');
+
+  for (const col of ['members', 'users']) {
+    for (const field of ['email', 'authEmail']) {
+      const q = await ctx.db.collection(col).where(field, '==', newEmail).limit(3).get();
+      if (q.docs.some((d) => !(col === 'users' && d.id === ref.id))) return bad('That email is already used by another account.', 409);
+    }
+  }
+  if (prof.role === 'admin') {
+    await ref.update({ email: newEmail });
+    return { status: 200, body: { ok: true, authChanged: false } };
+  }
+  const oldAuthEmail = String(prof.authEmail || '').toLowerCase();
+  if (!oldAuthEmail) return bad('This account has no login on file. Re-create the user.', 409);
+  let uid;
+  try { uid = (await ctx.auth.getUserByEmail(oldAuthEmail)).uid; } catch (e) { return bad('Login account for this user was not found.', 404); }
+  try {
+    await ctx.auth.updateUser(uid, { email: newEmail, emailVerified: false });
+  } catch (e) {
+    if (e && e.code === 'auth/email-already-exists') return bad('That email is already used by another account.', 409);
+    throw e;
+  }
+  try {
+    await ref.update({ email: newEmail, authEmail: newEmail });
+  } catch (e) {
+    try { await ctx.auth.updateUser(uid, { email: oldAuthEmail }); } catch (e2) { /* best effort */ }
+    throw e;
+  }
+  try { await ctx.auth.revokeRefreshTokens(uid); } catch (e) { /* non-fatal */ }
+  return { status: 200, body: { ok: true, authChanged: true } };
+}
+
+module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, isEmail };
