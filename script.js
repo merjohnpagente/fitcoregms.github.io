@@ -4301,7 +4301,7 @@ function copyMemberToken(id){
   try{navigator.clipboard.writeText(t);toast('QR token copied to clipboard.');}
   catch(e){try{prompt('Copy the member QR token:',t);}catch(_){}}
 }
-function profileCheckIn(id){
+async function profileCheckIn(id){
   const m=Members.one(id);
   const st=document.getElementById('profileQrStatus');
   const show=(msg,ok)=>{if(st){st.innerHTML='<span style="color:'+(ok?'var(--green)':'var(--red)')+'">'+msg+'</span>';}};
@@ -4315,8 +4315,31 @@ function profileCheckIn(id){
   if(last&&last.date===today()&&last.checkInTs&&(now.getTime()-last.checkInTs)<QR_SCAN_DUP_WINDOW_MIN*60000){show(m.name+' already checked in at '+last.checkIn+' — duplicate blocked.',false);return;}
   const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   Attendance.add({id:uid(),memberId:m.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'});
-  show(m.name+' checked in at '+time+'.',true);
+  show('Saving check-in online…',true);
+  // Only report success once Firestore has actually accepted the write.
+  const cloud=await confirmCloudPush(KEY.attendance);
+  if(!cloud.ok){
+    show('⚠ '+m.name+' is NOT saved online yet — '+cloud.reason+'. It will keep retrying; keep this page open.',false);
+    toast('Check-in not saved online yet.','error');
+    return;
+  }
+  show(m.name+' checked in at '+time+' (saved online).',true);
   toast(m.name+' checked in.');
+}
+// Awaits a real Firestore push for one collection and explains why it failed.
+async function confirmCloudPush(storageKey){
+  try{
+    if(!(window.GMSFB&&GMSFB.enabled))return {ok:false,reason:'cloud sync is off (offline mode)'};
+    if(!GMSFB.auth||!GMSFB.auth.currentUser)return {ok:false,reason:'not signed in to Firebase — log out and log in again'};
+    if(typeof navigator!=='undefined'&&navigator.onLine===false)return {ok:false,reason:'no internet connection'};
+    const r=await GMSFB.pushCollection(storageKey,DB.get(storageKey));
+    if(r&&r.ok)return {ok:true};
+    const code=String((r&&(r.error||r.reason))||'unknown error');
+    const hint={'permission-denied':'Firestore rules blocked the write (publish docs/firestore.rules in Firebase Console)','not-ready':'cloud sync is still starting','unauthenticated':'login expired — log in again','unavailable':'Firebase is unreachable'};
+    return {ok:false,reason:hint[code]||code};
+  }catch(e){
+    return {ok:false,reason:String((e&&(e.code||e.message))||'unknown error')};
+  }
 }
 let historySearch='';let memberHistoryTab='All';
 function renderHistory(){
