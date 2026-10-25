@@ -3288,12 +3288,17 @@ function buildMemberDashboard(){
       </div>
     </div>`;
   } else {
-    banner=`<div class="mb-banner active">
-      <div class="mb-banner-ico">✅</div>
-      <div>
-        <div class="mb-banner-title">Membership Active</div>
-        <div class="mb-banner-sub">Valid until <strong>${formatDate(mem.expiryDate)}</strong> (${d} day${d!==1?'s':''} left). Show your QR at the entrance to check in.</div>
+    const totalDays=(mem.planStart&&mem.expiryDate)?Math.round((new Date(mem.expiryDate)-new Date(mem.planStart))/86400000):0;
+    const pctLeft=totalDays>0?Math.max(0,Math.min(100,Math.round(d/totalDays*100))):null;
+    const soon=d<=7;
+    banner=`<div class="mb-banner active${soon?' soon':''}">
+      <div class="mb-banner-ico">${soon?'⚠️':'✅'}</div>
+      <div class="mb-banner-main">
+        <div class="mb-banner-title">${soon?'Membership Ending Soon':'Membership Active'}</div>
+        <div class="mb-banner-sub">Valid until <strong>${formatDate(mem.expiryDate)}</strong>. Show your QR at the entrance to check in.</div>
+        ${pctLeft!==null?`<div class="mb-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctLeft}" aria-label="Membership time left"><span style="width:${pctLeft}%"></span></div>`:''}
       </div>
+      <div class="mb-days"><strong>${d}</strong><span>day${d!==1?'s':''} left</span></div>
     </div>`;
   }
   const paySteps=locked?`
