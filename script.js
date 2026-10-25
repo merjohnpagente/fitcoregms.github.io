@@ -6045,6 +6045,7 @@ function renderRenewed(){
   rows.forEach(r=>{counts[r.bucket]++;});
   const now=new Date();
   const monthPays=Payments.all().filter(p=>{const d=new Date(p.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
+  const monthRenewals=monthPays.filter(p=>p.source==='renewal').length;
   const monthRev=monthPays.reduce((a,p)=>a+Number(p.amount),0);
   const filtered=_renewedFilter==='All'?rows:rows.filter(r=>r.bucket===_renewedFilter);
   const tab=(label,key,cnt)=>`<button class="filter-chip${_renewedFilter===key?' active':''}" onclick="_renewedFilter='${key}';renderRenewed()">${label} <span style="opacity:.7">(${cnt})</span></button>`;
@@ -6058,7 +6059,7 @@ function renderRenewed(){
   el.innerHTML=`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
-      <div class="section-title" style="margin-bottom:4px">Recently Renewed <span class="badge badge-active" style="margin-left:6px">${list.length}</span></div>
+      <div class="section-title" style="margin-bottom:4px">Renewal history <span class="badge badge-active" style="margin-left:6px">${list.length}</span></div>
       <div style="font-size:12px;color:var(--gray-500)">All recorded membership renewals and payments, newest first.</div>
     </div>
     <button class="btn-secondary btn-sm" onclick="backToRenewals()">← Back to Member Renewals</button>
@@ -6071,13 +6072,14 @@ function renderRenewed(){
     ${tab('Expired','expired',counts.expired)}
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    <div class="renew-mini-stat">🔄 ${monthPays.length} renewals this month</div>
+    <div class="renew-mini-stat">🔄 ${monthRenewals} renewal${monthRenewals!==1?'s':''} this month</div>
+    <div class="renew-mini-stat">🆕 ${monthPays.length-monthRenewals} new sign-up${monthPays.length-monthRenewals!==1?'s':''}</div>
     <div class="renew-mini-stat">💰 ₱${monthRev.toLocaleString()} collected</div>
   </div>
   <div class="table-card">
     <div class="table-header"><h3>Renewal Records <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${filtered.length} shown</span></h3></div>
-    ${filtered.length?`<div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Paid on</th><th>Expires</th><th>Status now</th></tr></thead><tbody>
-    ${filtered.map(r=>`<tr><td>${esc(r.p.memberName)}</td><td>${esc(r.p.planName)}</td><td>₱${Number(r.p.amount).toLocaleString()}</td><td>${formatDate(r.p.date)}</td><td>${r.m&&r.m.expiryDate?formatDate(r.m.expiryDate):'—'}</td><td>${statusCell(r)}</td></tr>`).join('')}
+    ${filtered.length?`<div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Type</th><th>Paid on</th><th>Expires</th><th>Status now</th></tr></thead><tbody>
+    ${filtered.map(r=>`<tr><td>${esc(r.p.memberName)}</td><td>${esc(r.p.planName)}</td><td>₱${Number(r.p.amount).toLocaleString()}</td><td><span class="badge ${r.p.source==='renewal'?'badge-expiring':'badge-active'}">${r.p.source==='renewal'?'Renewal':'New'}</span></td><td>${formatDate(r.p.date)}</td><td>${r.m&&r.m.expiryDate?formatDate(r.m.expiryDate):'—'}</td><td>${statusCell(r)}</td></tr>`).join('')}
     </tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">🔄</div><p>No renewal records in this category.</p></div>`}
   </div>`;
 }
