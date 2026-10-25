@@ -3742,6 +3742,8 @@ function openMemberModal(id=null){
     // Firebase Auth email (legacy synthetic .local addresses are not shown).
     const mEmail=String(m.email||'').trim()||(m.authEmail&&!String(m.authEmail).endsWith('@fitcoregym.local')?m.authEmail:'');
     document.getElementById('mf_email').value=mEmail;
+    { const ps=document.getElementById('mf_pass_section'); if(ps) ps.style.display=(currentUser&&currentUser.role==='admin')?'block':'none';
+      ['mf_pass','mf_pass2'].forEach(i=>{const e=document.getElementById(i); if(e){e.value='';e.type='password';}}); }
     document.getElementById('mf_paydate').value=today();
     const plan=Plans.one(m.planId);
     document.getElementById('mf_amount').value=plan?plan.price:'';
@@ -3765,6 +3767,7 @@ function openMemberModal(id=null){
     }
   } else {
     ['mf_name','mf_contact','mf_age','mf_address','mf_ecname','mf_ecnum','mf_notes','mf_email'].forEach(id=>document.getElementById(id).value='');
+    { const ps=document.getElementById('mf_pass_section'); if(ps) ps.style.display='none'; ['mf_pass','mf_pass2'].forEach(i=>{const e=document.getElementById(i); if(e) e.value='';}); }
     const dobIn=document.getElementById('mf_dob'); if(dobIn) dobIn.value='';
     const hint=document.getElementById('mf_age_hint'); if(hint){hint.textContent=''; hint.style.display='none';}
     document.getElementById('mf_sex').value='';
@@ -3838,6 +3841,24 @@ async function saveMember(){
     if(dupMember){err.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
     const dupUser=Users.all().find(u=>String(u.authEmail||'').toLowerCase()===mfEmail||String(u.email||'').toLowerCase()===mfEmail);
     if(dupUser){err.textContent='Email already exists — used by '+dupUser.name+'.';err.style.display='block';return;}
+  }
+  // Admin sets a new password for this member (saved online through the server).
+  const _np=(document.getElementById('mf_pass')||{}).value||'';
+  const _np2=(document.getElementById('mf_pass2')||{}).value||'';
+  if(_np||_np2){
+    if(!(editingMemberId&&currentUser&&currentUser.role==='admin')){err.textContent='Only admin can reset a member password.';err.style.display='block';return;}
+    if(_np.length<8){err.textContent='Password must be at least 8 characters.';err.style.display='block';return;}
+    if(_np!==_np2){err.textContent='Passwords do not match. Please re-enter the password.';err.style.display='block';return;}
+    const _mem=Members.one(editingMemberId);
+    const _loginEmail=(window.GMSFB&&GMSFB.authEmailFor&&_mem)?GMSFB.authEmailFor(_mem):'';
+    const _au=(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)?GMSFB.auth.currentUser:null;
+    if(!_au||!_loginEmail){err.textContent='Resetting a password needs an internet connection and an active login.';err.style.display='block';return;}
+    let _tok; try{ _tok=await _au.getIdToken(true); }catch(e){ err.textContent='Session expired. Please log in again.';err.style.display='block';return; }
+    const _r=await fpApi('admin-set-password',{email:_loginEmail,idToken:_tok,id:editingMemberId,newPassword:_np});
+    if(!_r||!_r.ok){err.textContent=(_r&&_r.error)||'Could not reset the password. Please try again.';err.style.display='block';return;}
+    try{ logActivity('Reset Password','Member',(_mem&&_mem.name)||editingMemberId,'ID: '+editingMemberId+' | Password set by admin'); }catch(e){}
+    ['mf_pass','mf_pass2'].forEach(i=>{const e=document.getElementById(i); if(e) e.value='';});
+    toast('Member password updated (saved online).','success');
   }
   // For 13-17 require emergency contact (guardian verification at front desk)
   const ecNameVal=document.getElementById('mf_ecname').value.trim();

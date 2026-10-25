@@ -1,4 +1,4 @@
-const { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, isEmail } = require('../server/passwordReset');
+const { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail } = require('../server/passwordReset');
 
 // Browsers allowed to call this API. Add your own origins via ALLOWED_ORIGINS (comma-separated).
 const DEFAULT_ORIGINS = ['https://merjohnpagente.github.io'];
@@ -39,6 +39,7 @@ module.exports = async function handler(req, res) {
     else if (body.action === 'change-email') r = await changeEmail(body.idToken, String(body.kind || ''), String(body.id || ''), email);
     else if (body.action === 'admin-change-email') r = await adminChangeUserEmail(body.idToken, String(body.id || ''), email);
     else if (body.action === 'admin-issue-code') r = await adminIssueResetCode(body.idToken, String(body.id || ''));
+    else if (body.action === 'admin-set-password') r = await adminSetMemberPassword(body.idToken, String(body.id || ''), email, body.newPassword);
     else r = { status: 400, body: { ok: false, error: 'Unknown action.' } };
     return send(res, r.status, r.body);
   } catch (e) {

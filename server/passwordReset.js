@@ -295,4 +295,34 @@ async function adminIssueResetCode(idToken, memberId) {
   return { status: 200, body: { ok: true, code, email, username: prof.username || '', expiresInMin: ADMIN_CODE_TTL_MS / 60000 } };
 }
 
-module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, isEmail };
+// Admin sets a member's password directly (Edit Member -> Password). Verified by the admin's Firebase ID token.
+async function adminSetMemberPassword(idToken, memberId, email, newPassword) {
+  const ctx = init();
+  const bad = (msg, status) => ({ status: status || 400, body: { ok: false, error: msg } });
+  if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128) return bad('Password must be at least 8 characters.');
+  let decoded;
+  try { decoded = await ctx.auth.verifyIdToken(String(idToken || ''), true); } catch (e) { return bad('Session expired. Please log in again.', 401); }
+  const callerEmail = String(decoded.email || '').toLowerCase();
+  if (!callerEmail) return bad('Session expired. Please log in again.', 401);
+  const cq = await ctx.db.collection('users').where('authEmail', '==', callerEmail).limit(1).get();
+  const caller = cq.empty ? null : cq.docs[0].data();
+  if (!caller || caller.role !== 'admin' || caller.status === 'locked') return bad('Only an administrator can reset a member password.', 403);
+
+  const ref = ctx.db.collection('members').doc(String(memberId || ''));
+  const snap = await ref.get();
+  if (!snap.exists) return bad('Member not found.', 404);
+  const prof = snap.data();
+  const loginEmail = [prof.authEmail, prof.email].map((x) => String(x || '').trim().toLowerCase()).find((x) => x && isEmail(x));
+  if (!loginEmail) return bad('This member has no login account yet.', 409);
+  const target = await resolveTarget(loginEmail, ctx);
+  if (!target || !target.profile || target.profile.kind !== 'members' || target.profile.id !== ref.id) {
+    return bad('Could not find this member\'s login account.', 404);
+  }
+  await ctx.auth.updateUser(target.uid, { password: newPassword });
+  await ctx.auth.revokeRefreshTokens(target.uid);
+  try { await ref.update({ mustChangePassword: false }); } catch (e) { /* non-fatal */ }
+  try { await ctx.db.collection(COLLECTION).doc(sha256(loginEmail)).delete(); } catch (e) { /* no pending code */ }
+  return { status: 200, body: { ok: true } };
+}
+
+module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail };
