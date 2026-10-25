@@ -17,3 +17,11 @@ The 12 built-in starter exercises have no match in the WorkoutX 50. Their local 
 
 - All business collections are stored in Firestore. `localStorage` is only a cache/offline fallback; failed cloud writes are retried when the device reconnects or a user signs in.
 - The Activity Log is internal-only (admin and staff; trainers cannot see it). Member actions are excluded from every view and rejected by `docs/firestore.rules`. Publish the updated rules in Firebase Console after pulling changes.
+
+## Flutter mobile app
+
+The Android app lives in `mobile/` and is built by GitHub Actions (`.github/workflows/mobile-ci.yml`). See `mobile/README.md` for Firebase setup, local builds and release signing.
+
+- Every push that changes `mobile/` builds a debug APK artifact.
+- Tags matching `mobile-v*` build a signed release APK and publish a GitHub Release.
+- Before shipping, register the Android package `io.github.merjohnpagente.fitcoregms` in the Firebase console and add `mobile/android/app/google-services.json`.
