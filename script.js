@@ -3554,7 +3554,7 @@ function renderMembers(){
     <div class="table-controls">
       <input class="search-input" placeholder="Search by name or ID…" value="${esc(memberSearch)}" oninput="memberSearch=this.value;memberPage=1;refreshMemberTable()">
       <select class="filter-sel" onchange="memberStatusFilter=this.value;memberPage=1;refreshMemberTable()">
-        <option>All</option><option>Active</option><option>Expired</option><option>Expiring Soon</option><option value="pending_payment">Pending Payment</option>
+        <option>All</option><option>Active</option><option>Expired</option><option>Expiring Soon</option><option value="pending_payment">Pending Payment</option><option value="Flagged">Flagged</option>
       </select>
       <select class="filter-sel" onchange="memberPlanFilter=this.value;memberPage=1;refreshMemberTable()">
         <option value="All">All Plans</option>${planOpts}
@@ -3570,7 +3570,8 @@ function renderMembers(){
 function refreshMemberTable(){
   let data=Members.all().filter(m=>m.status!=='Archived');
   if(memberSearch){const s=memberSearch.toLowerCase();data=data.filter(m=>m.name.toLowerCase().includes(s)||m.id.toLowerCase().includes(s));}
-  if(memberStatusFilter!=='All')data=data.filter(m=>m.status===memberStatusFilter);
+  if(memberStatusFilter==='Flagged')data=data.filter(m=>bgCheckFlagged(m));
+  else if(memberStatusFilter!=='All')data=data.filter(m=>m.status===memberStatusFilter&&!bgCheckFlagged(m));
   if(memberPlanFilter!=='All')data=data.filter(m=>m.planId===memberPlanFilter);
   // Detect duplicate contacts (normalized) for flagging
   const contactCounts={};
@@ -3605,7 +3606,7 @@ function refreshMemberTable(){
       <td>${formatDate(m.startDate)}</td>
       <td>${formatDate(m.expiryDate)}</td>
       <td>${attHtml}</td>
-      <td><span class="badge ${badgeCls}">${esc(m.status)}</span></td>
+      <td>${bgCheckFlagged(m)?'<span class="badge badge-suspended">Flagged</span>':`<span class="badge ${badgeCls}">${esc(m.status)}</span>`}</td>
       <td><div>${createdLine}${editedLine}</div></td>
       <td><div class="td-actions">
         <button class="btn-icon" title="View" onclick="viewMember('${m.id}')">👁</button>
@@ -4037,7 +4038,7 @@ function viewMember(id){
       <div style="width:52px;height:52px;border-radius:12px;flex-shrink:0;overflow:hidden;background:linear-gradient(135deg,var(--orange),var(--orange-dark));display:flex;align-items:center;justify-content:center">${m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:`<span style="color:#0a0a0a;font-size:18px;font-weight:800">${esc(initials(m.name))}</span>`}</div>
       <div><div style="font-size:20px;font-weight:800;font-family:'Barlow Condensed',sans-serif">${esc(m.name)}</div>
       <div style="color:var(--gray-500);font-size:12px">${esc(m.id)}</div>
-      <span class="badge ${badgeCls}" style="margin-top:4px">${esc(m.status)}</span></div>
+      ${bgCheckFlagged(m)?'<span class="badge badge-suspended" style="margin-top:4px">Flagged</span>':`<span class="badge ${badgeCls}" style="margin-top:4px">${esc(m.status)}</span>`}</div>
     </div>
     <h4>Personal Information</h4>
         <div class="profile-grid">
