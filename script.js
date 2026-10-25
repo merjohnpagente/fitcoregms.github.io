@@ -3195,7 +3195,7 @@ function renderMyAssigned(){
     const upcoming=mySessions.filter(s=>s.status==='Scheduled'&&s.date>=today()).length;
     const totalAtt=Attendance.all().filter(a=>a.memberId===id).length;
     const sessLimit=plan&&plan.sessions!=='Unlimited'?Number(plan.sessions):null;
-    const left=sessLimit===null?'∞':Math.max(0,sessLimit-totalAtt);
+    const left=sessLimit===null?'∞':Math.max(0,sessLimit-memberSessionsUsed(id));
     const statusCls=m&&(m.status==='Active'||m.status==='Expiring Soon')?'badge-active':m&&m.status==='Expired'?'badge-inactive':'badge-pending';
     return`<tr>
       <td><div style="display:flex;align-items:center;gap:10px"><div class="user-avatar avatar-trainer" style="width:32px;height:32px;font-size:11px;flex-shrink:0;${m&&m.avatar?'padding:0;overflow:hidden':''}">${m&&m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m?m.name:'?'))}</div><div><div style="font-weight:600;color:var(--white)">${esc(m?m.name:'Unknown member')}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace">${esc(m?m.id:'—')}</div></div></div></td>
@@ -3289,7 +3289,7 @@ function buildMemberDashboard(){
         <a class="btn-secondary btn-sm" href="sms:+639150435696">💬 Message Front Desk</a>
       </div>
     </div>`:'';
-  const sessLeft=locked?'—':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-totalAtt)):'—');
+  const sessLeft=locked?'—':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-memberSessionsUsed(mem.id))):'—');
   const workoutCta=locked?'':`<div class="mb-grid" style="margin-bottom:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
     <button class="btn-secondary btn-sm" onclick="navigate('myWorkoutPlan')" style="display:flex;align-items:center;gap:8px;padding:14px 16px;background:rgba(127,255,136,.06);border:1px solid rgba(127,255,136,.18);border-radius:12px;color:var(--green);font-weight:700;font-size:13px;cursor:pointer;transition:all .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5l11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/></svg>My Workout Plan</button>
     <button class="btn-secondary btn-sm" onclick="navigate('myWorkouts')" style="display:flex;align-items:center;gap:8px;padding:14px 16px;background:rgba(127,255,136,.06);border:1px solid rgba(127,255,136,.18);border-radius:12px;color:var(--green);font-weight:700;font-size:13px;cursor:pointer;transition:all .2s"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Log Workout</button>
@@ -4134,6 +4134,18 @@ async function adminResetMemberPassword(memberId){
 // Shared by the member, staff/admin and trainer Edit Profile modals.
 // The server verifies the user's Firebase ID token and updates the Firebase Auth
 // login email + the Firestore profile, so the change is saved online.
+// Trainer sessions a member has used in the current plan period.
+// A booking counts as soon as it is requested; Declined / Cancelled give it back.
+function memberSessionsUsed(memberId){
+  const m=Members.one(memberId);
+  const since=(m&&(m.planStart||m.startDate))||'';
+  return Sessions.all().filter(function(x){
+    if(x.memberId!==memberId)return false;
+    if(x.status==='Declined'||x.status==='Cancelled'||x.status==='Rejected')return false;
+    const d=x.createdAt||x.date||'';
+    return !since||!d||d>=since;
+  }).length;
+}
 function realEmailOf(u){
   if(!u)return '';
   const a=String(u.email||'').trim();
