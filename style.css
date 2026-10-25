@@ -1854,3 +1854,17 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 
 .renew-mini-stat{display:inline-flex;align-items:center;gap:8px;color:var(--white)}
 .renew-mini-stat svg{color:var(--green)}
+
+/* ===== Member Renewals / Recently Renewed: larger header, chips and stats ===== */
+#panelNotifications .section-title,#panelRenewed .section-title{font-size:26px;letter-spacing:2.5px}
+#panelNotifications .section-title .badge,#panelRenewed .section-title .badge{font-size:14px;padding:4px 12px}
+#panelNotifications .section-title+div,#panelRenewed .section-title+div{font-size:15px;color:var(--cyan-soft)}
+#panelNotifications .filter-chip,#panelRenewed .filter-chip{padding:11px 22px;font-size:15px}
+#panelNotifications .renew-mini-stat,#panelRenewed .renew-mini-stat{font-size:15px;padding:11px 18px;border-radius:12px}
+#panelNotifications .renew-mini-stat svg,#panelRenewed .renew-mini-stat svg{width:18px;height:18px}
+#panelNotifications .btn-sm,#panelRenewed .btn-sm{padding:12px 20px;font-size:13px}
+@media(max-width:520px){
+  #panelNotifications .section-title,#panelRenewed .section-title{font-size:21px}
+  #panelNotifications .filter-chip,#panelRenewed .filter-chip{padding:9px 16px;font-size:14px}
+  #panelNotifications .renew-mini-stat,#panelRenewed .renew-mini-stat{font-size:14px;padding:9px 14px}
+}

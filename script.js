@@ -6003,7 +6003,7 @@ function renderNotifications(){
     ${tab('Upcoming','upcoming',buckets.upcoming.length)}
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-    <div class="renew-mini-stat">🔄 ${monthPays.length} renewals this month</div>
+    <div class="renew-mini-stat">🔄 ${monthPays.filter(p=>p.source==='renewal').length} renewals this month</div>
     <div class="renew-mini-stat">💰 ₱${monthRev.toLocaleString()} collected</div>
   </div>
   ${visible.length?`<div class="notif-list">${items}</div>`:`<div class="table-card"><div class="empty-state"><div class="empty-icon">✅</div><p>${_notifFilter==='All'?'All members have been attended to.':'No members in this category right now.'}</p></div></div>`}`;
