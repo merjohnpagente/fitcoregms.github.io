@@ -7277,6 +7277,16 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
   // payment so the queue cannot say "confirmed" before Firestore has them.
   const activation={status:'Active',planId,planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token};
   const openNotifs=Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open');
+  // First activation of a newly registered member = 1 visit right away
+  // (no prior payment and no attendance on file). Saved in the same batch.
+  let firstVisit=null;
+  const isFirstActivation=(opts.source||'activation')==='activation'
+    &&!Payments.all().some(p=>p.memberId===memberId)
+    &&!Attendance.all().some(a=>a.memberId===memberId);
+  if(isFirstActivation){
+    const vt=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    firstVisit={id:uid(),memberId,date:start,time:vt,checkIn:vt,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'};
+  }
   if(window.GMSFB&&GMSFB.enabled){
     if(!GMSFB.auth||!GMSFB.auth.currentUser){
       throw new Error('Firebase session expired — please log out and log in again before confirming payments.');
@@ -7289,6 +7299,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
       {col:'payments',id:newId,data:payment,merge:false}
     ];
     openNotifs.forEach(n=>ops.push({col:'notifications',id:n.id,data:{status:'resolved',resolvedAt:new Date().toISOString()},merge:true}));
+    if(firstVisit)ops.push({col:'attendance',id:firstVisit.id,data:firstVisit,merge:false});
     let res;
     try{ res=await GMSFB.commitDocs(ops); }
     catch(e){ res={ok:false,error:e&&e.message}; }
@@ -7306,6 +7317,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
     payments.push(payment);
     Payments.save(payments);
     Members.update(memberId,activation);
+    if(firstVisit)Attendance.add(firstVisit);
   }
   resolveNotifsForMember(memberId);
   if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.applyLocalPatch==='function'){

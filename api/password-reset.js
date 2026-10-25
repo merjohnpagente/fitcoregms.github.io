@@ -40,6 +40,7 @@ module.exports = async function handler(req, res) {
     return send(res, r.status, r.body);
   } catch (e) {
     console.error('[password-reset]', body.action, e && e.message);
+    if (e && /Missing server env var/.test(e.message || '')) return send(res, 500, { ok: false, error: 'Email service is not set up on the server yet (missing ' + e.message.split(': ').pop() + ' in Vercel Environment Variables).' });
     return send(res, 500, { ok: false, error: 'Server error. Please try again in a moment.' });
   }
 };

@@ -105,7 +105,14 @@ async function sendCode(email) {
     lastSentAt: now, uid: target.uid, authEmail: target.authEmail,
     profile: target.profile || null, resetHash: null, resetExp: 0
   });
-  await sendEmailJs(email, target.name, target.label, code);
+  try {
+    await sendEmailJs(email, target.name, target.label, code);
+  } catch (e) {
+    // Don't lock the user out of retrying (60s cooldown) when the email never left.
+    try { await ref.delete(); } catch (e2) { /* ignore */ }
+    console.error('[password-reset] email send failed:', e && e.message);
+    return { status: 502, body: { ok: false, error: 'Could not send the email code right now (email service error). Please try again later.' } };
+  }
   return { status: 200, body: { ok: true, cooldown: RESEND_COOLDOWN_MS / 1000 } };
 }
 
