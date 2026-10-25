@@ -1,0 +1,70 @@
+name: Mobile debug release
+
+on:
+  push:
+    tags:
+      - "debug-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-debug-apk:
+    name: Build and publish debug APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.8"
+          cache: true
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install packages
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fitcore-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish debug pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: FitCore GMS ${{ github.ref_name }} (debug)
+          files: mobile/build/app/outputs/flutter-apk/app-debug.apk
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            Unsigned debug build of the FitCore GMS Flutter app.
+
+            Install `app-debug.apk` on an Android device. Firebase login still needs
+            `android/app/google-services.json` from the FitCore Firebase project.
