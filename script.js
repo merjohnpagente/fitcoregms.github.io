@@ -3606,7 +3606,7 @@ function refreshMemberTable(){
       <td>${formatDate(m.startDate)}</td>
       <td>${formatDate(m.expiryDate)}</td>
       <td>${attHtml}</td>
-      <td>${bgCheckFlagged(m)?'<span class="badge badge-suspended">Flagged</span>':`<span class="badge ${badgeCls}">${esc(m.status)}</span>`}</td>
+      <td>${bgCheckFlagged(m)?'<span class="badge badge-flagged">Flagged</span>':`<span class="badge ${badgeCls}">${esc(m.status)}</span>`}</td>
       <td><div>${createdLine}${editedLine}</div></td>
       <td><div class="td-actions">
         <button class="btn-icon" title="View" onclick="viewMember('${m.id}')">👁</button>
@@ -4031,14 +4031,14 @@ function viewMember(id){
   const attendance=Attendance.all().filter(a=>a.memberId===id).slice().reverse();
   const memberEmail=String(m.email||'').trim()||(m.authEmail&&!String(m.authEmail).endsWith('@fitcoregym.local')?m.authEmail:'');
   const badgeCls={Active:'badge-active',Expired:'badge-expired',Suspended:'badge-suspended','Expiring Soon':'badge-expiring'}[m.status]||'';
-  const bgBadgeCls={Cleared:'badge-active',Flagged:'badge-suspended',Pending:'badge-pending'}[m.bgCheckStatus||'Pending']||'badge-pending';
+  const bgBadgeCls={Cleared:'badge-active',Flagged:'badge-flagged',Pending:'badge-pending'}[m.bgCheckStatus||'Pending']||'badge-pending';
   document.getElementById('profileModalBody').innerHTML=`
   <div class="profile-section">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
       <div style="width:52px;height:52px;border-radius:12px;flex-shrink:0;overflow:hidden;background:linear-gradient(135deg,var(--orange),var(--orange-dark));display:flex;align-items:center;justify-content:center">${m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:`<span style="color:#0a0a0a;font-size:18px;font-weight:800">${esc(initials(m.name))}</span>`}</div>
       <div><div style="font-size:20px;font-weight:800;font-family:'Barlow Condensed',sans-serif">${esc(m.name)}</div>
       <div style="color:var(--gray-500);font-size:12px">${esc(m.id)}</div>
-      ${bgCheckFlagged(m)?'<span class="badge badge-suspended" style="margin-top:4px">Flagged</span>':`<span class="badge ${badgeCls}" style="margin-top:4px">${esc(m.status)}</span>`}</div>
+      ${bgCheckFlagged(m)?'<span class="badge badge-flagged" style="margin-top:4px">Flagged</span>':`<span class="badge ${badgeCls}" style="margin-top:4px">${esc(m.status)}</span>`}</div>
     </div>
     <h4>Personal Information</h4>
         <div class="profile-grid">
@@ -7275,7 +7275,7 @@ function renderQueue(){
       <div class="queue-main">
         <div class="queue-avatar" style="${m.avatar?'padding:0;overflow:hidden':''}">${m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m.name))}</div>
         <div class="queue-info">
-          <div class="queue-name">${esc(m.name)}${bgCheckFlagged(m)?'<span class="badge badge-suspended" style="margin-left:6px">BG Flagged</span>':''}${urgent?'<span class="badge badge-expired" style="margin-left:6px">auto-archive soon</span>':''}${m.createdBy==='Self'?'<span class="badge badge-pending" style="margin-left:6px">Self-Registered</span>':''}</div>
+          <div class="queue-name">${esc(m.name)}${bgCheckFlagged(m)?'<span class="badge badge-flagged" style="margin-left:6px">BG Flagged</span>':''}${urgent?'<span class="badge badge-expired" style="margin-left:6px">auto-archive soon</span>':''}${m.createdBy==='Self'?'<span class="badge badge-pending" style="margin-left:6px">Self-Registered</span>':''}</div>
           <div class="queue-meta"><span class="queue-meta-id">${esc(m.id)}</span></div>
           <div class="queue-meta"><span class="queue-ico">${iconSvg('mail',12)}</span><span>${esc(m.email||'no email')}</span></div>
           <div class="queue-meta"><span class="queue-ico">${iconSvg('phone',12)}</span><span>${esc(m.contact||'—')}</span></div>

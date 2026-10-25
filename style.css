@@ -380,6 +380,7 @@ tbody td{padding:11px 14px;color:var(--gray-300);font-size:13px;vertical-align:m
 .badge-expired{background:rgba(239,68,68,.14);color:var(--red)}
 .badge-urgent{background:rgba(127,250,136,.18);color:var(--orange)}
 .badge-suspended{background:rgba(109,124,160,.2);color:var(--gray-500)}
+.badge-flagged{background:rgba(239,68,68,.18);color:var(--red);border:1px solid rgba(239,68,68,.45)}
 .badge-expiring{background:rgba(251,191,36,.14);color:var(--gold)}
 .badge-admin{background:rgba(127,250,136,.16);color:var(--orange)}
 .badge-staff{background:rgba(127,250,136,.16);color:#d7ddd8}
