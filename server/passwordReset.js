@@ -19,10 +19,29 @@ function env(name) {
   return v;
 }
 
+// Accepts the service account as raw JSON, JSON wrapped in quotes, or base64 —
+// Vercel env vars are often pasted with stray quotes/newlines, which made
+// JSON.parse throw and surfaced only as a generic "Server error".
+function parseServiceAccount(raw) {
+  let t = String(raw).trim();
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) t = t.slice(1, -1).trim();
+  if (t && t[0] !== '{') { try { t = Buffer.from(t, 'base64').toString('utf8').trim(); } catch (e) { /* fall through */ } }
+  let sa;
+  try { sa = JSON.parse(t); } catch (e) {
+    const err = new Error('FIREBASE_SERVICE_ACCOUNT in Vercel is not valid JSON. Paste the whole service-account .json file content (starts with { and ends with }).');
+    err.configHint = true; throw err;
+  }
+  if (!sa || !sa.private_key || !sa.client_email || !sa.project_id) {
+    const err = new Error('FIREBASE_SERVICE_ACCOUNT is missing project_id / client_email / private_key. Generate a new key in Firebase Console -> Project settings -> Service accounts.');
+    err.configHint = true; throw err;
+  }
+  sa.private_key = String(sa.private_key).replace(/\\n/g, '\n');
+  return sa;
+}
+
 function init() {
   if (!admin.apps.length) {
-    const sa = JSON.parse(env('FIREBASE_SERVICE_ACCOUNT'));
-    if (sa.private_key) sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+    const sa = parseServiceAccount(env('FIREBASE_SERVICE_ACCOUNT'));
     admin.initializeApp({ credential: admin.credential.cert(sa) });
   }
   return { auth: admin.auth(), db: admin.firestore() };

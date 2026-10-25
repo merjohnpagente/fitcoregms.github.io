@@ -45,6 +45,12 @@ module.exports = async function handler(req, res) {
   } catch (e) {
     console.error('[password-reset]', body.action, e && e.message);
     if (e && /Missing server env var/.test(e.message || '')) return send(res, 500, { ok: false, error: 'Email service is not set up on the server yet (missing ' + e.message.split(': ').pop() + ' in Vercel Environment Variables).' });
+    if (e && e.configHint) return send(res, 500, { ok: false, error: e.message });
+    // Firestore / Firebase Admin problems that are server setup issues, not user errors.
+    const code = e && (e.code || e.errorInfo && e.errorInfo.code);
+    if (code === 7 || code === 'permission-denied' || code === 'PERMISSION_DENIED') return send(res, 500, { ok: false, error: 'Server setup error: the Firebase service account has no permission for Firestore (enable Cloud Firestore API / give it the Firebase Admin role).' });
+    if (code === 5 || code === 'NOT_FOUND') return send(res, 500, { ok: false, error: 'Server setup error: Firestore database was not found for the project in FIREBASE_SERVICE_ACCOUNT. Make sure the service account belongs to the same Firebase project as the app.' });
+    if (e && /DECODER routines|PEM|private key|invalid_grant|Credential implementation/i.test(e.message || '')) return send(res, 500, { ok: false, error: 'Server setup error: FIREBASE_SERVICE_ACCOUNT private key is invalid. Generate a new key in Firebase Console and paste the full JSON in Vercel.' });
     return send(res, 500, { ok: false, error: 'Server error. Please try again in a moment.' });
   }
 };
