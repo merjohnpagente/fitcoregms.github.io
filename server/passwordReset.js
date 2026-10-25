@@ -153,4 +153,51 @@ async function resetPassword(email, token, newPassword) {
   return { status: 200, body: { ok: true } };
 }
 
-module.exports = { sendCode, verifyCode, resetPassword, isEmail };
+// Change the logged-in user's own email. Verified by their Firebase ID token.
+// Members/staff/trainers: the Firebase Auth login email AND the profile are changed.
+// Built-in admin: only the profile email (used for Forgot Password) is changed, so
+// the fixed admin login identity keeps working.
+async function changeEmail(idToken, kind, id, newEmail) {
+  const ctx = init();
+  const bad = (msg, status) => ({ status: status || 400, body: { ok: false, error: msg } });
+  if (!isEmail(newEmail) || newEmail.endsWith('@fitcoregym.local')) return bad('Please enter a valid, real email address.');
+  if (kind !== 'members' && kind !== 'users') return bad('Invalid request.');
+  let decoded;
+  try { decoded = await ctx.auth.verifyIdToken(String(idToken || ''), true); } catch (e) { return bad('Session expired. Please log in again.', 401); }
+  const ref = ctx.db.collection(kind).doc(String(id || ''));
+  const snap = await ref.get();
+  if (!snap.exists) return bad('Profile not found.', 404);
+  const prof = snap.data();
+  const tokenEmail = String(decoded.email || '').toLowerCase();
+  const own = [prof.authEmail, prof.email].filter(Boolean).map((x) => String(x).toLowerCase());
+  if (!tokenEmail || !own.includes(tokenEmail)) return bad('You can only change your own email.', 403);
+  const isAdmin = kind === 'users' && prof.role === 'admin';
+  const oldAuthEmail = tokenEmail;
+  // Not used by anyone else (profiles).
+  for (const col of ['members', 'users']) {
+    for (const field of ['email', 'authEmail']) {
+      const q = await ctx.db.collection(col).where(field, '==', newEmail).limit(3).get();
+      if (q.docs.some((d) => !(col === kind && d.id === ref.id))) return bad('That email is already used by another account.', 409);
+    }
+  }
+  if (isAdmin) {
+    await ref.update({ email: newEmail });
+    return { status: 200, body: { ok: true, authChanged: false } };
+  }
+  try {
+    await ctx.auth.updateUser(decoded.uid, { email: newEmail, emailVerified: false });
+  } catch (e) {
+    if (e && e.code === 'auth/email-already-exists') return bad('That email is already used by another account.', 409);
+    throw e;
+  }
+  try {
+    await ref.update({ email: newEmail, authEmail: newEmail });
+  } catch (e) {
+    try { await ctx.auth.updateUser(decoded.uid, { email: oldAuthEmail }); } catch (e2) { /* best effort */ }
+    throw e;
+  }
+  try { await ctx.auth.revokeRefreshTokens(decoded.uid); } catch (e) { /* non-fatal */ }
+  return { status: 200, body: { ok: true, authChanged: true } };
+}
+
+module.exports = { sendCode, verifyCode, resetPassword, changeEmail, isEmail };

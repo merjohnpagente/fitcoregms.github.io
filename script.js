@@ -4130,6 +4130,70 @@ async function adminResetMemberPassword(memberId){
     toast('Could not send the reset email: '+((e&&e.message)||'unknown error'),'error');
   }
 }
+// ============================= EDIT PROFILE — CHANGE EMAIL =============================
+// Shared by the member, staff/admin and trainer Edit Profile modals.
+// The server verifies the user's Firebase ID token and updates the Firebase Auth
+// login email + the Firestore profile, so the change is saved online.
+function realEmailOf(u){
+  if(!u)return '';
+  const a=String(u.email||'').trim();
+  if(a&&!a.toLowerCase().endsWith('@fitcoregym.local'))return a;
+  const b=String(u.authEmail||'').trim();
+  return (b&&!b.toLowerCase().endsWith('@fitcoregym.local'))?b:'';
+}
+function setupEmailField(prefix,current){
+  const inp=document.getElementById(prefix+'_email');
+  if(!inp)return;
+  const wrap=document.getElementById(prefix+'_curpass_wrap');
+  const pw=document.getElementById(prefix+'_curpass');
+  inp.value=current||'';
+  inp.dataset.orig=(current||'').toLowerCase();
+  if(pw)pw.value='';
+  if(wrap)wrap.style.display='none';
+  inp.oninput=function(){
+    if(wrap)wrap.style.display=(inp.value.trim().toLowerCase()!==inp.dataset.orig)?'block':'none';
+  };
+}
+async function applyEmailChange(prefix){
+  const inp=document.getElementById(prefix+'_email');
+  if(!inp)return {ok:true,changed:false};
+  const newEmail=inp.value.trim().toLowerCase();
+  const oldEmail=String(inp.dataset.orig||'').toLowerCase();
+  if(newEmail===oldEmail)return {ok:true,changed:false};
+  if(!newEmail)return {ok:false,error:'Email cannot be empty.'};
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail))return {ok:false,error:'Please enter a valid email address.'};
+  if(newEmail.endsWith('@fitcoregym.local'))return {ok:false,error:'Please use a real email address (e.g. name@gmail.com).'};
+  const au=(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)?GMSFB.auth.currentUser:null;
+  if(!au||!au.email)return {ok:false,error:'Changing your email needs an internet connection and an active login. Please log in again.'};
+  const pwd=(document.getElementById(prefix+'_curpass')||{}).value||'';
+  if(!pwd)return {ok:false,error:'Enter your current password to change your email.'};
+  try{
+    const cred=firebase.auth.EmailAuthProvider.credential(au.email,pwd);
+    await au.reauthenticateWithCredential(cred);
+  }catch(e){
+    return {ok:false,error:'Current password is incorrect.'};
+  }
+  let idToken;
+  try{ idToken=await au.getIdToken(true); }catch(e){ return {ok:false,error:'Session expired. Please log in again.'}; }
+  const isMember=currentUser.role==='member';
+  const kind=isMember?'members':'users';
+  const id=isMember?(currentUser.memberId||currentUser.id):currentUser.id;
+  const r=await fpApi('change-email',{email:newEmail,idToken:idToken,kind:kind,id:id});
+  if(!r||!r.ok)return {ok:false,error:(r&&r.error)||'Could not change email. Please try again.'};
+  try{
+    const patch=r.authChanged?{email:newEmail,authEmail:newEmail}:{email:newEmail};
+    (isMember?Members:Users).update(id,patch);
+  }catch(e){}
+  currentUser={...currentUser,email:newEmail};
+  try{ setSession(currentUser); }catch(e){}
+  inp.dataset.orig=newEmail;
+  return {ok:true,changed:true,authChanged:!!r.authChanged,email:newEmail};
+}
+function finishEmailChange(ec){
+  if(ec&&ec.changed&&ec.authChanged){
+    setTimeout(function(){ toast('Email changed to '+ec.email+'. Please log in again with your new email.','success'); doLogout(); },900);
+  }
+}
 function openMemberProfileEdit(){
   const m=Members.one(currentUser.memberId||currentUser.id);
   if(!m){toast('Member record not found.','error');return;}
@@ -4139,6 +4203,7 @@ function openMemberProfileEdit(){
   document.getElementById('mep_name').value=m.name||currentUser.name||'';
   document.getElementById('mep_contact').value=m.contact||'';
   document.getElementById('mep_address').value=m.address||'';
+  setupEmailField('mep',realEmailOf(m));
   const err=document.getElementById('mepError');if(err){err.textContent='';err.style.display='none';}
   openModal('memberProfileEditModal');
 }
@@ -4162,6 +4227,8 @@ function saveMemberProfileEdit(){
     const cleanName=sanitizeText(name);
     const patch={avatar:a||'',name:cleanName,contact:contact,address:sanitizeText(address)};
     try{
+      const ec=await applyEmailChange('mep');
+      if(!ec.ok){showErr(ec.error);return;}
       if(window.GMSFB&&GMSFB.enabled){
         if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
         const res=await GMSFB.commitDocs([{col:'members',id:m.id,data:patch,merge:true}]);
@@ -4174,6 +4241,7 @@ function saveMemberProfileEdit(){
       closeModal('memberProfileEditModal');
       refreshMemberHome();
       toast('Profile updated and saved to Firebase.','success');
+      finishEmailChange(ec);
     }catch(e){
       showErr((e&&e.message)||'Could not save your profile. Please try again.');
       console.error('[saveMemberProfileEdit]',e);
@@ -4718,6 +4786,7 @@ function openTrainerEditModal(){
   document.getElementById('tep_from').value=u.availableFrom||'';
   document.getElementById('tep_to').value=u.availableTo||'';
   document.getElementById('tepError').style.display='none';
+  setupEmailField('tep',realEmailOf(u));
   openModal('trainerEditProfileModal');
 }
 async function saveTrainerProfile(){
@@ -4733,7 +4802,10 @@ async function saveTrainerProfile(){
   errEl.style.display='none';
   if(!fullname){errEl.textContent='Full name is required.';errEl.style.display='block';return;}
   const patch={name:fullname,coachName:coachname||fullname,bio:bio,specializations:specs,availableDays:days,availableFrom:from,availableTo:to,avatar:avatar||''};
+  let ecT={ok:true,changed:false};
   try{
+    ecT=await applyEmailChange('tep');
+    if(!ecT.ok){errEl.textContent=ecT.error;errEl.style.display='block';return;}
     if(window.GMSFB&&GMSFB.enabled){
       if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
       const res=await GMSFB.commitDocs([{col:'users',id:currentUser.id,data:patch,merge:true}]);
@@ -4760,6 +4832,7 @@ async function saveTrainerProfile(){
   closeModal('trainerEditProfileModal');
   toast('Profile updated successfully!','success');
   renderSchedule();
+  finishEmailChange(ecT);
 }
 function updateSepAvatar(name){
   const av=document.getElementById('sep_avatar_initials');
@@ -4823,6 +4896,7 @@ function openStaffEditModal(){
   const badge=document.getElementById('sep_role_badge');
   if(badge){badge.textContent=u.role==='admin'?'Admin':'Staff';badge.style.background=u.role==='admin'?'rgba(179,188,181,.22)':'rgba(127,250,136,.18)';badge.style.color=u.role==='admin'?'var(--orange)':'#d7ddd8';}
   document.getElementById('sepError').style.display='none';
+  setupEmailField('sep',realEmailOf(u));
   openModal('staffEditProfileModal');
 }
 async function saveStaffProfile(){
@@ -4844,6 +4918,8 @@ async function saveStaffProfile(){
     if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';}
     return;
   }
+  const ecS=await applyEmailChange('sep');
+  if(!ecS.ok){errEl.textContent=ecS.error;errEl.style.display='block';if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';}return;}
   const users=Users.all();
   const idx=users.findIndex(x=>x.id===currentUser.id);
   if(idx<0){errEl.textContent='User not found.';errEl.style.display='block'; if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';} return;}
@@ -4880,6 +4956,7 @@ async function saveStaffProfile(){
   toast('Profile updated successfully!','success');
   if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='✓ Save Changes';}
   buildSidebar(); renderTopbar();
+  finishEmailChange(ecS);
 }
 function getSchedSessions(){
   let s=Sessions.all();
