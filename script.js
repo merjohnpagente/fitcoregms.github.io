@@ -4135,14 +4135,13 @@ async function adminResetMemberPassword(memberId){
 // The server verifies the user's Firebase ID token and updates the Firebase Auth
 // login email + the Firestore profile, so the change is saved online.
 // Trainer sessions a member has used in the current plan period.
-// A booking counts as soon as it is requested; Declined / Cancelled give it back.
+// A session is only deducted once the trainer marks it Completed (Done).
 function memberSessionsUsed(memberId){
   const m=Members.one(memberId);
   const since=(m&&(m.planStart||m.startDate))||'';
   return Sessions.all().filter(function(x){
-    if(x.memberId!==memberId)return false;
-    if(x.status==='Declined'||x.status==='Cancelled'||x.status==='Rejected')return false;
-    const d=x.createdAt||x.date||'';
+    if(x.memberId!==memberId||x.status!=='Completed')return false;
+    const d=x.date||x.createdAt||'';
     return !since||!d||d>=since;
   }).length;
 }
