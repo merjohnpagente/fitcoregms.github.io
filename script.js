@@ -6861,12 +6861,24 @@ function bookSession(){
   if(trainerDay.length>=8){ if(err){err.textContent='Trainer is fully booked on that date — please choose another day.';err.style.display='block';} return; }
   if(sameDay.length>=3){ if(err){err.textContent='You can have at most 3 sessions per day.';err.style.display='block';} return; }
   if(!isTrainerAvailable(trainer,type,date,start,end)){ if(err){err.textContent='That trainer is no longer available for the selected slot. Please choose another available trainer or time.';err.style.display='block';} return; }
-  const rlMid=String(mid);
-  if(!rateLimitOk('gms_rl_book_gap_'+rlMid,1,10000)||!rateLimitOk('gms_rl_book_'+rlMid,5,10*60*1000)){
-    if(err){err.textContent='Too many booking requests — please wait a few minutes.';err.style.display='block';} return;
-  }
-  Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
-  toast('Session request sent — awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
+  const trainerLabel=trainer.coachName||trainer.name;
+  const detail=`<div style="margin-top:12px;background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(type)}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Trainer:</span> <strong style="color:var(--white)">${esc(trainerLabel)}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Date:</span> <strong style="color:var(--white)">${formatDate(date)}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Time:</span> <strong style="color:var(--white)">${esc(start)} – ${esc(end)}</strong></div>
+  </div>`;
+  openConfirm('Confirm Session Booking',
+    `Send this session request to your trainer?${detail}<div style="font-size:11px;color:var(--gray-500);margin-top:10px">Your session count is only deducted once the trainer marks the session as done.</div>`,
+    function(){
+    const rlMid=String(mid);
+    if(!rateLimitOk('gms_rl_book_gap_'+rlMid,1,10000)||!rateLimitOk('gms_rl_book_'+rlMid,5,10*60*1000)){
+      if(err){err.textContent='Too many booking requests — please wait a few minutes.';err.style.display='block';} return;
+    }
+    Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
+    toast('Session request sent — awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
+    },
+    'Yes, Request Session','btn-primary');
 }
 function rescheduleSession(id){
   const s=Sessions.one(id); if(!s) return;
