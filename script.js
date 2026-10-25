@@ -4974,7 +4974,7 @@ function openTrainerEditModal(){
   setupEmailField('tep',realEmailOf(u));
   openModal('trainerEditProfileModal');
 }
-async function saveTrainerProfile(){
+async function _saveTrainerProfileImpl(){
   const fullname=document.getElementById('tep_fullname').value.trim();
   const coachname=document.getElementById('tep_coachname').value.trim();
   const avatar=document.getElementById('tep_avatar').value;
@@ -5084,7 +5084,7 @@ function openStaffEditModal(){
   setupEmailField('sep',realEmailOf(u));
   openModal('staffEditProfileModal');
 }
-async function saveStaffProfile(){
+async function _saveStaffProfileImpl(){
   const name=document.getElementById('sep_name').value.trim();
   const contact=document.getElementById('sep_contact').value.trim();
   let avatar=document.getElementById('sep_avatar').value;
@@ -9000,7 +9000,32 @@ function openUserModal(id=null){
   }
   openModal('userModal');
 }
-async function saveUser(){
+// ---------- Save-button guard: loading spinner + blocks double submits ----------
+const _saveInflight={};
+function setBtnLoading(btn,on,text){
+  if(!btn)return;
+  if(on){
+    if(btn.dataset.label===undefined)btn.dataset.label=btn.innerHTML;
+    btn.disabled=true;btn.classList.add('is-loading');btn.setAttribute('aria-busy','true');
+    btn.innerHTML='<span class="btn-spin" aria-hidden="true"></span><span>'+(text||'Saving…')+'</span>';
+  }else{
+    btn.disabled=false;btn.classList.remove('is-loading');btn.removeAttribute('aria-busy');
+    if(btn.dataset.label!==undefined){btn.innerHTML=btn.dataset.label;delete btn.dataset.label;}
+  }
+}
+async function runGuardedSave(key,selector,fn){
+  if(_saveInflight[key])return; // already saving: ignore extra clicks / Enter presses
+  _saveInflight[key]=true;
+  const btn=document.querySelector(selector);
+  setBtnLoading(btn,true);
+  try{return await fn();}
+  finally{_saveInflight[key]=false;setBtnLoading(btn,false);}
+}
+function saveUser(){return runGuardedSave('saveUser','[onclick="saveUser()"]',_saveUserImpl);}
+function saveStaffProfile(){return runGuardedSave('saveStaffProfile','[onclick="saveStaffProfile()"]',_saveStaffProfileImpl);}
+function saveTrainerProfile(){return runGuardedSave('saveTrainerProfile','[onclick="saveTrainerProfile()"]',_saveTrainerProfileImpl);}
+
+async function _saveUserImpl(){
   const name=document.getElementById('uf_name').value.trim();
   const contact=document.getElementById('uf_contact').value.trim();
   const username=document.getElementById('uf_user').value.trim();
