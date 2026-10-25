@@ -4696,7 +4696,27 @@ function viewReceipt(id){
 let schedView='month';let schedTrainerFilter='all';let schedMemberSearch='';
 // Month calendar state
 let calYear=new Date().getFullYear();let calMonth=new Date().getMonth();
+// Repair: a session marked Completed before its scheduled date/time goes back to Scheduled.
+function repairEarlyCompletedSessions(){
+  try{
+    if(!currentUser||!['admin','staff','trainer'].includes(currentUser.role))return;
+    const all=Sessions.all();
+    let changed=false;
+    const fixed=all.map(function(x){
+      if(x.status==='Completed'&&sessionNotStartedYet(x)){
+        changed=true;
+        return {...x,status:'Scheduled',completedAt:'',completedBy:'',statusLog:[...(x.statusLog||[]),{from:'Completed',to:'Scheduled',by:'System (completed before schedule)',byRole:'system',at:new Date().toISOString()}]};
+      }
+      return x;
+    });
+    if(changed){
+      Sessions.save(fixed);
+      if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){ try{GMSFB.pushCollection(KEY.sessions,fixed);}catch(e){} }
+    }
+  }catch(e){ console.warn('[repairEarlyCompletedSessions]',e); }
+}
 function renderSchedule(){
+  repairEarlyCompletedSessions();
   const el=document.getElementById('panelSchedule');
   const users=Users.all().filter(u=>u.role==='trainer');
   const canCreate=currentUser.role==='staff'||currentUser.role==='admin';
@@ -5719,6 +5739,7 @@ function toggleSessionStatus(id){
   const s=sessions[idx];
   const cycle={Scheduled:'Completed',Completed:'Cancelled',Cancelled:'Scheduled'};
   const newStatus=cycle[s.status]||'Scheduled';
+  if(newStatus==='Completed'&&sessionNotStartedYet(s)){toast('This session has not started yet — it can only be completed on '+formatDate(s.date)+' at '+s.start+'.','error');return;}
   if(newStatus==='Scheduled'){
     const live=sessions.filter(x=>x.id!==id&&x.date===s.date&&(x.status==='Scheduled'||x.status==='Accepted')&&!(s.end<=x.start||s.start>=x.end));
     if(live.some(x=>x.trainerId===s.trainerId)){toast('Cannot set to Scheduled — trainer already booked at that time.','error');return;}
