@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-import '../data/models/app_user.dart';
-import '../data/services/auth_service.dart';
+import '../models/app_user.dart';
+import 'auth_service.dart';
 
 enum AuthPhase { initializing, signedOut, signedIn, pending }
 

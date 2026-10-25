@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/services/auth_controller.dart';
-import '../features/auth/login_page.dart';
-import '../features/auth/pending_page.dart';
-import '../features/shell/app_shell.dart';
-import '../widgets/fitcore_ui.dart';
+import '../../data/services/auth_controller.dart';
+import '../shell/app_shell.dart';
+import '../../widgets/fitcore_ui.dart';
+import 'login_page.dart';
+import 'pending_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
