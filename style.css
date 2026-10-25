@@ -1821,3 +1821,18 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 #panelDashboard{max-width:1120px;margin-left:auto;margin-right:auto}
 #panelDashboard .mb-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
 @media(max-width:1100px){#panelDashboard .mb-grid{grid-template-columns:1fr}}
+
+/* ===== Page action group (Members: Add / Renumber / Delete all) ===== */
+.pa-group{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.pa-btn{height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;font-size:13px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.pa-btn.btn-inline{padding:0 24px;min-width:0}
+.pa-btn.pa-ghost{padding:0 18px;color:var(--white);background:rgba(127,250,136,.08);border:1.5px solid rgba(127,250,136,.45)}
+.pa-btn.pa-ghost:hover{background:rgba(127,250,136,.18);border-color:var(--green)}
+.pa-btn.pa-icon{width:46px;padding:0}
+.pa-divider{width:1px;height:28px;background:rgba(255,255,255,.14)}
+@media(max-width:640px){
+  .pa-group{width:100%;margin-left:0}
+  .pa-btn.btn-inline{flex:1 1 100%}
+  .pa-btn.pa-ghost{flex:1}
+  .pa-divider{display:none}
+}

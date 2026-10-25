@@ -3571,9 +3571,12 @@ function renderMembers(){
         <option value="All">All Plans</option>${planOpts}
       </select>
     </div>
-    <button class="btn-primary btn-inline" onclick="openMemberModal()">+ Add New Member</button>
-    <button class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;padding:0 18px;height:46px;border:1.8px solid #7ffa88;color:#fff;background:rgba(127,250,136,.12);border-radius:14px;font-weight:800;letter-spacing:.6px;flex-shrink:0;box-shadow:0 0 0 1px rgba(127,250,136,.15) inset" onclick="renumberMembers()" title="Purge archived members and renumber IDs sequentially (MEM-0001, MEM-0002, …)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> RENUMBER</button>
-    <button class="btn-danger" style="width:46px;height:46px;padding:0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0" onclick="resetAllMembers()" title="Delete ALL members — empty member list"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+    <div class="pa-group">
+      <button class="btn-primary btn-inline pa-btn" onclick="openMemberModal()">+ Add New Member</button>
+      <button class="btn-secondary pa-btn pa-ghost" onclick="renumberMembers()" title="Purge archived members and renumber IDs sequentially (MEM-0001, MEM-0002, …)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span>Renumber</span></button>
+      <span class="pa-divider" aria-hidden="true"></span>
+      <button class="btn-danger pa-btn pa-icon" onclick="resetAllMembers()" title="Delete ALL members — empty member list" aria-label="Delete all members"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+    </div>
   </div>
   <div class="table-card" id="memberTableCard"></div>`;
   refreshMemberTable();
