@@ -2174,7 +2174,11 @@ async function submitMemberSignup(){
   const consentWaiver=calcAgeVal>=13&&calcAgeVal<=15?!!(document.getElementById('msConsentWaiver')&&document.getElementById('msConsentWaiver').checked):true;
   const consentWritten=calcAgeVal>=16&&calcAgeVal<=17?!!(document.getElementById('msConsentWritten')&&document.getElementById('msConsentWritten').checked):true;
   const ecName=(document.getElementById('msEcName')?document.getElementById('msEcName').value.trim():'');
-  const ecNum=(document.getElementById('msEcNum')?document.getElementById('msEcNum').value.trim():'');
+  let ecNum=(document.getElementById('msEcNum')?document.getElementById('msEcNum').value.trim():'');
+  if(ecNum){
+    if(!validatePhone(ecNum,'+63')){err.textContent='Emergency contact number must be 11 digits starting with 09 (e.g. 09171234567).';err.style.display='block';restoreBtn();return;}
+    ecNum=normalizeContact(ecNum,'+63');
+  }
   const medicalNotes=(document.getElementById('msMedical')?document.getElementById('msMedical').value.trim():'');
   const member={id,name:sanitizeText(v.name),firstName:sanitizeText(v.firstName||''),middleName:sanitizeText(v.middleName||''),lastName:sanitizeText(v.lastName||''),suffix:sanitizeText(v.suffix||''),username:v.uname,contact:v.contact,email:sanitizeText(v.email),dob:dob,age:String(calcAgeVal),sex:sanitizeText(v.sex||''),planId,status:'pending_payment',startDate:'',expiryDate:'',planStart:'',qrToken:'',address:addr,province:sanitizeText(v.province||''),city:sanitizeText(v.city||''),barangay:sanitizeText(v.barangay||''),street:sanitizeText(v.street||''),ecName:sanitizeText(ecName),ecNum:sanitizeText(ecNum),notes:sanitizeText(medicalNotes),createdAt:today(),createdBy:'Self',createdByUsername:v.uname,createdByRole:'member',bgCheckStatus:'Pending',bgCheckDate:'',bgCheckBy:'',bgCheckNotes:'',authEmail,guardianName:sanitizeText(gName||''),consentWaiver:consentWaiver,consentWritten:consentWritten};
   const wr=await GMSFB.secSetDoc('members',member);
@@ -3772,7 +3776,11 @@ async function saveMember(){
   }
   // For 13-17 require emergency contact (guardian verification at front desk)
   const ecNameVal=document.getElementById('mf_ecname').value.trim();
-  const ecNumVal=document.getElementById('mf_ecnum').value.trim();
+  let ecNumVal=document.getElementById('mf_ecnum').value.trim();
+  if(ecNumVal){
+    if(!validatePhone(ecNumVal,'+63')){err.textContent='Emergency contact number must be 11 digits starting with 09 (e.g. 09171234567).';err.style.display='block';return;}
+    ecNumVal=normalizeContact(ecNumVal,'+63');
+  }
   if(ageCalc<=17){
     if(!ecNameVal||!ecNumVal){
       err.textContent=(ageCalc<=15?'Ages 13–15 require parent/guardian name + number (guardian must be present).':'Ages 16–17 require parent/guardian emergency contact + written consent on file.');

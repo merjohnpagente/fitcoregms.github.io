@@ -1220,7 +1220,7 @@
 
             <div class="form-row cols-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div class="form-group"><label>Emergency Contact Name</label><input type="text" id="msEcName" placeholder="Parent / guardian / emergency contact"></div>
-              <div class="form-group"><label>Emergency Contact Number</label><input type="tel" id="msEcNum" placeholder="09171234567" inputmode="numeric" maxlength="15"></div>
+              <div class="form-group"><label>Emergency Contact Number</label><input type="tel" id="msEcNum" placeholder="09171234567" inputmode="numeric" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'').slice(0,11)"></div>
             </div>
             <div class="form-group"><label>Medical / Special Notes</label><textarea id="msMedical" rows="2" placeholder="Allergies, conditions, injuries, or anything staff should know"></textarea></div>
 
@@ -1965,7 +1965,7 @@
 
         <div class="form-group"><label>Emergency Contact Name</label><input type="text" id="mf_ecname"></div>
 
-        <div class="form-group"><label>Emergency Contact Number</label><input type="text" id="mf_ecnum"></div>
+        <div class="form-group"><label>Emergency Contact Number</label><input type="tel" id="mf_ecnum" placeholder="09171234567" inputmode="numeric" maxlength="11" oninput="this.value=this.value.replace(/\D/g,'').slice(0,11)"></div>
 
       </div>
 
@@ -3029,7 +3029,7 @@
 
 <script src="workoutx-exercises.js?v=22"></script>
 
-<script src="script.js?v=64"></script>
+<script src="script.js?v=65"></script>
 
 </body>
 
