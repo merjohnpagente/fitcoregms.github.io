@@ -5271,22 +5271,16 @@ function renderListView(){
     <div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Time</th><th>Trainer</th><th>Member</th><th>Type</th><th>Status</th><th>Created / Edited By</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
-// A session can only be completed once its scheduled day/time has arrived.
+// A session can only be completed on its scheduled day (or later), never before.
 function sessionNotStartedYet(s){
   if(!s||!s.date)return false;
-  const t=today();
-  if(s.date>t)return true;
-  if(s.date<t)return false;
-  const startMin=parseTimeToMin(s.start);
-  if(startMin===null)return false;
-  const now=new Date();
-  return (now.getHours()*60+now.getMinutes())<startMin;
+  return String(s.date)>today();
 }
 function confirmCompleteSession(id){
   const s=Sessions.one(id);
   if(!s)return;
   if(currentUser.role==='trainer'&&s.trainerId!==currentUser.id){toast('You can only update your own sessions.','error');return;}
-  if(sessionNotStartedYet(s)){toast('You can only complete this session on '+formatDate(s.date)+' at '+s.start+'. It has not started yet.','error');return;}
+  if(sessionNotStartedYet(s)){toast('You can only complete this session on its scheduled day: '+formatDate(s.date)+'.','error');return;}
   const detail=`<div style="margin-top:12px;background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'—')}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'—')}</strong></div>
@@ -5331,7 +5325,7 @@ function markSessionDone(id){
   const idx=sessions.findIndex(s=>s.id===id);
   if(idx<0)return;
   if(sessions[idx].trainerId!==currentUser.id){toast('You can only mark your own sessions as done.','error');return;}
-  if(sessionNotStartedYet(sessions[idx])){toast('This session has not started yet — it can only be completed on its scheduled date and time.','error');return;}
+  if(sessionNotStartedYet(sessions[idx])){toast('This session is not scheduled for today yet — it can only be completed on '+formatDate(sessions[idx].date)+'.','error');return;}
   const prevStatus=sessions[idx].status;
   // Immutable replace — never mutate the object in place (sync bug fix)
   sessions[idx]={...sessions[idx],status:'Completed',completedAt:today(),completedBy:currentUser.username,statusLog:[...(sessions[idx].statusLog||[]),{from:prevStatus,to:'Completed',by:currentUser.name,byUsername:currentUser.username,byRole:currentUser.role,at:new Date().toISOString()}]};
@@ -5739,7 +5733,7 @@ function toggleSessionStatus(id){
   const s=sessions[idx];
   const cycle={Scheduled:'Completed',Completed:'Cancelled',Cancelled:'Scheduled'};
   const newStatus=cycle[s.status]||'Scheduled';
-  if(newStatus==='Completed'&&sessionNotStartedYet(s)){toast('This session has not started yet — it can only be completed on '+formatDate(s.date)+' at '+s.start+'.','error');return;}
+  if(newStatus==='Completed'&&sessionNotStartedYet(s)){toast('This session is not scheduled for today yet — it can only be completed on '+formatDate(s.date)+'.','error');return;}
   if(newStatus==='Scheduled'){
     const live=sessions.filter(x=>x.id!==id&&x.date===s.date&&(x.status==='Scheduled'||x.status==='Accepted')&&!(s.end<=x.start||s.start>=x.end));
     if(live.some(x=>x.trainerId===s.trainerId)){toast('Cannot set to Scheduled — trainer already booked at that time.','error');return;}
