@@ -4883,7 +4883,7 @@ function renderSchedule(){
       ${trainerOpts}
     </select>
     <input class="search-input" placeholder="Search member name…" value="${esc(schedMemberSearch)}" oninput="schedMemberSearch=this.value;if(schedView==='list'){renderListView();}" style="min-width:180px">
-    ${canCreate?`<button class="btn-primary" style="margin-left:auto" onclick="openSessionModal()">+ Create Session</button>`:''}
+    ${canCreate?`<button class="btn-primary btn-inline" style="margin-left:auto" onclick="openSessionModal()">+ Create Session</button>`:''}
   </div>
   <div id="schedContent"></div>`;
   if(schedView==='month')renderMonthView();else if(schedView==='week')renderWeekView();else renderListView();
@@ -6492,7 +6492,7 @@ function renderMyWorkouts(){
         <div class="form-group"><label>Duration (min)</label><input type="number" id="wk_duration" placeholder="45" min="1"></div>
       </div>
       <div class="form-group"><label>Notes</label><input type="text" id="wk_notes" placeholder="How did it feel?"></div>
-      <div style="display:flex;gap:8px"><button class="btn-primary" onclick="addWorkoutEntry()">Save Workout</button><button class="btn-secondary" onclick="renderMyWorkouts()">Clear</button></div>
+      <div style="display:flex;gap:8px"><button class="btn-primary btn-inline" onclick="addWorkoutEntry()">Save Workout</button><button class="btn-secondary" onclick="renderMyWorkouts()">Clear</button></div>
       <div id="wkError" class="error-msg" style="display:none"></div>
     </div>
   </div>
@@ -6571,7 +6571,7 @@ function renderMyGoals(){
         <div class="form-group"><label>Current</label><input type="number" id="goal_current" placeholder="0"></div>
         <div class="form-group"><label>Deadline</label><input type="date" id="goal_deadline"></div>
       </div>
-      <button class="btn-primary" onclick="addGoal()">Add Goal</button>
+      <button class="btn-primary btn-inline" onclick="addGoal()">Add Goal</button>
       <div id="goalError" class="error-msg" style="display:none"></div>
     </div>
   </div>
@@ -8838,7 +8838,7 @@ function renderUsers(){
   </div>
   <div class="page-actions">
     <input class="search-input" placeholder="Search ${searchPh}…" value="${esc(userSearch)}" oninput="userSearch=this.value;refreshUserTable()">
-    <button class="btn-primary" onclick="openUserModal()">+ Add User</button>
+    <button class="btn-primary btn-inline" onclick="openUserModal()">+ Add User</button>
   </div>
   <div class="table-card" id="userTableCard"></div>`;
   refreshUserTable();
