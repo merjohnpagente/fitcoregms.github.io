@@ -7,8 +7,12 @@ same Firebase project (`fitcoregym-1019f`) and Firestore collections as the web 
 
 - Firebase Auth login with the same username/email → `authEmail` lookup as the web app
 - Pending/locked account gate
-- Role routing for member, trainer, staff and admin
+- Role routing for member, trainer, staff and admin (auto-detected from the Firestore profile)
 - Role dashboards, profile, sign-out
+  - **Admin**: dashboard, members, billing, scanner, users, plans, reports, activity log
+  - **Staff**: dashboard, members, billing, scanner, queue, walk-ins, schedule, renewals
+  - **Trainer**: dashboard, schedule, assigned sessions, exercise library, profile
+  - **Member**: dashboard, QR, attendance, sessions, profile
 - Placeholder screens for the core modules that land in M2–M4
 - GitHub Actions: debug APK on changes under `mobile/`, signed release APK on `mobile-v*` tags
 
