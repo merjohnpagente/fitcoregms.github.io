@@ -2985,9 +2985,15 @@ function renderDashboard(){
   const el=document.getElementById('panelDashboard');
   const role=currentUser.role;
   if(role==='member'){el.innerHTML=buildMemberDashboard();refreshMyQr();}
-  else if(role==='admin')el.innerHTML=buildAdminDashboard();
-  else if(role==='staff')el.innerHTML=buildStaffDashboard();
-  else el.innerHTML=buildTrainerDashboard();
+  else{
+    el.innerHTML=role==='admin'?buildAdminDashboard():role==='staff'?buildStaffDashboard():buildTrainerDashboard();
+    const strip=announceStripHtml();
+    if(strip){
+      const hero=el.querySelector('.dash-hero');
+      if(hero)hero.insertAdjacentHTML('afterend',strip);
+      else el.insertAdjacentHTML('afterbegin',strip);
+    }
+  }
 }
 function updateQueueBadge(){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
