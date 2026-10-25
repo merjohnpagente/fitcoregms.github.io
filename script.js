@@ -7234,20 +7234,22 @@ function deleteAnnouncement(id){
 function announceStripHtml(){
   const all=Announcements.all().slice().reverse().slice(0,4);
   if(!all.length)return'';
-  return `<div style="display:grid;gap:10px;margin-bottom:16px">${all.map(a=>{
-    const meta=ANNOUNCE_META[a.type]||ANNOUNCE_META.general;
-    return `<div style="display:flex;align-items:flex-start;gap:12px;background:linear-gradient(135deg,rgba(127,250,136,.08),rgba(127,250,136,.02));border:1px solid rgba(127,250,136,.25);border-radius:14px;padding:14px 16px">
-      <div style="font-size:20px;flex-shrink:0">${meta.icon}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-weight:800;color:var(--white);font-size:13.5px">${esc(a.title)}</span>
-          <span class="badge ${meta.cls}" style="font-size:9.5px;padding:2px 8px">${meta.label}</span>
+  const items=all.map(a=>{
+    const t=ANNOUNCE_META[a.type]?a.type:'general';
+    const meta=ANNOUNCE_META[t];
+    return `<article class="ann-card ann-${t}" role="note">
+      <div class="ann-icon" aria-hidden="true">${meta.icon}</div>
+      <div class="ann-body">
+        <div class="ann-top">
+          <h3 class="ann-title">${esc(a.title)}</h3>
+          <span class="ann-tag">${meta.label}</span>
         </div>
-        <div style="font-size:12.5px;color:var(--gray-500);margin-top:4px;white-space:pre-wrap">${esc(a.text)}</div>
-        ${a.date?`<div style="font-size:11px;color:var(--orange);font-weight:600;margin-top:6px">📅 ${formatDate(a.date)}</div>`:''}
+        <p class="ann-text">${esc(a.text)}</p>
+        ${a.date?`<div class="ann-date"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${formatDate(a.date)}</div>`:''}
       </div>
-    </div>`;
-  }).join('')}</div>`;
+    </article>`;
+  }).join('');
+  return `<section class="ann-strip" aria-label="Announcements">${items}</section>`;
 }
 
 // ======================================================================
