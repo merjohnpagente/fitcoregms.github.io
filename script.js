@@ -6033,19 +6033,28 @@ function renderRenewed(){
   const el=document.getElementById('panelRenewed');
   if(!el)return;
   const list=Payments.all().slice().reverse();
-  const allExpiring=Members.all().filter(m=>{
-    if(m.status==='Archived')return false;
-    return daysUntil(m.expiryDate)<=7;
-  });
-  const bucketOf=m=>{const d=daysUntil(m.expiryDate);return d<=0?'expired':(d<=2?'urgent':'upcoming');};
-  const buckets={expired:[],urgent:[],upcoming:[]};
-  allExpiring.forEach(m=>buckets[bucketOf(m)].push(m));
+  const memberById={};Members.all().forEach(m=>{memberById[m.id]=m;});
+  // Bucket each renewal record by the member's CURRENT membership state.
+  const bucketOfMember=m=>{
+    if(!m||!m.expiryDate)return 'active';
+    const d=daysUntil(m.expiryDate);
+    return d<=0?'expired':(d<=2?'urgent':(d<=7?'upcoming':'active'));
+  };
+  const rows=list.map(p=>{const m=memberById[p.memberId];return{p,m,bucket:bucketOfMember(m)};});
+  const counts={expired:0,urgent:0,upcoming:0,active:0};
+  rows.forEach(r=>{counts[r.bucket]++;});
   const now=new Date();
   const monthPays=Payments.all().filter(p=>{const d=new Date(p.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
   const monthRev=monthPays.reduce((a,p)=>a+Number(p.amount),0);
-  const memberBucket={};allExpiring.forEach(m=>memberBucket[m.id]=bucketOf(m));
-  const filtered=_renewedFilter==='All'?list:list.filter(p=>memberBucket[p.memberId]===_renewedFilter);
+  const filtered=_renewedFilter==='All'?rows:rows.filter(r=>r.bucket===_renewedFilter);
   const tab=(label,key,cnt)=>`<button class="filter-chip${_renewedFilter===key?' active':''}" onclick="_renewedFilter='${key}';renderRenewed()">${label} <span style="opacity:.7">(${cnt})</span></button>`;
+  const statusCell=r=>{
+    if(!r.m||!r.m.expiryDate)return '<span style="color:var(--gray-500)">—</span>';
+    const d=daysUntil(r.m.expiryDate);
+    const meta={expired:['badge-expired','Expired'],urgent:['badge-urgent','Urgent'],upcoming:['badge-expiring','Upcoming'],active:['badge-active','Active']}[r.bucket];
+    const note=d<=0?'':` <span style="font-size:11px;color:var(--gray-500);margin-left:6px">${d} day${d!==1?'s':''} left</span>`;
+    return `<span class="badge ${meta[0]}">${meta[1]}</span>${note}`;
+  };
   el.innerHTML=`
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
@@ -6055,20 +6064,21 @@ function renderRenewed(){
     <button class="btn-secondary btn-sm" onclick="backToRenewals()">← Back to Member Renewals</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-    ${tab('All','All',allExpiring.length)}
-    ${tab('Expired','expired',buckets.expired.length)}
-    ${tab('Urgent','urgent',buckets.urgent.length)}
-    ${tab('Upcoming','upcoming',buckets.upcoming.length)}
+    ${tab('All','All',list.length)}
+    ${tab('Active','active',counts.active)}
+    ${tab('Upcoming','upcoming',counts.upcoming)}
+    ${tab('Urgent','urgent',counts.urgent)}
+    ${tab('Expired','expired',counts.expired)}
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
     <div class="renew-mini-stat">🔄 ${monthPays.length} renewals this month</div>
     <div class="renew-mini-stat">💰 ₱${monthRev.toLocaleString()} collected</div>
   </div>
   <div class="table-card">
-    <div class="table-header"><h3>Renewal Records</h3></div>
-    ${filtered.length?`<div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Date</th></tr></thead><tbody>
-    ${filtered.map(p=>`<tr><td>${esc(p.memberName)}</td><td>${esc(p.planName)}</td><td>₱${Number(p.amount).toLocaleString()}</td><td>${formatDate(p.date)}</td></tr>`).join('')}
-    </tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">🔄</div><p>No renewals in this category right now.</p></div>`}
+    <div class="table-header"><h3>Renewal Records <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${filtered.length} shown</span></h3></div>
+    ${filtered.length?`<div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Paid on</th><th>Expires</th><th>Status now</th></tr></thead><tbody>
+    ${filtered.map(r=>`<tr><td>${esc(r.p.memberName)}</td><td>${esc(r.p.planName)}</td><td>₱${Number(r.p.amount).toLocaleString()}</td><td>${formatDate(r.p.date)}</td><td>${r.m&&r.m.expiryDate?formatDate(r.m.expiryDate):'—'}</td><td>${statusCell(r)}</td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">🔄</div><p>No renewal records in this category.</p></div>`}
   </div>`;
 }
 
