@@ -381,6 +381,7 @@ class AuthService{
       if(effMember){
         if(effMember.status==='Archived')return{ok:false,error:'Your account has been archived. Please contact the front desk.'};
         if(isMemberExpired(effMember))return{ok:false,error:EXPIRED_LOGIN_MSG};
+        if(bgCheckFlagged(effMember))return{ok:false,error:'Your account is flagged pending a background check. Please contact the front desk.'};
         const r=await GMSFB.signIn(GMSFB.authEmailFor(effMember),password);
         if(r.ok){
           LoginAttempts.reset(username);
@@ -501,6 +502,7 @@ class AuthService{
           // Note: pending_payment is ALLOWED to log in — they land on pendingGate
           // with auto-refresh, so they see their status live. No block here.
           if(isMemberExpired(m)){GMSFB.signOut();return{ok:false,error:EXPIRED_LOGIN_MSG};}
+          if(bgCheckFlagged(m)){GMSFB.signOut();return{ok:false,error:'Your account is flagged pending a background check. Please contact the front desk.'};}
           LoginAttempts.reset(username);
           const sess={id:m.id,email:m.email||'',username:m.username,name:m.name,contact:m.contact,role:'member',memberId:m.id,status:m.status,authEmail:GMSFB.authEmailFor(m)};
           this.setSession(sess);
@@ -4079,7 +4081,7 @@ function viewMember(id){
       <span class="badge ${bgBadgeCls}">${esc(m.bgCheckStatus||'Pending')}</span>
       ${m.bgCheckDate?`<span style="font-size:11px;color:var(--gray-500)">${formatDate(m.bgCheckDate)} · by ${esc(m.bgCheckBy||'—')}</span>`:''}
     </div>
-    ${bgCheckFlagged(m)?`<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;color:var(--red);font-size:12px;margin-bottom:10px">⚠ Flagged — entry and activation are blocked until cleared.</div>`:''}
+    ${bgCheckFlagged(m)?`<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;color:var(--red);font-size:12px;margin-bottom:10px">⚠ Flagged — login, entry and activation are blocked until cleared.</div>`:''}
     ${m.bgCheckNotes?`<div class="profile-field"><label>Notes</label><p>${esc(m.bgCheckNotes)}</p></div>`:''}
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn-sm" style="background:rgba(127,250,136,.15);color:var(--green);border:1px solid rgba(127,250,136,.4)" onclick="setBgCheck('${id}','Cleared')">✓ Cleared</button>
