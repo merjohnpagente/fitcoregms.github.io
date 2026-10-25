@@ -9794,3 +9794,42 @@ function restoreSession(sess){
     fb.waitForSnap(key,10000).then(function(){if(currentUser)loadApp();});
   });
 }
+
+// ======================================================================
+// Sidebar hide/show button (UI only - no data/backend changes)
+// Mobile (<=768px): closes the drawer. Desktop: collapses the sidebar.
+// ======================================================================
+(function(){
+  var KEY='fitcore_sidebar_collapsed';
+  function setCollapsed(c){
+    document.body.classList.toggle('sidebar-collapsed',c);
+    try{localStorage.setItem(KEY,c?'1':'0');}catch(e){}
+  }
+  function makeBtn(id,cls,title,inner,onClick){
+    var b=document.createElement('button');
+    b.id=id;b.type='button';b.className=cls;b.title=title;
+    b.setAttribute('aria-label',title);
+    b.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+inner+'</svg>';
+    b.addEventListener('click',onClick);
+    return b;
+  }
+  function initSidebarToggle(){
+    var row=document.querySelector('.sidebar-brand .brand-row');
+    var top=document.querySelector('.topbar');
+    if(!row||!top||document.getElementById('sbHideBtn'))return;
+    row.appendChild(makeBtn('sbHideBtn','sb-hide-btn','Hide sidebar',
+      '<polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/>',
+      function(){
+        if(window.innerWidth<=768){closeSidebar();}
+        else{setCollapsed(true);}
+      }));
+    top.insertBefore(makeBtn('sbShowBtn','sb-show-btn','Show sidebar',
+      '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+      function(){setCollapsed(false);}),top.firstChild);
+    var saved=false;
+    try{saved=localStorage.getItem(KEY)==='1';}catch(e){}
+    if(saved)document.body.classList.add('sidebar-collapsed');
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initSidebarToggle);
+  else initSidebarToggle();
+})();
