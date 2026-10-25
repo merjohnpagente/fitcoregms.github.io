@@ -6851,6 +6851,19 @@ function bookSession(){
   const availErr=trainerAvailabilityError(trainer,date,start,end);
   if(availErr){ if(err){err.textContent=availErr;err.style.display='block';} return; }
   const mid=currentUser.memberId||currentUser.id; const mem=Members.one(mid);
+  // Plan session limit: no more booking once the plan's sessions are used up
+  // (completed sessions) or already fully reserved by open requests.
+  const bkPlan=mem&&mem.planId?Plans.one(mem.planId):null;
+  if(bkPlan&&bkPlan.sessions!=='Unlimited'){
+    const limit=Number(bkPlan.sessions);
+    if(Number.isFinite(limit)){
+      const used=memberSessionsUsed(mid);
+      if(used>=limit){ if(err){err.textContent='You have used all '+limit+' sessions of your '+bkPlan.name+' plan. Please renew your plan to book more sessions.';err.style.display='block';} return; }
+      const since=(mem&&(mem.planStart||mem.startDate))||'';
+      const reserved=Sessions.all().filter(x=>x.memberId===mid&&['Pending','Accepted','Scheduled'].includes(x.status)&&(!since||!x.date||x.date>=since)).length;
+      if(used+reserved>=limit){ if(err){err.textContent='All your remaining sessions are already booked ('+reserved+' pending/scheduled). Wait for them to be completed or cancelled before booking another.';err.style.display='block';} return; }
+    }
+  }
   // conflict check: same member same date overlap + trainer double-booking
   const sameDay=Sessions.all().filter(s=>s.memberId===mid&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined');
   const overlap=sameDay.some(s=> !(end<=s.start || start>=s.end) );
