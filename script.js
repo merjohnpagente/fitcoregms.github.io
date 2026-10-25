@@ -1087,51 +1087,12 @@ function showLandingSection(section, linkEl) {
   iconize(document);
   initReveals();
 }
-
-// ---- Login with username/email + ONE-TIME CODE (issued by the admin in Member Profile) ----
-// The member types the 6-digit code in the Password field. If the server accepts it,
-// we go straight to "set a new password"; the new password is saved online via the API.
-function _emailForLoginName(name){
-  const n=String(name||'').trim().toLowerCase();
-  if(!n)return '';
-  const u=Users.all().find(x=>x.username&&x.username.toLowerCase()===n);
-  const m=Members.all().find(x=>x.username&&x.username.toLowerCase()===n);
-  const rec=u||m;
-  if(rec)return String((window.GMSFB&&GMSFB.authEmailFor)?GMSFB.authEmailFor(rec):(rec.authEmail||'')).toLowerCase();
-  if(n.indexOf('@')>-1){
-    const byMail=Members.all().find(x=>(x.email&&x.email.toLowerCase()===n)||(x.authEmail&&x.authEmail.toLowerCase()===n))
-      ||Users.all().find(x=>(x.email&&x.email.toLowerCase()===n)||(x.authEmail&&x.authEmail.toLowerCase()===n));
-    return byMail?String((window.GMSFB&&GMSFB.authEmailFor)?GMSFB.authEmailFor(byMail):n).toLowerCase():n;
-  }
-  return '';
-}
-async function tryOneTimeCodeLogin(name,code){
-  if(!/^\d{6}$/.test(String(code||'')))return false;
-  const email=_emailForLoginName(name);
-  if(!email)return false;
-  let r;
-  try{ r=await fpApi('verify',{email:email,code:String(code)}); }catch(e){ return false; }
-  if(!r||!r.ok||!r.resetToken)return false;
-  openForgotModal();
-  _fpEmail=email; _fpResetToken=r.resetToken; _fpForcedMode=false;
-  const prog=document.getElementById('fpProgress'); if(prog) prog.style.display='none';
-  const t=document.getElementById('fpModalTitle'); if(t) t.textContent='Set New Password';
-  showFpStep(3);
-  toast('Code accepted — set your new password.','success');
-  return true;
-}
 async function doLogin(){
   const u=document.getElementById('loginUser').value.trim();
   const p=document.getElementById('loginPass').value;
   const btn=document.querySelector('#loginForm .btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Logging in…';}
   try{
-    // 6-digit one-time code from the admin typed as the password?
-    if(/^\d{6}$/.test(p) && await tryOneTimeCodeLogin(u,p)){
-      const lp=document.getElementById('loginPass'); if(lp) lp.value='';
-      const le=document.getElementById('loginError'); if(le) le.style.display='none';
-      return;
-    }
     const result=await Auth.login(u,p);
     if(!result.ok){showLoginError(result.error);return;}
     currentUser=result.user;
@@ -1326,7 +1287,7 @@ function openForgotModal(){
   if(em){
     em.value='';
     const loginVal=(document.getElementById('loginUser')||{}).value||'';
-    if(loginVal) em.value=loginVal.trim();
+    if(loginVal && loginVal.indexOf('@')>-1) em.value=loginVal.trim();
   }
   setFpOtp('');
   const legacyOtp=document.getElementById('fp_otp'); if(legacyOtp) legacyOtp.value='';
@@ -1338,7 +1299,7 @@ function openForgotModal(){
   const resend=document.getElementById('fp_resend'); if(resend){ resend.style.display='none'; resend.textContent='Resend Code'; }
   const btn=document.getElementById('fp_verify_btn'); if(btn){ btn.textContent='Continue'; btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; }
   const cb=document.getElementById('fp_confirm_btn'); if(cb) setFpBtnLoading(cb,false);
-  const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Enter Code'; }
+  const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Send Code'; }
   const _fp1=document.getElementById('fp_new_pass'); if(_fp1) _fp1.value='';
   const _fp2=document.getElementById('fp_new_pass2'); if(_fp2) _fp2.value='';
   const _fe=document.getElementById('fpsError'); if(_fe) _fe.style.display='none';
@@ -1452,23 +1413,23 @@ async function fpSendCode(isResend){
   else { toast('A new code was sent to '+email,'info'); setFpOtp(''); }
   fpStartResendTimer(Number(r.cooldown)||60);
 }
-async function fpSubmitCode(){ return fpUseGymCode(); }
+async function fpSubmitCode(){ return fpSendCode(false); }
 // Member has a one-time code from the gym (admin-issued): go straight to code entry
 // WITHOUT asking the server to email a new code (that would replace the admin's code).
 function fpUseGymCode(){
   const err=document.getElementById('forgotError'); if(err) err.style.display='none';
   const emailEl=document.getElementById('fp_email');
-  const typed=((emailEl&&emailEl.value)||'').trim();
+  const email=((emailEl&&emailEl.value)||'').trim().toLowerCase();
   const showErr=(m)=>{ if(err){err.textContent=m;err.style.display='block';} };
-  if(!typed){ showErr('Enter your username first.'); return; }
-  const email=_emailForLoginName(typed);
-  if(!email){ showErr('Account not found. Check your username.'); return; }
+  if(!email){ showErr('Enter the email registered on your account first.'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showErr('Please enter a valid email address.'); return; }
+  if(email.endsWith('@fitcoregym.local')){ showErr('Please use your real email address.'); return; }
   _fpEmail=email; _fpResetToken=null;
   const hint=document.getElementById('fp_code_hint'); if(hint) hint.style.display='none';
   const codeErr=document.getElementById('fp_code_error'); if(codeErr) codeErr.style.display='none';
   const resend=document.getElementById('fp_resend'); if(resend) resend.style.display='none';
   const sub=document.getElementById('fpStep2Sub');
-  if(sub) sub.innerHTML='Enter the 6-digit one-time code from the gym for<br><strong style="color:var(--orange)">'+esc(typed)+'</strong>';
+  if(sub) sub.innerHTML='Enter the 6-digit one-time code from the gym for<br><strong style="color:var(--orange)">'+esc(email)+'</strong>';
   setFpOtp(''); const ci=document.getElementById('fp_code_input'); if(ci) ci.value='';
   showFpStep(2); updateFpVerifyBtnState();
   const f=document.querySelector('.fp-otp-box'); if(f) f.focus();
@@ -4206,9 +4167,11 @@ function openEditFromProfile(){
 async function adminResetMemberPassword(memberId){
   const m=Members.one(memberId);
   if(!m){toast('Member not found.','error');return;}
-  // Login identity (Firebase Auth email) - the member does NOT need a real/Gmail address.
-  const email=(window.GMSFB&&GMSFB.authEmailFor)?GMSFB.authEmailFor(m):String(m.authEmail||'').toLowerCase();
-  if(!email){toast('This member has no login account yet.','error');return;}
+  const email=realEmailOf(m)||(String(m.authEmail||'').toLowerCase().endsWith('@fitcoregym.local')?'':String(m.authEmail||''));
+  if(!email||String(email).toLowerCase().endsWith('@fitcoregym.local')){
+    toast('This member has no real email on file. Add one in Edit Profile first.','error');
+    return;
+  }
   const au=(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)?GMSFB.auth.currentUser:null;
   if(!au){toast('Resetting a password needs an internet connection and an active login.','error');return;}
   let idToken;
@@ -4217,7 +4180,7 @@ async function adminResetMemberPassword(memberId){
   if(!r||!r.ok||!r.code){ toast((r&&r.error)||'Could not create the one-time code. Please try again.','error'); return; }
   logActivity('Reset Password','Member',m.name,'ID: '+memberId+' | One-time reset code issued (valid '+(r.expiresInMin||15)+' min)');
   window._adminResetCode=r.code;
-  const f=document.getElementById('adminCodeFor'); if(f) f.innerHTML='For <strong>'+esc(m.name)+'</strong> · Username: <strong>'+esc(r.username||m.username||'')+'</strong>';
+  const f=document.getElementById('adminCodeFor'); if(f) f.innerHTML='For <strong>'+esc(m.name)+'</strong> ('+esc(r.email||email)+')';
   const v=document.getElementById('adminCodeValue'); if(v) v.textContent=r.code;
   const x=document.getElementById('adminCodeExp'); if(x) x.textContent='Valid for '+(r.expiresInMin||15)+' minutes · works once.';
   openModal('adminCodeModal');

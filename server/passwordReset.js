@@ -274,11 +274,9 @@ async function adminIssueResetCode(idToken, memberId) {
   const snap = await ref.get();
   if (!snap.exists) return bad('Member not found.', 404);
   const prof = snap.data();
-  // The code is tied to the member's LOGIN identity (their Firebase Auth email, which can be the
-  // synthetic username@fitcoregym.local) - a real/Gmail address is NOT required.
   const email = [prof.authEmail, prof.email].map((x) => String(x || '').trim().toLowerCase())
-    .find((x) => x && isEmail(x));
-  if (!email) return bad('This member has no login account yet.', 409);
+    .find((x) => x && isEmail(x) && !x.endsWith('@fitcoregym.local'));
+  if (!email) return bad('This member has no real email on file. Add one in Edit Profile first.', 409);
 
   const target = await resolveTarget(email, ctx);
   if (!target || !target.profile || target.profile.kind !== 'members' || target.profile.id !== ref.id) {
@@ -292,7 +290,7 @@ async function adminIssueResetCode(idToken, memberId) {
     profile: target.profile, resetHash: null, resetExp: 0,
     adminIssued: true, issuedBy: callerEmail
   });
-  return { status: 200, body: { ok: true, code, email, username: prof.username || '', expiresInMin: ADMIN_CODE_TTL_MS / 60000 } };
+  return { status: 200, body: { ok: true, code, email, expiresInMin: ADMIN_CODE_TTL_MS / 60000 } };
 }
 
 // Admin sets a member's password directly (Edit Member -> Password). Verified by the admin's Firebase ID token.
