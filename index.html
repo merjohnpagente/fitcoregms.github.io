@@ -1342,25 +1342,6 @@
 
   </div><!-- /loginPage -->
 
-
-
-<!-- ============================================================ ADMIN ONE-TIME RESET CODE ============================================================ -->
-<div class="modal-overlay" id="adminCodeModal" style="z-index:1200">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-head"><h2>One-Time Reset Code</h2><button class="modal-close" onclick="closeAdminCodeModal()">&#10005;</button></div>
-    <div class="modal-body">
-      <p id="adminCodeFor" style="font-size:13px;color:var(--gray-400);margin:0 0 12px"></p>
-      <div id="adminCodeValue" style="font-family:monospace;font-size:36px;letter-spacing:10px;text-align:center;padding:16px 8px;border:1px dashed rgba(127,250,136,.5);border-radius:12px;color:var(--green)"></div>
-      <p style="font-size:12px;color:var(--gray-500);margin:14px 0 0;line-height:1.5">Give this code to the member in person. On the login page they tap <strong>Forgot password</strong>, then <strong>Enter the one-time code from the gym</strong>, type their email and this code, and set a new password.</p>
-      <p id="adminCodeExp" style="font-size:12px;color:var(--gray-500);margin:8px 0 0"></p>
-    </div>
-    <div class="modal-foot" style="gap:10px">
-      <button class="btn-secondary" style="flex:1" onclick="copyAdminResetCode()">Copy Code</button>
-      <button class="btn-primary" style="flex:1" onclick="closeAdminCodeModal()">Done</button>
-    </div>
-  </div>
-</div>
-
 <!-- ============================================================ FORGOT PASSWORD ============================================================ -->
 
 <div class="modal-overlay" id="forgotModal">
@@ -1392,8 +1373,6 @@
         </div>
 
         <div class="form-group lf-group"><label class="lf-label" for="fp_email">Email *</label><input type="email" id="fp_email" class="lf-input" placeholder="Enter your Gmail" autocomplete="email" onkeydown="if(event.key==='Enter')fpSubmitCode()"></div>
-
-        <div style="text-align:center;margin-top:12px"><a href="#" onclick="fpUseGymCode();return false" style="font-size:12px;color:var(--green);text-decoration:underline">Can't access your email? Enter the one-time code from the gym</a></div>
 
         <input type="hidden" id="fp_user" value="">
 

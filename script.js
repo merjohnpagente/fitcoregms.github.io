@@ -1414,26 +1414,6 @@ async function fpSendCode(isResend){
   fpStartResendTimer(Number(r.cooldown)||60);
 }
 async function fpSubmitCode(){ return fpSendCode(false); }
-// Member has a one-time code from the gym (admin-issued): go straight to code entry
-// WITHOUT asking the server to email a new code (that would replace the admin's code).
-function fpUseGymCode(){
-  const err=document.getElementById('forgotError'); if(err) err.style.display='none';
-  const emailEl=document.getElementById('fp_email');
-  const email=((emailEl&&emailEl.value)||'').trim().toLowerCase();
-  const showErr=(m)=>{ if(err){err.textContent=m;err.style.display='block';} };
-  if(!email){ showErr('Enter the email registered on your account first.'); return; }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showErr('Please enter a valid email address.'); return; }
-  if(email.endsWith('@fitcoregym.local')){ showErr('Please use your real email address.'); return; }
-  _fpEmail=email; _fpResetToken=null;
-  const hint=document.getElementById('fp_code_hint'); if(hint) hint.style.display='none';
-  const codeErr=document.getElementById('fp_code_error'); if(codeErr) codeErr.style.display='none';
-  const resend=document.getElementById('fp_resend'); if(resend) resend.style.display='none';
-  const sub=document.getElementById('fpStep2Sub');
-  if(sub) sub.innerHTML='Enter the 6-digit one-time code from the gym for<br><strong style="color:var(--orange)">'+esc(email)+'</strong>';
-  setFpOtp(''); const ci=document.getElementById('fp_code_input'); if(ci) ci.value='';
-  showFpStep(2); updateFpVerifyBtnState();
-  const f=document.querySelector('.fp-otp-box'); if(f) f.focus();
-}
 async function fpVerifyCode(){
   const err=document.getElementById('forgotError');
   const codeErr=document.getElementById('fp_code_error');
@@ -4107,12 +4087,6 @@ function viewMember(id){
       <button class="btn-sm btn-secondary" onclick="setBgCheck('${id}','Pending')">↺ Pending</button>
     </div>
   </div>
-  ${currentUser&&currentUser.role==='admin'?`<div class="profile-section">
-    <h4>Admin Actions</h4>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-sm btn-primary" style="height:32px" onclick="adminResetMemberPassword('${id}')">🔑 Reset Password (One-Time Code)</button>
-    </div>
-  </div>`:''}
   <div class="profile-section">
     <h4>Payment History</h4>
     ${payments.length?`<table style="width:100%"><thead><tr><th>ID</th><th>Plan</th><th>Amount</th><th>Date</th><th>Method</th></tr></thead><tbody>${payments.map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(p.planName)}</td><td style="color:var(--green)">₱${Number(p.amount).toLocaleString()}</td><td>${formatDate(p.date)}</td><td>${esc(p.method)}</td></tr>`).join('')}</tbody></table>`:
@@ -4160,40 +4134,6 @@ function setBgCheck(id,status){
 function openEditFromProfile(){
   if(currentUser && currentUser.role==='staff'){toast('Only admin can edit members.','error');return;}
   closeModal('profileModal');openMemberModal(currentProfileId);
-}
-// ── ADMIN RESET MEMBER PASSWORD ──────────────────────────────
-// Generates a temporary password, sets mustChangePassword flag.
-// The member is forced to set a new password on next login.
-async function adminResetMemberPassword(memberId){
-  const m=Members.one(memberId);
-  if(!m){toast('Member not found.','error');return;}
-  const email=realEmailOf(m)||(String(m.authEmail||'').toLowerCase().endsWith('@fitcoregym.local')?'':String(m.authEmail||''));
-  if(!email||String(email).toLowerCase().endsWith('@fitcoregym.local')){
-    toast('This member has no real email on file. Add one in Edit Profile first.','error');
-    return;
-  }
-  const au=(window.GMSFB&&GMSFB.enabled&&GMSFB.auth)?GMSFB.auth.currentUser:null;
-  if(!au){toast('Resetting a password needs an internet connection and an active login.','error');return;}
-  let idToken;
-  try{ idToken=await au.getIdToken(true); }catch(e){ toast('Session expired. Please log in again.','error'); return; }
-  const r=await fpApi('admin-issue-code',{email:email,idToken:idToken,id:memberId});
-  if(!r||!r.ok||!r.code){ toast((r&&r.error)||'Could not create the one-time code. Please try again.','error'); return; }
-  logActivity('Reset Password','Member',m.name,'ID: '+memberId+' | One-time reset code issued (valid '+(r.expiresInMin||15)+' min)');
-  window._adminResetCode=r.code;
-  const f=document.getElementById('adminCodeFor'); if(f) f.innerHTML='For <strong>'+esc(m.name)+'</strong> ('+esc(r.email||email)+')';
-  const v=document.getElementById('adminCodeValue'); if(v) v.textContent=r.code;
-  const x=document.getElementById('adminCodeExp'); if(x) x.textContent='Valid for '+(r.expiresInMin||15)+' minutes · works once.';
-  openModal('adminCodeModal');
-}
-function copyAdminResetCode(){
-  const c=window._adminResetCode||'';
-  if(!c)return;
-  try{navigator.clipboard.writeText(c);toast('Code copied.');}catch(e){try{prompt('Copy the one-time code:',c);}catch(_){}}
-}
-function closeAdminCodeModal(){
-  window._adminResetCode='';
-  const v=document.getElementById('adminCodeValue'); if(v) v.textContent='';
-  closeModal('adminCodeModal');
 }
 // Old behaviour kept as a second option: email the member a Firebase reset link.
 async function adminSendMemberResetLink(memberId){
