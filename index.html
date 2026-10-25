@@ -1370,11 +1370,11 @@
 
           <h1>FORGOT <span>PASSWORD</span></h1>
 
-          <p>Enter your email and we'll send a secure reset link</p>
+          <p>Enter your Gmail and we'll send a 6-digit verification code</p>
 
         </div>
 
-        <div class="form-group lf-group"><label class="lf-label" for="fp_email">Email *</label><input type="email" id="fp_email" class="lf-input" placeholder="Enter your email" autocomplete="email" onkeydown="if(event.key==='Enter')fpSubmitCode()"></div>
+        <div class="form-group lf-group"><label class="lf-label" for="fp_email">Email *</label><input type="email" id="fp_email" class="lf-input" placeholder="Enter your Gmail" autocomplete="email" onkeydown="if(event.key==='Enter')fpSubmitCode()"></div>
 
         <input type="hidden" id="fp_user" value="">
 
@@ -1476,7 +1476,7 @@
 
         <button class="btn-secondary" style="flex:1" onclick="fpBackToLogin()">Back to Login</button>
 
-        <button class="btn-primary" style="flex:1.4" id="fp_submit_btn" onclick="fpSubmitCode()">Send Reset Link</button>
+        <button class="btn-primary" style="flex:1.4" id="fp_submit_btn" onclick="fpSubmitCode()">Send Code</button>
 
       </div>
 
@@ -2994,6 +2994,8 @@
 <script>
   // Optional: set this when the static site and the Vercel API use different origins.
   window.WORKOUTX_API_BASE = window.WORKOUTX_API_BASE || '';
+  // Vercel project URL that hosts /api (exercises + password-reset). Example: 'https://fitcoregms.vercel.app'
+  window.FITCORE_API_BASE = window.FITCORE_API_BASE || window.WORKOUTX_API_BASE || '';
 </script>
 
 <script src="workoutx-exercises.js?v=22"></script>

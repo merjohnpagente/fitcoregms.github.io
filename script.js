@@ -1138,6 +1138,7 @@ function doLogout(){
 function showLoginError(msg){const el=document.getElementById('loginError');el.textContent=msg;el.style.display='block';}
 // ============================= FORGOT PASSWORD — 3-step (email only) =============================
 let _fpCode=null, _fpCodeExp=0, _fpCooldown=0, _fpVerified=null, _fpCodeTimer=null, _fpStep=1, _fpForcedMode=false;
+let _fpEmail='', _fpResetToken=null;
 try{
   const _fpStored=sessionStorage.getItem('gms_fp_verified');
   if(_fpStored) _fpVerified=JSON.parse(_fpStored);
@@ -1292,7 +1293,7 @@ function openForgotModal(){
   const resend=document.getElementById('fp_resend'); if(resend){ resend.style.display='none'; resend.textContent='Resend Code'; }
   const btn=document.getElementById('fp_verify_btn'); if(btn){ btn.textContent='Continue'; btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; }
   const cb=document.getElementById('fp_confirm_btn'); if(cb) setFpBtnLoading(cb,false);
-  const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Send Reset Link'; }
+  const sb=document.getElementById('fp_submit_btn'); if(sb){ sb.disabled=false; sb.style.opacity=''; sb.style.cursor=''; sb.textContent='Send Code'; }
   const _fp1=document.getElementById('fp_new_pass'); if(_fp1) _fp1.value='';
   const _fp2=document.getElementById('fp_new_pass2'); if(_fp2) _fp2.value='';
   const _fe=document.getElementById('fpsError'); if(_fe) _fe.style.display='none';
@@ -1302,7 +1303,7 @@ function openForgotModal(){
   if(cancel){ cancel.style.display=''; cancel.textContent='Cancel'; cancel.onclick=function(){ closeModal('forgotModal'); }; }
   const _lb=document.getElementById('fpsLabel'); if(_lb) _lb.textContent='';
   ['fps1','fps2','fps3'].forEach(id=>{const b=document.getElementById(id); if(b) b.className='pw-strength-bar';});
-  _fpCode=null; _fpCodeExp=0; _fpCooldown=0;
+  _fpCode=null; _fpCodeExp=0; _fpCooldown=0; _fpEmail=''; _fpResetToken=null;
   if(_fpCodeTimer){ clearInterval(_fpCodeTimer); _fpCodeTimer=null; }
   if(window._fpPendingTarget){ try{ delete window._fpPendingTarget; }catch(e){ window._fpPendingTarget=null; } }
   initFpOtp();
@@ -1339,9 +1340,8 @@ function sendForgotCode(){
 }
 function fpBackToLoginAlias(){ fpBackToLogin(); }
 async function resendForgotCode(){
-  // Firebase Auth generates and rate-limits the reset link now; there is no
-  // client-side OTP to resend. Reuse the same rate-limited send path.
-  return fpSubmitCode();
+  if(Date.now()<_fpCooldown) return;
+  return fpSendCode(true);
 }
 function updateFpStrength(val){
   const bars=[document.getElementById('fps1'),document.getElementById('fps2'),document.getElementById('fps3')];
@@ -1357,85 +1357,82 @@ function updateFpStrength(val){
   for(let i=0;i<score;i++)bars[i].classList.add(levels[Math.min(score-1,2)]);
   lbl.textContent=labels[Math.min(score-1,2)]||'';
 }
-async function fpSubmitCode(){
+function fpApiBase(){ return String(window.FITCORE_API_BASE||window.WORKOUTX_API_BASE||'').replace(/\/$/,''); }
+async function fpApi(action,payload){
+  const base=fpApiBase();
+  if(!base && /\.github\.io$/i.test(location.hostname)) return {ok:false,error:'Email service is not configured. Set window.FITCORE_API_BASE to your Vercel URL.'};
+  let res;
+  try{
+    res=await fetch(base+'/api/password-reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({action:action},payload))});
+  }catch(e){ return {ok:false,error:'Network error. Please check your internet and try again.'}; }
+  let data=null; try{ data=await res.json(); }catch(e){}
+  if(!data) return {ok:false,error:'Server error. Please try again.'};
+  return data;
+}
+function fpStartResendTimer(sec){
+  const link=document.getElementById('fp_resend'); if(!link) return;
+  if(_fpCodeTimer){ clearInterval(_fpCodeTimer); _fpCodeTimer=null; }
+  _fpCooldown=Date.now()+sec*1000;
+  link.style.display='';
+  const tick=()=>{
+    const left=Math.ceil((_fpCooldown-Date.now())/1000);
+    if(left>0){ link.textContent='Resend ('+left+'s)'; link.style.opacity='.6'; link.style.pointerEvents='none'; }
+    else { link.textContent='Resend Code'; link.style.opacity=''; link.style.pointerEvents=''; clearInterval(_fpCodeTimer); _fpCodeTimer=null; }
+  };
+  tick(); _fpCodeTimer=setInterval(tick,500);
+}
+async function fpSendCode(isResend){
   const err=document.getElementById('forgotError');
   const suc=document.getElementById('forgotSuccess');
-  if(err) err.style.display='none'; if(suc) suc.style.display='none';
+  const codeErr=document.getElementById('fp_code_error');
+  if(err) err.style.display='none'; if(suc) suc.style.display='none'; if(codeErr) codeErr.style.display='none';
+  const emailEl=document.getElementById('fp_email');
+  const email=((emailEl&&emailEl.value)||_fpEmail||'').trim().toLowerCase();
+  const showErr=(m)=>{ if(_fpStep===2&&codeErr){codeErr.textContent=m;codeErr.style.display='block';} else if(err){err.textContent=m;err.style.display='block';} };
+  if(!email){ showErr('Please enter your email.'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showErr('Please enter a valid email address.'); return; }
+  if(email.endsWith('@fitcoregym.local')){ showErr('Please use your real Gmail address.'); return; }
+  if(!rateLimitOk('gms_rl_forgot',6,15*60*1000)){ showErr('Too many requests. Please wait 15 minutes and try again.'); return; }
   const sb=document.getElementById('fp_submit_btn');
-  const email=(document.getElementById('fp_email')?document.getElementById('fp_email').value.trim():'');
-  const emailLower=email.toLowerCase();
-  if(!email){if(err){err.textContent='Please enter your email.';err.style.display='block';}return;}
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(err){err.textContent='Please enter a valid email address.';err.style.display='block';}return;}
-  if(Date.now()<_fpCooldown){if(err){err.textContent='Please wait '+Math.ceil((_fpCooldown-Date.now())/1000)+'s before sending again.';err.style.display='block';}return;}
-  if(!rateLimitOk('gms_rl_forgot',3,15*60*1000)){
-    if(err){err.textContent='Too many reset requests. Please wait 15 minutes and try again.';err.style.display='block';}
-    return;
-  }
   if(sb){ sb.disabled=true; sb.style.opacity='0.7'; sb.textContent='Sending…'; }
-  // SECURITY: Firebase Auth generates and verifies the reset link server-side.
-  // There is no client-side OTP or password hash to forge, and the response is
-  // intentionally generic so the form cannot be used to enumerate accounts.
-  let sent=false;
-  try{
-    if(window.GMSFB&&GMSFB.enabled&&GMSFB.auth&&typeof GMSFB.auth.sendPasswordResetEmail==='function'){
-      await GMSFB.auth.sendPasswordResetEmail(emailLower);
-      sent=true;
-    }
-  }catch(e){
-    console.warn('[reset] sendPasswordResetEmail',e&&e.code);
-  }
-  _fpCooldown=Date.now()+60*1000;
-  if(sb){ sb.disabled=false; sb.style.opacity=''; sb.textContent='Send Reset Link'; }
-  const prog=document.getElementById('fpProgress'); if(prog) prog.style.display='none';
-  if(suc){
-    suc.innerHTML='If <strong>'+esc(emailLower)+'</strong> is linked to an account, a secure reset link is on its way. Check your inbox and spam folder.<br><span style="font-size:12px;color:var(--gray-400)">No email? Your account may use a staff-managed password — please contact the front desk.</span>';
-    suc.style.display='block';
-  }
-  toast(sent?'Password reset link sent — check your email.':'If an account exists, a reset link has been sent.','info');
+  const r=await fpApi('send',{email:email});
+  if(sb){ sb.disabled=false; sb.style.opacity=''; sb.textContent='Send Code'; }
+  if(!r.ok){ showErr(r.error||'Could not send the code. Please try again.'); return; }
+  _fpEmail=email; _fpResetToken=null;
+  const hint=document.getElementById('fp_code_hint');
+  if(hint){ hint.innerHTML='✓ Code sent to <strong style="color:var(--orange)">'+esc(email)+'</strong> (valid 5 min). Check inbox / spam.'; hint.style.display='block'; }
+  const sub=document.getElementById('fpStep2Sub');
+  if(sub) sub.innerHTML='Enter the 6-digit code we sent to<br><strong style="color:var(--orange)">'+esc(email)+'</strong>';
+  if(!isResend){ setFpOtp(''); const ci=document.getElementById('fp_code_input'); if(ci) ci.value=''; showFpStep(2); updateFpVerifyBtnState(); const f=document.querySelector('.fp-otp-box'); if(f) f.focus(); }
+  else { toast('A new code was sent to '+email,'info'); setFpOtp(''); }
+  fpStartResendTimer(Number(r.cooldown)||60);
 }
+async function fpSubmitCode(){ return fpSendCode(false); }
 async function fpVerifyCode(){
   const err=document.getElementById('forgotError');
   const codeErr=document.getElementById('fp_code_error');
   if(err) err.style.display='none';
   if(codeErr) codeErr.style.display='none';
-  const entered=getFpOtp()||(document.getElementById('fp_code_input')?document.getElementById('fp_code_input').value.trim():'');
-  const legacyOtp=(document.getElementById('fp_otp')?document.getElementById('fp_otp').value.trim():'');
-  const finalCode=entered || legacyOtp;
-  if(!finalCode){ if(err){err.textContent='Please enter the 6-digit verification code.';err.style.display='block';} if(codeErr){codeErr.textContent='Please enter the 6-digit code.';codeErr.style.display='block';} return;}
-  if(finalCode.length!==6 || !/^\d{6}$/.test(finalCode)){ if(err){err.textContent='Code must be 6 digits.';err.style.display='block';} if(codeErr){codeErr.textContent='Code must be 6 digits.';codeErr.style.display='block';} return;}
-  if(!_fpCode || Date.now()>_fpCodeExp){
-    const msg='Code expired. Please tap Resend Code to get a new one.';
-    if(err){err.textContent=msg;err.style.display='block';}
-    if(codeErr){codeErr.textContent=msg;codeErr.style.display='block';}
-    return;
-  }
-  if(finalCode!==_fpCode){
-    const msg='Invalid code. Please check and try again.';
-    if(err){err.textContent=msg;err.style.display='block';}
-    if(codeErr){codeErr.textContent=msg;codeErr.style.display='block';}
-    return;
-  }
+  const finalCode=getFpOtp()||(document.getElementById('fp_code_input')?document.getElementById('fp_code_input').value.trim():'');
+  const fail=(m)=>{ if(codeErr){codeErr.textContent=m;codeErr.style.display='block';} };
+  if(!finalCode){ fail('Please enter the 6-digit code.'); return; }
+  if(!/^\d{6}$/.test(finalCode)){ fail('Code must be 6 digits.'); return; }
+  if(!_fpEmail){ fail('Session expired. Please go back and request a new code.'); return; }
   const verifyBtn=document.getElementById('fp_verify_btn');
   setFpBtnLoading(verifyBtn,true,'Verifying…');
-  await new Promise(r=>setTimeout(r,350));
-  const pending=window._fpPendingTarget || {};
-  let username=pending.username || '';
-  let targetId=pending.targetId;
-  let targetType=pending.targetType;
-  _fpVerified={username:username,targetId:targetId,targetType:targetType,expiresAt:Date.now()+10*60*1000};
-  try{ sessionStorage.setItem('gms_fp_verified', JSON.stringify(_fpVerified)); }catch(e){}
-  try{ delete window._fpPendingTarget; }catch(e){ window._fpPendingTarget=null; }
+  const r=await fpApi('verify',{email:_fpEmail,code:finalCode});
+  if(!r.ok||!r.resetToken){ setFpBtnLoading(verifyBtn,false); fail(r.error||'Invalid code. Please try again.'); return; }
+  _fpResetToken=r.resetToken;
   const _n1=document.getElementById('fp_new_pass'); if(_n1) _n1.value='';
   const _n2=document.getElementById('fp_new_pass2'); if(_n2) _n2.value='';
   const _e2=document.getElementById('fpsError'); if(_e2) _e2.style.display='none';
   const _s2=document.getElementById('fpsSuccess'); if(_s2) _s2.style.display='none';
   const _lbl=document.getElementById('fpsLabel'); if(_lbl) _lbl.textContent='';
   ['fps1','fps2','fps3'].forEach(id=>{const b=document.getElementById(id); if(b) b.className='pw-strength-bar';});
+  if(_fpCodeTimer){clearInterval(_fpCodeTimer); _fpCodeTimer=null;}
   showFpStep(3);
   setFpBtnLoading(verifyBtn,false);
   toast('Code verified — now set your new password.','success');
-  _fpCode=null; _fpCodeExp=0;
-  if(_fpCodeTimer){clearInterval(_fpCodeTimer); _fpCodeTimer=null;}
 }
 async function handleForgotVerify(){ return _fpStep===2 ? fpVerifyCode() : fpSubmitCode(); }
 async function verifyForgotCode(){ return fpVerifyCode(); }
@@ -1452,6 +1449,22 @@ async function confirmForgotPassword(){
   if(!pass||!pass2){if(err){err.textContent='Please enter new password.';err.style.display='block';}return;}
   if(pass.length<8){if(err){err.textContent='Password must be at least 8 characters.';err.style.display='block';}return;}
   if(pass!==pass2){if(err){err.textContent='Passwords do not match.';err.style.display='block';}return;}
+  if(_fpResetToken && _fpEmail && !isForcedMode){
+    const cb=document.getElementById('fp_confirm_btn');
+    setFpBtnLoading(cb,true,'Saving…');
+    const r=await fpApi('reset',{email:_fpEmail,resetToken:_fpResetToken,newPassword:pass});
+    if(!r.ok){ setFpBtnLoading(cb,false); if(err){err.textContent=r.error||'Reset failed. Please try again.';err.style.display='block';} return; }
+    const doneEmail=_fpEmail;
+    _fpResetToken=null; _fpEmail='';
+    if(suc){suc.textContent='Password reset successful! You can now log in with your new password.'; suc.style.display='block';}
+    toast('Password reset - please log in with the new password.','success');
+    setTimeout(()=>{
+      closeModal('forgotModal');
+      const lu=document.getElementById('loginUser'); if(lu) lu.value=doneEmail;
+      const lp=document.getElementById('loginPass'); if(lp){ lp.value=''; lp.focus(); }
+    },1500);
+    return;
+  }
   let verified=_fpVerified;
   if(!verified){
     try{
