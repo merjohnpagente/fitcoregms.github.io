@@ -295,7 +295,7 @@ class Member{
     if(this.status==='Archived')return'Archived';
     if(this.status==='pending_payment')return'pending_payment';
     const d=this.daysUntilExpiry;
-    if(d<0)return'Expired';
+    if(d<=0)return'Expired'; // expired exactly on the expiry date
     if(d<=3)return this.status==='Suspended'?'Suspended':'Expiring Soon';
     return this.status==='Suspended'?'Suspended':'Active';
   }
@@ -633,7 +633,7 @@ function isMemberExpired(m){
   if(!m)return false;
   if(m.status==='Archived'||m.status==='pending_payment')return false;
   if(m.status==='Expired')return true;
-  return !!(m.expiryDate&&daysUntil(m.expiryDate)<0);
+  return !!(m.expiryDate&&daysUntil(m.expiryDate)<=0);
 }
 // ===== DOB / AGE POLICY (gym age limits) =====
 function calcAge(dobStr){
@@ -3004,7 +3004,7 @@ function updateQueueBadge(){
 function buildAdminDashboard(){
   const members=Members.all().filter(m=>m.status!=='Archived');
   const active=members.filter(m=>m.status==='Active'||m.status==='Expiring Soon');
-  const expiring=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=0&&d<=7;});
+  const expiring=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=1&&d<=7;});
   const payments=Payments.all();
   const thisMonth=new Date();
   const monthRev=payments.filter(p=>{const d=new Date(p.date);return d.getMonth()===thisMonth.getMonth()&&d.getFullYear()===thisMonth.getFullYear();}).reduce((a,p)=>a+Number(p.amount),0);
@@ -3120,7 +3120,7 @@ function buildStaffDashboard(){
   const members=Members.all().filter(m=>m.status!=='Archived');
   const today_=today();
   const attendance=Attendance.all().filter(a=>a.date===today_);
-  const expiring3=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=0&&d<=3;});
+  const expiring3=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=1&&d<=3;});
   const newThisMonth=members.filter(m=>{const d=new Date(m.createdAt||m.startDate);const now=new Date();return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
   const todayLog=attendance.map(a=>{const m=Members.all().find(x=>x.id===a.memberId);const pl=m?Plans.all().find(p=>p.id===m.planId):null;return{...a,memberName:m?m.name:'Unknown',planName:pl?pl.name:'—'};});
   const todayWalkins=Walkins.all().filter(w=>w.date===today_).length;
@@ -3279,7 +3279,7 @@ function buildMemberDashboard(){
         <div class="mb-banner-sub">Your pending sign-up was archived. Visit the front desk to sign up again.</div>
       </div>
     </div>`;
-  } else if(d<0){
+  } else if(d<=0){
     banner=`<div class="mb-banner expired">
       <div class="mb-banner-ico">🚫</div>
       <div>
@@ -4148,7 +4148,7 @@ function setBgCheck(id,status){
     }else if(cur.status==='Flagged'){
       // Cleared / Pending: restore the status the member had before being flagged (recomputed from expiry if unknown).
       const d=cur.expiryDate?daysUntil(cur.expiryDate):null;
-      const fallback=d===null?'Active':d<0?'Expired':d<=3?'Expiring Soon':'Active';
+      const fallback=d===null?'Active':d<=0?'Expired':d<=3?'Expiring Soon':'Active';
       nextStatus=(prevStatus&&prevStatus!=='Flagged')?prevStatus:fallback;
       prevStatus='';
     }
@@ -4432,7 +4432,7 @@ async function profileCheckIn(id){
     if(m.status==='pending_payment'){show(m.name+' has NOT paid yet — send to the counter first.',false);return;}
     if(m.status==='Archived'){show('Account archived — entry blocked.',false);return;}
     if(bgCheckFlagged(m)){show(m.name+' has a Flagged background check — entry blocked. Clear it in the member profile first.',false);return;}
-    if(daysUntil(m.expiryDate)<0){show('Plan expired on '+formatDate(m.expiryDate)+' — renew at the counter, entry blocked.',false);return;}
+    if(daysUntil(m.expiryDate)<=0){show('Plan expired on '+formatDate(m.expiryDate)+' — renew at the counter, entry blocked.',false);return;}
     Attendance.add({id:uid(),memberId:m.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'});
     refreshProfileCheckBtn(m.id); // flips to "Check Out" right away so a double-click cannot add a duplicate
     show('Saving check-in online…',true);
@@ -5954,7 +5954,7 @@ function renderNotifications(){
   });
   const members=allExpiring.filter(m=>!_dismissedIds.has(m.id));
   const plans=Plans.all();
-  const bucketOf=m=>{const d=daysUntil(m.expiryDate);return d<0?'expired':(d<=2?'urgent':'upcoming');};
+  const bucketOf=m=>{const d=daysUntil(m.expiryDate);return d<=0?'expired':(d<=2?'urgent':'upcoming');};
   const buckets={expired:[],urgent:[],upcoming:[]};
   members.forEach(m=>buckets[bucketOf(m)].push(m));
   ['expired','urgent','upcoming'].forEach(k=>buckets[k].sort((a,b)=>daysUntil(a.expiryDate)-daysUntil(b.expiryDate)));
@@ -5969,7 +5969,7 @@ function renderNotifications(){
     const dayLabel=bucket==='expired'?`Expired ${Math.abs(d)} day${Math.abs(d)!==1?'s':''} ago`:`${d} day${d!==1?'s':''} left`;
     const badgeCls=bucket==='expired'?'badge-expired':bucket==='urgent'?'badge-urgent':'badge-expiring';
     const cls=bucket==='expired'?'expired':bucket==='urgent'?'urgent':'warning';
-    const dayColor=d<0?'var(--red)':d<=2?'var(--orange)':'var(--gold)';
+    const dayColor=d<=0?'var(--red)':d<=2?'var(--orange)':'var(--gold)';
     return`<div class="notif-item ${cls}" style="display:flex;align-items:center;gap:12px;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.035)'" onmouseout="this.style.background=''">
       <div class="user-avatar" style="width:36px;height:36px;font-size:12px;background:${avatarColor};flex-shrink:0">${esc(initials(m.name))}</div>
       <div style="flex:1;min-width:0">
@@ -6037,7 +6037,7 @@ function renderRenewed(){
     if(m.status==='Archived')return false;
     return daysUntil(m.expiryDate)<=7;
   });
-  const bucketOf=m=>{const d=daysUntil(m.expiryDate);return d<0?'expired':(d<=2?'urgent':'upcoming');};
+  const bucketOf=m=>{const d=daysUntil(m.expiryDate);return d<=0?'expired':(d<=2?'urgent':'upcoming');};
   const buckets={expired:[],urgent:[],upcoming:[]};
   allExpiring.forEach(m=>buckets[bucketOf(m)].push(m));
   const now=new Date();
@@ -7802,7 +7802,7 @@ function processQrToken(token){
   if(member.status==='pending_payment'){showScanResult('blocked','Payment Pending',member.name+' has not paid yet — send to the counter.');return;}
   if(member.status==='Archived'){showScanResult('blocked','Account Archived','Member account is archived.');return;}
   if(bgCheckFlagged(member)){showScanResult('blocked','Background Check Flagged',member.name+' is flagged — entry blocked. Clear it in the member profile.');return;}
-  if(daysUntil(member.expiryDate)<0){showScanResult('blocked','Plan Expired',member.name+'\'s plan expired on '+formatDate(member.expiryDate)+'. Renew at the counter — entry blocked.');return;}
+  if(daysUntil(member.expiryDate)<=0){showScanResult('blocked','Plan Expired',member.name+'\'s plan expired on '+formatDate(member.expiryDate)+'. Renew at the counter — entry blocked.');return;}
   Attendance.add({id:uid(),memberId:member.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'qr'});
   showScanResult('granted','Entry Granted',member.name+' ('+member.id+') — logged at '+time);
   playScanSound('success');
