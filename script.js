@@ -4127,7 +4127,20 @@ function setBgCheck(id,status){
     const members=Members.all();
     const idx=members.findIndex(x=>x.id===id);
     if(idx<0){toast('Member not found.','error');return;}
-    members[idx]={...members[idx],bgCheckStatus:status,bgCheckDate:status==='Pending'?'':today(),bgCheckBy:status==='Pending'?'':currentUser.name};
+    const cur=members[idx];
+    let nextStatus=cur.status, prevStatus=cur.statusBeforeFlag||'';
+    if(status==='Flagged'){
+      // Persist "Flagged" as the member's status in the database; remember the old one so Clear can restore it.
+      if(cur.status!=='Flagged') prevStatus=cur.status;
+      nextStatus='Flagged';
+    }else if(cur.status==='Flagged'){
+      // Cleared / Pending: restore the status the member had before being flagged (recomputed from expiry if unknown).
+      const d=cur.expiryDate?daysUntil(cur.expiryDate):null;
+      const fallback=d===null?'Active':d<0?'Expired':d<=3?'Expiring Soon':'Active';
+      nextStatus=(prevStatus&&prevStatus!=='Flagged')?prevStatus:fallback;
+      prevStatus='';
+    }
+    members[idx]={...cur,status:nextStatus,statusBeforeFlag:prevStatus,bgCheckStatus:status,bgCheckDate:status==='Pending'?'':today(),bgCheckBy:status==='Pending'?'':currentUser.name};
     Members.save(members);
     logActivity('Background Check','Member',m.name,'Status: '+status);
     toast('Background check marked as '+status+'.');
