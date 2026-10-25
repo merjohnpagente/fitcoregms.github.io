@@ -1818,7 +1818,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 @media(prefers-reduced-motion:reduce){.mb-tile,.mb-tile:hover{transition:none;transform:none}}
 
 /* ===== Dashboard: dili na sobra ka-lapad sa dagko nga screen ===== */
-#panelDashboard{max-width:1120px;margin-left:auto;margin-right:auto}
+#panelDashboard{max-width:none;width:100%;margin:0;padding:0 18px}
+@media(max-width:900px){#panelDashboard{padding:0}}
 #panelDashboard .mb-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
 @media(max-width:1100px){#panelDashboard .mb-grid{grid-template-columns:1fr}}
 
