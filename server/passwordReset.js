@@ -253,4 +253,44 @@ async function adminChangeUserEmail(idToken, targetId, newEmail) {
   return { status: 200, body: { ok: true, authChanged: true } };
 }
 
-module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, isEmail };
+// Admin issues a ONE-TIME CODE for a member who cannot use their email (lost access,
+// forgot the Gmail password, etc.). The code is generated, hashed and stored HERE using
+// the same record the email flow uses, so the member finishes through the normal
+// Forgot Password screen (email + code -> new password). Nothing is emailed; the code is
+// returned once to the verified admin, who gives it to the member in person.
+const ADMIN_CODE_TTL_MS = 15 * 60 * 1000;   // admin-issued code valid 15 minutes
+async function adminIssueResetCode(idToken, memberId) {
+  const ctx = init();
+  const bad = (msg, status) => ({ status: status || 400, body: { ok: false, error: msg } });
+  let decoded;
+  try { decoded = await ctx.auth.verifyIdToken(String(idToken || ''), true); } catch (e) { return bad('Session expired. Please log in again.', 401); }
+  const callerEmail = String(decoded.email || '').toLowerCase();
+  if (!callerEmail) return bad('Session expired. Please log in again.', 401);
+  const cq = await ctx.db.collection('users').where('authEmail', '==', callerEmail).limit(1).get();
+  const caller = cq.empty ? null : cq.docs[0].data();
+  if (!caller || caller.role !== 'admin' || caller.status === 'locked') return bad('Only an administrator can issue a reset code.', 403);
+
+  const ref = ctx.db.collection('members').doc(String(memberId || ''));
+  const snap = await ref.get();
+  if (!snap.exists) return bad('Member not found.', 404);
+  const prof = snap.data();
+  const email = [prof.authEmail, prof.email].map((x) => String(x || '').trim().toLowerCase())
+    .find((x) => x && isEmail(x) && !x.endsWith('@fitcoregym.local'));
+  if (!email) return bad('This member has no real email on file. Add one in Edit Profile first.', 409);
+
+  const target = await resolveTarget(email, ctx);
+  if (!target || !target.profile || target.profile.kind !== 'members' || target.profile.id !== ref.id) {
+    return bad('Could not find this member\'s login account.', 404);
+  }
+  const code = String(crypto.randomInt(100000, 1000000));
+  const now = Date.now();
+  await ctx.db.collection(COLLECTION).doc(sha256(email)).set({
+    codeHash: hmac(email + ':' + code), codeExp: now + ADMIN_CODE_TTL_MS, attempts: 0,
+    lastSentAt: now, uid: target.uid, authEmail: target.authEmail,
+    profile: target.profile, resetHash: null, resetExp: 0,
+    adminIssued: true, issuedBy: callerEmail
+  });
+  return { status: 200, body: { ok: true, code, email, expiresInMin: ADMIN_CODE_TTL_MS / 60000 } };
+}
+
+module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, isEmail };
