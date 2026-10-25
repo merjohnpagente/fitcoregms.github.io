@@ -5,7 +5,6 @@
   "description": "FitCore GMS static site + Vercel serverless API",
   "engines": { "node": ">=18" },
   "dependencies": {
-    "firebase-admin": "^12.7.0",
-    "nodemailer": "^6.9.16"
+    "firebase-admin": "^12.7.0"
   }
 }

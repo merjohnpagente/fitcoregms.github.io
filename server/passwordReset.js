@@ -5,7 +5,6 @@
 // never in the browser. The browser only ever sees the final result.
 // ============================================================
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const admin = require('firebase-admin');
 
 const CODE_TTL_MS = 5 * 60 * 1000;      // code valid 5 minutes
@@ -36,7 +35,6 @@ function safeEq(a, b) {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 254;
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Find the Firebase Auth account for a real email. Works when the Auth login
 // email IS the Gmail, or when the Gmail is only stored on the member/user profile.
@@ -61,37 +59,31 @@ async function resolveTarget(email, { auth, db }) {
   return { uid, authEmail, name: name || email.split('@')[0], label, profile: profile ? { kind, id: profile.id } : null };
 }
 
-function emailHtml(name, label, code) {
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#222;font-family:Arial,Helvetica,sans-serif">
-<div style="max-width:520px;margin:0 auto;background:#0f1115;border-radius:16px;overflow:hidden;border:1px solid #1d2530">
-  <div style="background:#0b2239;padding:28px 20px;text-align:center">
-    <div style="display:inline-block;background:#4ade80;color:#052e16;font-weight:800;font-size:22px;width:44px;height:44px;line-height:44px;border-radius:8px;vertical-align:middle">F</div>
-    <span style="color:#fff;font-size:22px;letter-spacing:1px;vertical-align:middle;margin-left:8px">FITCORE</span>
-    <div style="color:#4ade80;font-size:13px;letter-spacing:6px;font-weight:700;margin-top:18px">GYM MANAGEMENT SYSTEM</div>
-  </div>
-  <div style="padding:32px 28px;color:#e5e7eb">
-    <h1 style="margin:0 0 20px;font-size:28px;line-height:1.25;color:#fff">You have requested a password change</h1>
-    <p style="font-size:16px;margin:0 0 14px">Hi <strong>${esc(name)}</strong> (${esc(label)}),</p>
-    <p style="font-size:15px;line-height:1.6;color:#cbd5e1;margin:0 0 22px">We received a request to reset the password for your account. Use the verification code below to create a new password:</p>
-    <div style="background:#0b2239;border:1px solid #1e3a5f;border-radius:16px;text-align:center;padding:22px 12px">
-      <div style="color:#4ade80;font-size:13px;letter-spacing:5px;font-weight:700">VERIFICATION CODE</div>
-      <div style="color:#fff;font-size:44px;font-weight:700;letter-spacing:12px;margin:12px 0 8px">${esc(code)}</div>
-      <div style="color:#94a3b8;font-size:13px">Valid for 5 minutes • Do not share</div>
-    </div>
-    <p style="font-size:12px;color:#64748b;margin:22px 0 0">If you didn't request this, you can safely ignore this email — your password will not change.</p>
-  </div>
-</div></body></html>`;
-}
-
-let _tx;
-function mailer() {
-  if (!_tx) {
-    _tx = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: env('GMAIL_USER'), pass: env('GMAIL_APP_PASSWORD') }
-    });
-  }
-  return _tx;
+// Sends through EmailJS's REST API from the SERVER (so the code never touches the browser).
+// Your existing template variables are kept: to_email, to_name, username, otp_code, from_name, message.
+// Needs: EmailJS dashboard -> Account -> Security -> allow API calls from non-browser apps,
+// and EMAILJS_PRIVATE_KEY (Account -> API keys -> Private Key).
+async function sendEmailJs(to, name, label, code) {
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id: process.env.EMAILJS_SERVICE_ID || 'service_qzaheib',
+      template_id: process.env.EMAILJS_TEMPLATE_ID || 'template_cwn0ver',
+      user_id: process.env.EMAILJS_PUBLIC_KEY || 'G6l2ttn_xjztBJVM6',
+      accessToken: env('EMAILJS_PRIVATE_KEY'),
+      template_params: {
+        to_email: to,
+        to_name: name,
+        username: name,
+        user_role: label,
+        otp_code: code,
+        from_name: 'FitCore GMS',
+        message: 'Your FitCore verification code is ' + code + ' (valid 5 minutes). Do not share this code.'
+      }
+    })
+  });
+  if (!res.ok) throw new Error('EmailJS ' + res.status + ': ' + (await res.text()).slice(0, 200));
 }
 
 async function sendCode(email) {
@@ -113,13 +105,7 @@ async function sendCode(email) {
     lastSentAt: now, uid: target.uid, authEmail: target.authEmail,
     profile: target.profile || null, resetHash: null, resetExp: 0
   });
-  await mailer().sendMail({
-    from: '"Fitcore GMS" <' + env('GMAIL_USER') + '>',
-    to: email,
-    subject: 'Reset your password',
-    text: 'Your FitCore verification code is ' + code + '. Valid for 5 minutes. Do not share.',
-    html: emailHtml(target.name, target.label, code)
-  });
+  await sendEmailJs(email, target.name, target.label, code);
   return { status: 200, body: { ok: true, cooldown: RESEND_COOLDOWN_MS / 1000 } };
 }
 
