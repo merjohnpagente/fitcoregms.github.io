@@ -7726,8 +7726,10 @@ function startScanner(){
     return;
   }
   stopScanner();
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(stream=>{
+  const showErr=(msg)=>{ if(err){err.textContent=msg;err.style.display='block';} };
+  const onStream=(stream)=>{
     _scanStream=stream;
+    video.setAttribute('playsinline','true'); video.setAttribute('muted','true'); video.muted=true;
     video.srcObject=stream;
     video.style.display='block';
     if(placeholder)placeholder.style.display='none';
@@ -7739,8 +7741,24 @@ function startScanner(){
       _scanning=true;
       _scanLoop();
     }).catch(()=>{});
-  }).catch(()=>{
-    if(err){err.textContent='Camera access denied. Use Manual Entry instead.';err.style.display='block';}
+  };
+  const onFail=(e)=>{
+    const n=(e&&e.name)||'';
+    if(n==='NotAllowedError'||n==='SecurityError'||n==='PermissionDeniedError'){
+      showErr('Camera is blocked for this site. Tap the lock icon beside the web address > Permissions > Camera > Allow, then reload this page and tap Start Camera. (Or use Manual Entry.)');
+    }else if(n==='NotReadableError'||n==='TrackStartError'){
+      showErr('Camera is being used by another app or tab. Close it, then tap Start Camera again.');
+    }else if(n==='NotFoundError'||n==='DevicesNotFoundError'){
+      showErr('No camera found on this device. Use Manual Entry instead.');
+    }else{
+      showErr('Could not start the camera. Use Manual Entry instead.');
+    }
+  };
+  // Try the back camera first; if the device has no back camera (or it is not allowed to pick one), fall back to any camera.
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}).then(onStream).catch(e1=>{
+    const n=(e1&&e1.name)||'';
+    if(n==='NotAllowedError'||n==='SecurityError'||n==='PermissionDeniedError'){ onFail(e1); return; }
+    navigator.mediaDevices.getUserMedia({video:true,audio:false}).then(onStream).catch(onFail);
   });
 }
 function stopScanner(){
