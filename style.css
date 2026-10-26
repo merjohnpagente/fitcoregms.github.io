@@ -1869,3 +1869,11 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
   #panelNotifications .filter-chip,#panelRenewed .filter-chip{padding:9px 16px;font-size:14px}
   #panelNotifications .renew-mini-stat,#panelRenewed .renew-mini-stat{font-size:14px;padding:9px 14px}
 }
+
+/* TCGC logo */
+.brand-logo{width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#fff}
+.ln-brand .brand-logo{display:inline-block;vertical-align:middle;margin:-4px 10px 0 0}
+.sidebar-brand .brand-row{gap:10px}
+.login-tcgc{display:block;width:84px;height:84px;border-radius:50%;object-fit:cover;background:#fff;margin:0 auto 14px}
+.pending-gate-card .login-tcgc{width:72px;height:72px}
+@media(max-width:480px){.login-tcgc{width:68px;height:68px;margin-bottom:10px}.ln-brand .brand-logo{width:28px;height:28px}}
