@@ -623,6 +623,15 @@ function newestPaymentFirst(a,b){
 function nextMemberId(){const n=Members.all().filter(m=>m.status!=='Archived').length;return 'MEM-'+String(n+1).padStart(4,'0');}
 function addDays(dateStr,days){const d=new Date(dateStr);d.setDate(d.getDate()+days);return d.toISOString().split('T')[0];}
 function addMonths(dateStr,months){const d=new Date(dateStr);d.setMonth(d.getMonth()+months);return d.toISOString().split('T')[0];}
+// New expiry for a payment. If the member's plan is still running (expiry is after the
+// payment date), the new period stacks on top of the current expiry so early renewals
+// do not lose their remaining days. Pending/archived/expired members start from the payment date.
+function renewalExpiry(member,startDate,months){
+  const cur=member&&member.expiryDate;
+  const live=!!member&&member.status!=='pending_payment'&&member.status!=='Archived'&&member.status!=='Expired';
+  const base=(live&&cur&&String(cur)>String(startDate))?cur:startDate;
+  return addMonths(base,months);
+}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysUntil(dateStr){const ms=new Date(dateStr)-new Date(today());return Math.ceil(ms/(1000*60*60*24));}
 // Expired member check for login gate + session force-logout.
@@ -4647,7 +4656,7 @@ function savePayment(){
     err.style.display='block';
     return;
   }
-  const newExpiry=addMonths(date,plan?plan.duration:1);
+  const newExpiry=renewalExpiry(member,date,plan?plan.duration:1);
   const fromRenewal=document.getElementById('paymentModal').dataset.fromRenewal==='1';
   const confirmTitle=fromRenewal?'🔄 Confirm Renewal Payment':'💳 Confirm Payment';
   const memberInitials=member?member.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2):'?';
@@ -7550,7 +7559,7 @@ function openConfirmPayment(memberId){
       <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Plan</div><div style="font-weight:700;color:var(--white);margin-top:2px">${esc(plan?plan.name:'—')}</div></div>
       <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Plan Price</div><div style="font-weight:700;color:var(--green);margin-top:2px">₱${plan?Number(plan.price).toLocaleString():'0'}</div></div>
       <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Duration</div><div style="font-weight:700;color:var(--white);margin-top:2px">${plan?plan.duration+' month(s)':'-'}</div></div>
-      <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">New Expiry</div><div style="font-weight:700;color:var(--white);margin-top:2px">${plan?formatDate(addMonths(today(),plan.duration)):'—'}</div></div>
+      <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">New Expiry</div><div style="font-weight:700;color:var(--white);margin-top:2px">${plan?formatDate(renewalExpiry(m,today(),plan.duration)):'—'}</div></div>
     </div>`;
   document.getElementById('cpm_amount').value=plan?plan.price:'';
   document.getElementById('cpm_method').value='';
@@ -7576,7 +7585,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
   const planId=opts.planId||member.planId;
   const plan=planId?Plans.one(planId):null;
   const start=opts.date||today();
-  const newExpiry=addMonths(start,plan?plan.duration:1);
+  const newExpiry=renewalExpiry(member,start,plan?plan.duration:1);
   const now=new Date();
   const newId=opts.paymentId||nextId(KEY.payments,'PAY');
   const payment={id:newId,memberId,memberName:member.name,planId,planName:plan?plan.name:'Unknown',amount:amount|| (plan?Number(plan.price):0),date:start,newExpiry,method:method||'Cash',reference:sanitizeText(reference||''),notes:sanitizeText(opts.notes||''),recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:opts.source||'activation',timestamp:now.getTime(),createdAt:start};
