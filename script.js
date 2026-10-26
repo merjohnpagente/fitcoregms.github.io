@@ -7689,6 +7689,8 @@ function renderScanner(){
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn-primary btn-sm" id="scanStartBtn" onclick="startScanner()">▶ Start Camera</button>
+          <button class="btn-secondary btn-sm" id="scanPhotoBtn" type="button" onclick="document.getElementById('scanPhotoInput').click()" style="margin-left:8px">📷 Scan with Phone Camera App</button>
+          <input type="file" id="scanPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="scanFromPhoto(this)">
           <button class="btn-secondary btn-sm" id="scanStopBtn" style="display:none" onclick="stopScanner()">■ Stop</button>
         </div>
       </div>
@@ -7840,6 +7842,31 @@ function processQrToken(token){
   if(navigator.vibrate) try{navigator.vibrate(120);}catch(e){}
   _scanLocked=true;
   setTimeout(()=>{_scanLocked=false;},4000);
+}
+function scanFromPhoto(input){
+  const err=document.getElementById('scanError');
+  const showErr=(m)=>{ if(err){err.textContent=m;err.style.display='block';} };
+  if(err)err.style.display='none';
+  const file=input&&input.files&&input.files[0];
+  if(!file)return;
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    try{
+      const max=1400, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const w=Math.max(1,Math.round(img.width*sc)), h=Math.max(1,Math.round(img.height*sc));
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+      const data=ctx.getImageData(0,0,w,h);
+      const code=jsQR(data.data,w,h,{inversionAttempts:'attemptBoth'});
+      if(code&&code.data){ processQrToken(code.data); }
+      else{ showErr('No QR code found in the photo. Move closer, keep the QR flat and well lit, and try again.'); }
+    }catch(e){ showErr('Could not read the photo. Please try again.'); }
+    URL.revokeObjectURL(url);
+    input.value='';
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(url); showErr('Could not open the photo. Please try again.'); input.value=''; };
+  img.src=url;
 }
 function scanManualToken(){
   const input=document.getElementById('scanManualInput');
