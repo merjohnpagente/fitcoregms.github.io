@@ -666,7 +666,11 @@ select option{background:var(--navy-700)}
 .ln-link.ln-cta:hover{background:linear-gradient(135deg,#a4fcab,var(--orange-dark))}
 /* ======= LANDING SECTIONS ======= */
 .landing-section{display:none;min-height:100vh;padding-top:68px}
-#landingHome{display:flex;align-items:center;justify-content:space-between;padding:112px 80px 84px;gap:60px;position:relative;overflow:hidden;min-height:90vh}
+#landingHome{display:flex;align-items:center;justify-content:space-between;padding:112px 80px 84px;gap:60px;position:relative;overflow:hidden;min-height:90vh;background:linear-gradient(90deg,rgba(8,12,9,.94) 0%,rgba(8,12,9,.78) 38%,rgba(8,12,9,.28) 68%,rgba(8,12,9,.08) 100%),url('assets/hero-banner.webp') right 68px/auto calc(100% - 68px) no-repeat,#0a0f0b}
+/* Web banner: the hero picture is the banner background, so the old floating preview image is hidden */
+#landingHome .hero-visual{display:none}
+#landingHome .hero-content{max-width:600px}
+@media(max-width:900px){#landingHome{background:linear-gradient(180deg,rgba(8,12,9,.9) 0%,rgba(8,12,9,.78) 55%,rgba(8,12,9,.6) 100%),url('assets/hero-banner.webp') 72% center/cover no-repeat,#0a0f0b}}
 #landingHome::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 55% 70% at 72% 50%,rgba(127,250,136,.14) 0%,transparent 60%),radial-gradient(ellipse 50% 50% at 20% 70%,rgba(179,188,181,.1) 0%,transparent 55%),radial-gradient(ellipse 40% 40% at 80% 10%,rgba(127,250,136,.07) 0%,transparent 50%);pointer-events:none}
 #landingHome::after{content:'FITCORE';position:absolute;bottom:-60px;right:-20px;font-family:'Space Grotesk',sans-serif;font-size:260px;font-weight:900;letter-spacing:-10px;color:rgba(255,255,255,.02);white-space:nowrap;pointer-events:none;user-select:none;line-height:1}
 #landingFeatures,#landingExplore,#landingTrainers,#landingReviews{display:flex;justify-content:center;align-items:flex-start;padding-top:100px}
