@@ -16,7 +16,7 @@
 
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Montserrat:ital,wght@1,500;1,600;1,800;1,900&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="style.css?v=31">
 
@@ -96,17 +96,30 @@
 
   <div id="landingHome" class="landing-section">
 
+    <div class="hero-art" aria-hidden="true">
+      <img class="hero-art-img" src="assets/hero-banner.webp" alt="" width="1154" height="684">
+      <div class="hero-feat">
+        <div class="hero-feat-title">FitCore Features</div>
+        <ul class="hero-feat-list">
+          <li><b>1</b> Members &amp; Billing</li>
+          <li><b>2</b> QR Check-in/out</li>
+          <li><b>3</b> Trainer Schedules</li>
+          <li><b>4</b> Walk-ins &amp; Reports</li>
+        </ul>
+      </div>
+    </div>
+
     <div class="hero-content">
 
       <div class="hero-chip reveal"><span class="hero-chip-dot"></span>Web-Based Gym Management</div>
 
-      <h1 class="hero-title reveal reveal-d1">Manage Your<br><span>Gym</span> with<br>FITCORE</h1>
+      <h1 class="hero-hl reveal reveal-d1"><span class="hh-wake">Wake Up!</span><span class="hh-sub">It&rsquo;s Time To Take The Action</span><span class="hh-start">Start Training</span><span class="hh-today">TODAY</span></h1>
 
       <p class="hero-sub reveal reveal-d2">A complete gym management system built for local fitness centers. Members, billing, trainer schedules, walk-ins, and reports all in one place.</p>
 
       <div class="hero-btns reveal reveal-d3">
 
-        <button class="btn-primary hero-btn hero-btn-orange" onclick="showLandingSection('register',document.querySelector('.ln-cta'))">Get Started Now</button>
+        <button class="hero-join" onclick="showLandingSection('register',document.querySelector('.ln-cta'))"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>Join Now</button>
 
         <button class="btn-secondary hero-btn hero-btn-outline" onclick="showLandingSection('explore',document.querySelectorAll('.ln-link')[2])">Explore Plans</button>
 
@@ -122,25 +135,9 @@
 
       </div>
 
-      <div class="scroll-cue"><span class="scroll-cue-line"></span>Scroll</div>
-
-    </div>
-
-    <div class="hero-visual reveal reveal-d2">
-
-      <img src="assets/pngegg.png" alt="FITCORE preview" class="hero-img">
-
-      <span class="hero-plus hp-1" aria-hidden="true">+</span>
-
-      <span class="hero-plus hp-2" aria-hidden="true">+</span>
-
-      <span class="hero-plus hp-3" aria-hidden="true">+</span>
-
     </div>
 
   </div>
-
-
 
   <!-- MARQUEE TICKER -->
 
