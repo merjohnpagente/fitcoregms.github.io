@@ -9048,8 +9048,7 @@ function openUserModal(id=null){
       emailEl.placeholder=u.role==='admin'?'Admin contact email (used for Forgot Password)':'e.g. trainer@gmail.com';
     }
     document.getElementById('uf_pass').value='';document.getElementById('uf_pass2').value='';
-    document.getElementById('uf_pass').placeholder='Leave blank to keep the current password';
-    const _pwHint=document.getElementById('uf_pwHint');if(_pwHint)_pwHint.style.display='block';
+    document.getElementById('uf_pass').placeholder='Leave blank to keep current password';
     document.getElementById('uf_role').value=u.role;
     // Hide role field for admin users — role cannot be changed
     const roleRow=document.getElementById('uf_role_row');
@@ -9083,7 +9082,6 @@ function openUserModal(id=null){
   } else {
     ['uf_name','uf_contact','uf_user','uf_pass','uf_pass2','uf_email'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('uf_pass').placeholder='Minimum 8 characters';
-    const _pwHintAdd=document.getElementById('uf_pwHint');if(_pwHintAdd)_pwHintAdd.style.display='none';
     const newEmailEl=document.getElementById('uf_email');
     if(newEmailEl){newEmailEl.disabled=false;newEmailEl.placeholder='e.g. trainer@gmail.com';}
     document.getElementById('uf_role').value=userRoleTab;
