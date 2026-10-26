@@ -5443,6 +5443,7 @@ function confirmCompleteSession(id){
   const s=Sessions.one(id);
   if(!s)return;
   if(currentUser.role==='trainer'&&s.trainerId!==currentUser.id){toast('You can only update your own sessions.','error');return;}
+  if(s.status!=='Scheduled'&&s.status!=='Accepted'){toast('Only a scheduled session can be marked as completed.','error');return;}
   if(sessionNotStartedYet(s)){toast('You can only complete this session on its scheduled day: '+formatDate(s.date)+'.','error');return;}
   const detail=`<div style="margin-top:12px;background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'—')}</strong></div>
@@ -5488,6 +5489,7 @@ function markSessionDone(id){
   const idx=sessions.findIndex(s=>s.id===id);
   if(idx<0)return;
   if(sessions[idx].trainerId!==currentUser.id){toast('You can only mark your own sessions as done.','error');return;}
+  if(sessions[idx].status!=='Scheduled'&&sessions[idx].status!=='Accepted'){toast('Only a scheduled session can be marked as completed.','error');return;}
   if(sessionNotStartedYet(sessions[idx])){toast('This session is not scheduled for today yet — it can only be completed on '+formatDate(sessions[idx].date)+'.','error');return;}
   const prevStatus=sessions[idx].status;
   // Immutable replace — never mutate the object in place (sync bug fix)
@@ -7042,6 +7044,10 @@ function bookSession(){
   if(!trainerId||!date||!start||!end||!type){ if(err){err.textContent='Session type, trainer, date, start and end are required.';err.style.display='block';} return; }
   if(date<today()){ if(err){err.textContent='Cannot request a session on a past date. Please choose today or a future date.';err.style.display='block';} return; }
   if(start>=end){ if(err){err.textContent='End time must be after start time.';err.style.display='block';} return; }
+  if(date===today()){
+    const nd=new Date();const nowHM=String(nd.getHours()).padStart(2,'0')+':'+String(nd.getMinutes()).padStart(2,'0');
+    if(start<nowHM){ if(err){err.textContent='That start time has already passed today. Please choose a later time.';err.style.display='block';} return; }
+  }
   const trainer=Users.one(trainerId);
   if(!trainer){ if(err){err.textContent='Trainer not found.';err.style.display='block';} return; }
   if(!isBookableTrainer(trainer)){ if(err){err.textContent='That trainer is not available for booking right now. Please choose another trainer.';err.style.display='block';} return; }
@@ -7049,12 +7055,20 @@ function bookSession(){
   const availErr=trainerAvailabilityError(trainer,date,start,end);
   if(availErr){ if(err){err.textContent=availErr;err.style.display='block';} return; }
   const mid=currentUser.memberId||currentUser.id; const mem=Members.one(mid);
+  if(!mem){ if(err){err.textContent='Your member record was not found. Please log in again.';err.style.display='block';} return; }
+  // The membership must be active, and the session must fall before it ends
+  // (the expiry day itself counts as expired).
+  if(mem.status==='pending_payment'||mem.status==='Archived'||isMemberExpired(mem)){ if(err){err.textContent='Your membership is not active. Please renew at the front desk before booking a session.';err.style.display='block';} return; }
+  if(mem.expiryDate&&date>=mem.expiryDate){ if(err){err.textContent='Your membership ends on '+formatDate(mem.expiryDate)+'. Please choose an earlier date, or renew at the front desk first.';err.style.display='block';} return; }
   // Plan session limit: no more booking once the plan's sessions are used up
   // (completed sessions) or already fully reserved by open requests.
-  const bkPlan=mem&&mem.planId?Plans.one(mem.planId):null;
-  if(bkPlan&&bkPlan.sessions!=='Unlimited'){
+  // A missing plan, or a plan without a numeric session count, cannot book (no unlimited fallback).
+  const bkPlan=mem.planId?Plans.one(mem.planId):null;
+  if(!bkPlan){ if(err){err.textContent='You do not have an active plan. Please visit the front desk.';err.style.display='block';} return; }
+  if(bkPlan.sessions!=='Unlimited'){
     const limit=Number(bkPlan.sessions);
-    if(Number.isFinite(limit)){
+    if(!Number.isFinite(limit)||limit<=0){ if(err){err.textContent='Your plan ('+bkPlan.name+') does not include trainer sessions.';err.style.display='block';} return; }
+    {
       const used=memberSessionsUsed(mid);
       if(used>=limit){ if(err){err.textContent='You have used all '+limit+' sessions of your '+bkPlan.name+' plan. Please renew your plan to book more sessions.';err.style.display='block';} return; }
       const since=(mem&&(mem.planStart||mem.startDate))||'';
