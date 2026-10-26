@@ -7689,8 +7689,6 @@ function renderScanner(){
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn-primary btn-sm" id="scanStartBtn" onclick="startScanner()">▶ Start Camera</button>
-          <button class="btn-secondary btn-sm" id="scanPhotoBtn" type="button" onclick="document.getElementById('scanPhotoInput').click()" style="margin-left:8px;display:inline-flex;align-items:center;gap:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>Scan with Phone Camera App</button>
-          <input type="file" id="scanPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="scanFromPhoto(this)">
           <button class="btn-secondary btn-sm" id="scanStopBtn" style="display:none" onclick="stopScanner()">■ Stop</button>
         </div>
       </div>
