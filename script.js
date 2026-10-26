@@ -5858,18 +5858,41 @@ function saveSession(){
   const err=document.getElementById('sessionFormError');
   err.style.display='none';
   if(!trainerId||!memberId||!type||!date||!start||!end){err.textContent='Please fill in all required fields.';err.style.display='block';return;}
+  const origSession=editingSessionId?Sessions.one(editingSessionId):null;
   // Block past dates (date picker min is a UI guard; this is the hard check)
   const minDate=document.getElementById('sf_date').min||today();
   if(date<minDate){err.textContent='Cannot schedule a session on a past date. Please choose today or a future date.';err.style.display='block';return;}
   const memberCheck=Members.one(memberId);
   if(memberCheck&&memberCheck.status==='Expired'){err.textContent='Cannot schedule a session for '+memberCheck.name+'. Their membership has expired. Please renew their membership first.';err.style.display='block';return;}
+  if(memberCheck&&(memberCheck.status==='pending_payment'||memberCheck.status==='Archived')){err.textContent='Cannot schedule a session for '+memberCheck.name+'. Their membership is not active.';err.style.display='block';return;}
+  // The membership must still be valid on the session date (the expiry day itself counts as expired).
+  if(memberCheck&&memberCheck.expiryDate&&date>=memberCheck.expiryDate){err.textContent='Cannot schedule on '+formatDate(date)+'. '+memberCheck.name+"'s membership ends on "+formatDate(memberCheck.expiryDate)+'. Renew first or pick an earlier date.';err.style.display='block';return;}
   if(end<=start){err.textContent='Invalid time range. The end time must be after the start time.';err.style.display='block';return;}
+  // A start time that has already passed today is not allowed (unchanged edits of an existing session are left alone).
+  if(date===today()&&(!origSession||origSession.date!==date||origSession.start!==start)){
+    const nd=new Date();const nowHM=String(nd.getHours()).padStart(2,'0')+':'+String(nd.getMinutes()).padStart(2,'0');
+    if(start<nowHM){err.textContent='The start time has already passed today. Please choose a later time.';err.style.display='block';return;}
+  }
   if(!sessionTypesForTrainer(trainerId).includes(type)){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';return;}
   const trAvail=Users.all().find(u=>u.id===trainerId);
   if(!isBookableTrainer(trAvail)){err.textContent='That trainer is not available for booking right now. Please choose another trainer.';err.style.display='block';return;}
   const availErr=trainerAvailabilityError(trAvail,date,start,end);
   if(availErr){err.textContent=availErr;err.style.display='block';return;}
   const sessions=Sessions.all();
+  // Plan session limit (same rule as member self-booking): completed + already-booked sessions must stay under the plan total.
+  if(memberCheck){
+    const sPlan=memberCheck.planId?Plans.one(memberCheck.planId):null;
+    if(sPlan&&sPlan.sessions!=='Unlimited'){
+      const limit=Number(sPlan.sessions);
+      if(!Number.isFinite(limit)||limit<=0){err.textContent=memberCheck.name+"'s plan ("+sPlan.name+') does not include trainer sessions.';err.style.display='block';return;}
+      const since=memberCheck.planStart||memberCheck.startDate||'';
+      const inPeriod=x=>!since||!x.date||x.date>=since;
+      // An edited session that was Completed becomes Scheduled again, so it stops counting as used.
+      const used=memberSessionsUsed(memberId)-((origSession&&origSession.status==='Completed'&&inPeriod(origSession))?1:0);
+      const reserved=sessions.filter(x=>x.memberId===memberId&&x.id!==editingSessionId&&['Pending','Accepted','Scheduled'].includes(x.status)&&inPeriod(x)).length;
+      if(used+reserved>=limit){err.textContent=memberCheck.name+' has no sessions left on the '+sPlan.name+' plan ('+used+' completed, '+reserved+' booked, '+limit+' total). Renew the plan to add more.';err.style.display='block';return;}
+    }
+  }
   // Conflict: same trainer, same date, overlapping time
   const trainerConflict=sessions.filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined'&&s.id!==editingSessionId).find(s=>start<s.end&&end>s.start);
   if(trainerConflict){err.textContent=`Schedule Conflict: This trainer already has a session from ${trainerConflict.start}–${trainerConflict.end} on this date. Please choose a different time.`;err.style.display='block';return;}
