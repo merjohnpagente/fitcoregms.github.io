@@ -4971,6 +4971,8 @@ function openTrainerEditModal(){
   document.getElementById('tep_fullname').value=u.name||'';
   document.getElementById('tep_coachname').value=u.coachName||'';
   document.getElementById('tep_bio').value=u.bio||'';
+  clearCustomSpecBoxes('tep_specs');
+  trainerSpecList(u).forEach(function(sp){addSpecBox('tep_specs',sp,false);});
   document.querySelectorAll('#tep_specs input[type=checkbox]').forEach(cb=>{
     cb.checked=trainerSpecList(u).includes(cb.value);
   });
@@ -9002,11 +9004,58 @@ function toggleTrainerFields(){
 function updateUfSpecChips(){
   const container=document.getElementById('ufSpecChips');
   if(!container)return;
+  container.innerHTML='';
   const checked=document.querySelectorAll('#ufSpecGrid input[type=checkbox]:checked');
-  if(!checked.length){container.innerHTML='';return;}
-  container.innerHTML=Array.from(checked).map(cb=>{
-    return `<span class="uf-chip" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer" onclick="this.closest('.form-group').querySelectorAll('input[value=\"'+cb.value+'\"]')[0].checked=false;updateUfSpecChips()">${esc(cb.value)}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>`;
-  }).join('');
+  Array.from(checked).forEach(function(cb){
+    const chip=document.createElement('span');
+    chip.className='uf-chip';
+    chip.style.cssText='display:inline-flex;align-items:center;gap:4px;cursor:pointer';
+    chip.appendChild(document.createTextNode(cb.value));
+    chip.insertAdjacentHTML('beforeend','<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>');
+    chip.onclick=function(){cb.checked=false;updateUfSpecChips();};
+    container.appendChild(chip);
+  });
+}
+// ── Custom trainer specializations ──────────────────────────────────────────
+// The checklist is a fixed list, so an admin can type in another specialization.
+// It becomes its own checkbox (data-custom) and is saved like any other value.
+// The same helper restores a trainer's custom values into the checklist when a form
+// is opened, so saving a profile never drops them.
+function addSpecBox(gridId,value,checked){
+  const grid=document.getElementById(gridId);if(!grid)return null;
+  const v=String(value==null?'':value).trim();if(!v)return null;
+  const existing=Array.from(grid.querySelectorAll('input[type=checkbox]')).find(function(cb){return cb.value.toLowerCase()===v.toLowerCase();});
+  if(existing){if(checked)existing.checked=true;return existing;}
+  const tpl=grid.querySelector('label');if(!tpl)return null;
+  const lab=tpl.cloneNode(true);
+  lab.setAttribute('data-custom','1');
+  const inp=lab.querySelector('input');
+  Array.from(lab.childNodes).forEach(function(n){if(n.nodeType===3)lab.removeChild(n);});
+  inp.value=v;inp.checked=!!checked;
+  lab.appendChild(document.createTextNode(' '+v));
+  grid.appendChild(lab);
+  if(gridId==='ufSpecGrid')inp.addEventListener('change',updateUfSpecChips);
+  return inp;
+}
+function clearCustomSpecBoxes(gridId){
+  const grid=document.getElementById(gridId);if(!grid)return;
+  grid.querySelectorAll('label[data-custom="1"]').forEach(function(l){l.remove();});
+}
+function addCustomSpec(){
+  const inputEl=document.getElementById('uf_specCustom');
+  const errEl=document.getElementById('uf_specCustomErr');
+  if(!inputEl)return;
+  const fail=function(m){if(errEl){errEl.textContent=m;errEl.style.display='block';}};
+  if(errEl)errEl.style.display='none';
+  const v=String(inputEl.value||'').replace(/\s+/g,' ').trim();
+  if(!v){fail('Type a specialization first.');return;}
+  if(v.length<2||v.length>30){fail('Specialization must be 2 to 30 characters.');return;}
+  if(!/^[A-Za-z0-9][A-Za-z0-9 &\/.+\-]*$/.test(v)){fail('Use letters, numbers and spaces only.');return;}
+  if(v.toLowerCase()==='assessment'){fail('"Assessment" is already available for every trainer.');return;}
+  const box=addSpecBox('ufSpecGrid',v,true);
+  if(box)box.checked=true;
+  inputEl.value='';
+  updateUfSpecChips();
 }
 // Live duplicate check for the Add/Edit User email field. This is only a
 // convenience guard; saveUser() re-checks and Firebase Auth rejects the real
@@ -9033,6 +9082,9 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 function openUserModal(id=null){
   editingUserId=id;
+  clearCustomSpecBoxes('ufSpecGrid');
+  const _cs=document.getElementById('uf_specCustom');if(_cs)_cs.value='';
+  const _cse=document.getElementById('uf_specCustomErr');if(_cse)_cse.style.display='none';
   document.getElementById('userModalTitle').textContent=id?'Edit User':'Add User';
   document.getElementById('userFormError').style.display='none';
   const ufEmailErr=document.getElementById('uf_email_error');
@@ -9060,6 +9112,7 @@ function openUserModal(id=null){
       document.getElementById('uf_bio').value=u.bio||'';
       // Check specialization boxes (legacy values may be comma-separated)
       const _editSpecs=trainerSpecList(u);
+      _editSpecs.forEach(function(sp){addSpecBox('ufSpecGrid',sp,false);});
       document.querySelectorAll('#ufSpecGrid input[type=checkbox]').forEach(cb=>{cb.checked=_editSpecs.includes(cb.value);});
       // Check availability day boxes
       document.querySelectorAll('#ufAvailDays input[type=checkbox]').forEach(cb=>{cb.checked=(u.availableDays||[]).includes(cb.value);});
