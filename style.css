@@ -1876,7 +1876,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 
 /* TCGC logo */
 .brand-logo{width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#fff}
-.ln-brand .brand-logo{display:inline-block;vertical-align:middle;margin:-4px 10px 0 0}
+.ln-brand .brand-logo{display:inline-block;vertical-align:middle;margin:-4px 8px 0 0}
 .sidebar-brand .brand-row{gap:10px}
 .login-tcgc{display:block;width:84px;height:84px;border-radius:50%;object-fit:cover;background:#fff;margin:0 auto 14px}
 .pending-gate-card .login-tcgc{width:72px;height:72px}
@@ -1919,3 +1919,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
   #landingHome .hero-btns{justify-content:flex-start;flex-direction:row;align-items:center}
   #landingHome .hero-stats{justify-content:flex-start}
 }
+.login-logos{display:flex;justify-content:center;gap:12px;margin-bottom:14px}
+.login-logos .login-tcgc{margin:0}
+.sidebar-brand .brand-logo{width:30px;height:30px}
+.sidebar-brand .brand-row{gap:8px}
