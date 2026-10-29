@@ -1524,6 +1524,8 @@
 
     </div>
 
+    <div id="pgGcash" style="display:none;margin-top:14px"></div>
+
     <div class="pending-gate-note" id="pgNote">Your QR code unlocks automatically once payment is confirmed. (Auto-checks every 4s)</div>
 
     <div style="display:flex;gap:10px;margin-top:16px">
@@ -2091,6 +2093,58 @@
 
   </div>
 
+</div>
+
+<!-- GCash Pay Modal (member submits proof of payment) -->
+<div class="modal-overlay" id="gcashPayModal" style="z-index:1300">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head"><h2>📱 Pay via GCash</h2><button class="modal-close" onclick="closeModal('gcashPayModal')">✕</button></div>
+    <div class="modal-body">
+      <div id="gp_error" class="error-msg"></div>
+      <div style="background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.7">
+        <div><span style="color:var(--gray-500)">Plan:</span> <strong id="gp_plan">—</strong></div>
+        <div><span style="color:var(--gray-500)">Amount to pay:</span> <strong id="gp_amount" style="color:var(--green)">—</strong></div>
+      </div>
+      <div style="text-align:center;margin-bottom:14px">
+        <img id="gp_qr" alt="GCash QR" style="display:none;width:200px;max-width:70%;border-radius:12px;background:#fff;padding:6px;cursor:zoom-in" onclick="openAvatarZoom(this.src,'GCash QR')">
+        <div style="margin-top:8px;font-size:13px">Account name: <strong id="gp_accName">—</strong></div>
+        <div style="font-size:13px">GCash number: <strong id="gp_accNum" style="font-family:monospace">—</strong></div>
+      </div>
+      <ol style="font-size:12px;color:var(--gray-300);line-height:1.8;padding-left:18px;margin:0 0 14px">
+        <li>Open GCash and scan the QR (or send to the number above).</li>
+        <li>Send the exact amount shown.</li>
+        <li>Type the <strong>reference number</strong> and upload a <strong>screenshot of the receipt</strong> below.</li>
+        <li>The front desk checks it, then your membership is activated.</li>
+      </ol>
+      <div class="form-group"><label>GCash Reference Number *</label><input type="text" id="gp_ref" placeholder="e.g. 1234567890123" autocomplete="off" maxlength="24"></div>
+      <div class="form-group"><label>Receipt Screenshot *</label>
+        <input type="file" id="gp_file" accept="image/*" onchange="onGcashReceiptPick(this)">
+        <img id="gp_preview" alt="Receipt preview" style="display:none;margin-top:8px;max-width:100%;max-height:180px;border-radius:8px;border:1px solid rgba(255,255,255,.12)">
+        <input type="hidden" id="gp_receipt">
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('gcashPayModal')">Cancel</button><button class="btn-primary" id="gp_submit" onclick="submitGcashProof()">Submit Payment</button></div>
+  </div>
+</div>
+
+<!-- GCash Settings Modal (admin) -->
+<div class="modal-overlay" id="gcashSettingsModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head"><h2>⚙️ GCash Payment Settings</h2><button class="modal-close" onclick="closeModal('gcashSettingsModal')">✕</button></div>
+    <div class="modal-body">
+      <div id="gs_error" class="error-msg"></div>
+      <div class="form-group"><label>Account Name *</label><input type="text" id="gs_name" placeholder="e.g. Juan D."></div>
+      <div class="form-group"><label>GCash Number *</label><input type="text" id="gs_number" placeholder="09XXXXXXXXX" inputmode="numeric"></div>
+      <div class="form-group"><label>GCash QR Image</label>
+        <input type="file" id="gs_file" accept="image/*" onchange="onGcashQrPick(this)">
+        <img id="gs_preview" alt="QR preview" style="display:none;margin-top:8px;width:160px;border-radius:10px;background:#fff;padding:4px">
+        <input type="hidden" id="gs_qr">
+        <button type="button" class="btn-secondary btn-sm" id="gs_clear" style="display:none;margin-top:8px" onclick="clearGcashQr()">Remove QR</button>
+      </div>
+      <div style="font-size:11px;color:var(--gray-500)">Members will see this QR and number when they choose Pay via GCash.</div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('gcashSettingsModal')">Cancel</button><button class="btn-primary" onclick="saveGcashSettings()">Save</button></div>
+  </div>
 </div>
 
 <!-- Receipt Modal -->

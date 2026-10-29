@@ -190,7 +190,7 @@ function pruneMemberActivity(){
 const LoginAttempts=new AttemptTracker(KEY.loginAttempts);
 const Settings=new Repository(KEY.settings);
 function getWalkinFee(){return Number((Settings.one('walkin')||{}).fee)||100;}
-function setWalkinFee(fee){Settings.save([{id:'walkin',fee:Number(fee)}]);}
+function setWalkinFee(fee){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{id:'walkin',fee:Number(fee)}]);}
 function formatPeso(n){return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function syncStaticWalkinPrice(){document.querySelectorAll('.js-walkin-price').forEach(el=>{el.textContent='₱'+getWalkinFee().toLocaleString()+'/day';});document.querySelectorAll('.js-walkin-price-prose').forEach(el=>{el.textContent='₱'+getWalkinFee().toLocaleString();});}
 function cleanDigits(s){return String(s||'').replace(/\D/g,'');}
@@ -2362,6 +2362,7 @@ function showPendingGate(mem){
     set('pgId',mem.id);
     set('pgPlanName',plan?plan.name:'—');
     set('pgPlanPrice',plan?'₱'+Number(plan.price).toLocaleString()+(plan.duration===1?'/mo':'/'+plan.duration+'mo'):'—');
+    updatePgGcash(mem);
     g.style.display='flex';
   }
   if(_pendingPoll)clearInterval(_pendingPoll);
@@ -2374,6 +2375,7 @@ function showPendingGate(mem){
     let _pollTries=0;
     _pendingPoll=setInterval(async()=>{
       _pollTries++;
+      try{updatePgGcash(Members.one(mem.id)||mem);}catch(e){}
       try{
         let live=null;
         // Try direct cloud fetch first (most reliable right after admin confirms)
@@ -2629,7 +2631,7 @@ function buildSidebar(){
     {id:'members',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,label:'Members',roles:['admin','staff']},
     {id:'history',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 14"/></svg>`,label:'Member History',roles:['admin','staff']},
     {id:'queue',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,label:'Payment Queue',roles:['admin','staff'],badge:'queueBadge'},
-    {id:'billing',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,label:'Billing & Payments',roles:['admin','staff']},
+    {id:'billing',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,label:'Billing & Payments',badge:'gcashBadge',roles:['admin','staff']},
     {id:'walkin',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M14 8H10l-2 6h2l1 5h2l1-5h2l-2-6z"/><path d="M9 14l-2 4"/><path d="M15 14l2 4"/></svg>`,label:'Walk-In',roles:['admin','staff']},
     {id:'schedule',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,label:'Trainer Schedule',roles:['admin','staff','trainer'],badge:'schedPendingBadge'},
     {id:'myassigned',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,label:'My Assigned Members',roles:['trainer']},
@@ -3009,6 +3011,11 @@ function updateQueueBadge(){
   const pending=Members.all().filter(m=>m.status==='pending_payment').length;
   const badge=document.getElementById('queueBadge');
   if(badge){badge.textContent=pending;badge.style.display=pending>0?'flex':'none';}
+  const gb=document.getElementById('gcashBadge');
+  const gn=openGcashProofs().length;
+  if(gb){gb.textContent=gn;gb.style.display=gn>0?'flex':'none';}
+  if(_gcashSeen!==null&&gn>_gcashSeen)toast('📱 '+gn+' GCash payment'+(gn!==1?'s':'')+' waiting for verification','info');
+  _gcashSeen=gn;
 }
 function buildAdminDashboard(){
   const members=Members.all().filter(m=>m.status!=='Archived');
@@ -3293,8 +3300,9 @@ function buildMemberDashboard(){
       <div class="mb-banner-ico">🚫</div>
       <div>
         <div class="mb-banner-title">Plan Expired</div>
-        <div class="mb-banner-sub">Entry is blocked. Please visit the front desk to renew your membership.</div>
+        <div class="mb-banner-sub">Entry is blocked. Please visit the front desk to renew your membership${gcashReady()?', or renew via GCash':''}.</div>
       </div>
+      ${mbGcashCta(mem)}
     </div>`;
   } else {
     const totalDays=(mem.planStart&&mem.expiryDate)?Math.round((new Date(mem.expiryDate)-new Date(mem.planStart))/86400000):0;
@@ -3308,6 +3316,7 @@ function buildMemberDashboard(){
         ${pctLeft!==null?`<div class="mb-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctLeft}" aria-label="Membership time left"><span style="width:${pctLeft}%"></span></div>`:''}
       </div>
       <div class="mb-days"><strong>${d}</strong><span>day${d!==1?'s':''} left</span></div>
+      ${soon?mbGcashCta(mem):''}
     </div>`;
   }
   const paySteps=locked?`
@@ -4544,7 +4553,7 @@ function renderBilling(){
   const el=document.getElementById('panelBilling');
   const plans=Plans.all();
   const planOpts=plans.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  el.innerHTML=`
+  el.innerHTML=gcashVerifyHtml()+`
   <div class="page-actions">
     <div class="table-controls">
       <input class="search-input" placeholder="Search member…" value="${esc(billingSearch)}" oninput="billingSearch=this.value;billingPage=1;refreshBillingTable()">
@@ -4553,6 +4562,7 @@ function renderBilling(){
       <select class="filter-sel" onchange="billingPlanFilter=this.value;billingPage=1;refreshBillingTable()">
         <option value="All">All Plans</option>${planOpts}
       </select>
+      ${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary" onclick="openGcashSettings()">⚙ GCash Settings</button>':''}
     </div>
   </div>
   <div class="table-card" id="billingTableCard"></div>`;
@@ -4587,6 +4597,249 @@ function refreshBillingTable(){
     <div style="overflow-x:auto"><table><thead><tr><th>Pay ID</th><th>Member</th><th>Plan</th><th>Amount</th><th>Date</th><th>New Expiry</th><th>Recorded By</th><th>Method</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
   setTimeout(repairMicoDuplicatePayments,0);
 }
+// ============================= GCASH ONLINE PAYMENT =============================
+// Member pays through the admin's GCash QR, submits the reference number and a
+// receipt screenshot. The proof is stored as a Notification (type 'gcash_proof')
+// and shows up in Billing for admin/staff, who Confirm (activates the member) or Reject.
+let _gcashSeen=null;
+function getGcashSettings(){return Settings.one('gcash')||{};}
+function gcashReady(){const g=getGcashSettings();return !!(g.name&&(g.number||g.qr));}
+function _normRef(v){return String(v||'').replace(/[\s-]+/g,'').toUpperCase();}
+function _safeImg(s){return(typeof s==='string'&&/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(s))?s:'';}
+function _pickImage(input,maxDim,maxChars,cb){
+  const f=input.files&&input.files[0];
+  if(!f)return;
+  if(!(/^image\//.test(f.type)||/\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name||''))){toast('Please select an image file.','error');input.value='';return;}
+  if(f.size>20*1024*1024){toast('Image too large — max 20MB.','error');input.value='';return;}
+  const r=new FileReader();
+  r.onload=async function(ev){
+    let data=ev.target.result;
+    try{data=await compressDataUrl(data,maxDim,maxChars);}catch(e){}
+    if(!_safeImg(data)||data.length>maxChars*1.05){toast('Could not use this image. Please use a JPG or PNG screenshot.','error');input.value='';return;}
+    cb(data);
+  };
+  r.readAsDataURL(f);
+}
+// ---- Admin: GCash account settings ----
+function _setGcashQrPreview(src){
+  const q=document.getElementById('gs_qr'),p=document.getElementById('gs_preview'),c=document.getElementById('gs_clear');
+  if(q)q.value=src||'';
+  if(p){p.src=src||'';p.style.display=src?'block':'none';}
+  if(c)c.style.display=src?'inline-flex':'none';
+}
+function openGcashSettings(){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admin can change GCash settings.','error');return;}
+  const g=getGcashSettings();
+  document.getElementById('gs_error').style.display='none';
+  document.getElementById('gs_name').value=g.name||'';
+  document.getElementById('gs_number').value=g.number||'';
+  document.getElementById('gs_file').value='';
+  _setGcashQrPreview(_safeImg(g.qr));
+  openModal('gcashSettingsModal');
+}
+function onGcashQrPick(input){_pickImage(input,600,200000,_setGcashQrPreview);}
+function clearGcashQr(){_setGcashQrPreview('');document.getElementById('gs_file').value='';}
+function saveGcashSettings(){
+  const err=document.getElementById('gs_error');err.style.display='none';
+  const fail=m=>{err.textContent=m;err.style.display='block';};
+  if(!currentUser||currentUser.role!=='admin')return fail('Only admin can change GCash settings.');
+  const name=sanitizeText(document.getElementById('gs_name').value).trim().slice(0,60);
+  const number=document.getElementById('gs_number').value.replace(/[\s-]+/g,'');
+  const qr=_safeImg(document.getElementById('gs_qr').value);
+  if(!name)return fail('Please enter the GCash account name.');
+  if(!/^(09\d{9}|\+639\d{9})$/.test(number))return fail('Enter a valid GCash number (09XXXXXXXXX).');
+  Settings.save([...Settings.all().filter(x=>x.id!=='gcash'),{id:'gcash',name,number,qr}]);
+  closeModal('gcashSettingsModal');
+  toast('GCash payment details saved.','success');
+  try{logActivity('Updated','Settings','GCash payment details');}catch(e){}
+  if(typeof _lastPanel!=='undefined'&&_lastPanel==='billing')renderBilling();
+}
+// ---- Proof helpers ----
+function gcashProofsOf(memberId){
+  return Notifications.all().filter(n=>n.type==='gcash_proof'&&n.memberId===memberId)
+    .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+function latestGcashProof(memberId){return gcashProofsOf(memberId)[0]||null;}
+function openGcashProofs(){
+  return Notifications.all().filter(n=>n.type==='gcash_proof'&&n.status==='open')
+    .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+// ---- Member: pay via GCash ----
+function openGcashPay(){
+  if(!currentUser||currentUser.role!=='member'){toast('Please log in as a member.','error');return;}
+  const mem=Members.one(currentUser.memberId||currentUser.id);
+  if(!mem||mem.status==='Archived'){toast('Member account not found.','error');return;}
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  if(!plan){toast('No plan selected. Please contact the front desk.','error');return;}
+  if(!gcashReady()){toast('GCash payment is not set up yet. Please pay at the front desk.','info');return;}
+  const latest=latestGcashProof(mem.id);
+  if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
+  const g=getGcashSettings();
+  document.getElementById('gp_error').style.display='none';
+  document.getElementById('gp_plan').textContent=plan.name;
+  document.getElementById('gp_amount').textContent='₱'+Number(plan.price).toLocaleString();
+  document.getElementById('gp_accName').textContent=g.name||'—';
+  document.getElementById('gp_accNum').textContent=g.number||'—';
+  const q=document.getElementById('gp_qr'),qs=_safeImg(g.qr);
+  q.src=qs;q.style.display=qs?'inline-block':'none';
+  document.getElementById('gp_ref').value='';
+  document.getElementById('gp_file').value='';
+  document.getElementById('gp_receipt').value='';
+  const pv=document.getElementById('gp_preview');pv.src='';pv.style.display='none';
+  openModal('gcashPayModal');
+}
+function onGcashReceiptPick(input){
+  _pickImage(input,1000,260000,function(d){
+    document.getElementById('gp_receipt').value=d;
+    const pv=document.getElementById('gp_preview');pv.src=d;pv.style.display='block';
+  });
+}
+async function submitGcashProof(){
+  const err=document.getElementById('gp_error');err.style.display='none';
+  const fail=m=>{err.textContent=m;err.style.display='block';};
+  if(!currentUser||currentUser.role!=='member')return fail('Please log in as a member.');
+  const mem=Members.one(currentUser.memberId||currentUser.id);
+  if(!mem||mem.status==='Archived')return fail('Member account not found.');
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  if(!plan)return fail('No plan selected. Please contact the front desk.');
+  const ref=_normRef(document.getElementById('gp_ref').value);
+  const receipt=_safeImg(document.getElementById('gp_receipt').value);
+  if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number (letters/numbers, at least 8 characters).');
+  if(!receipt)return fail('Please upload a screenshot of your GCash receipt.');
+  const latest=latestGcashProof(mem.id);
+  if(latest&&latest.status==='open')return fail('You already submitted a payment that is waiting for verification.');
+  const used=Notifications.all().some(n=>n.type==='gcash_proof'&&n.status!=='rejected'&&_normRef(n.reference)===ref)
+    ||Payments.all().some(p=>String(p.method||'')==='GCash'&&_normRef(p.reference)===ref);
+  if(used)return fail('This reference number was already used.');
+  if(!rateLimitOk('gms_gcash_'+mem.id,5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
+  const proof={id:'GCP-'+uid(),type:'gcash_proof',status:'open',memberId:mem.id,memberName:mem.name,planId:plan.id,planName:plan.name,amount:Number(plan.price),reference:ref,receipt,createdAt:new Date().toISOString(),date:today()};
+  const btn=document.getElementById('gp_submit');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  try{
+    if(window.GMSFB&&GMSFB.enabled){
+      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Session expired — please log out and log in again.');
+      const res=await GMSFB.commitDocs([{col:'notifications',id:proof.id,data:proof,merge:false}]);
+      if(!res||!res.ok)throw new Error('Could not send your payment. Please check your connection and try again.');
+    }else{
+      Notifications.add(proof);
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Submit Payment';}
+    return fail((e&&e.message)||'Could not send your payment.');
+  }
+  if(btn){btn.disabled=false;btn.textContent='Submit Payment';}
+  closeModal('gcashPayModal');
+  toast('Payment submitted. The front desk will verify it shortly.','success');
+  _refreshGcashMemberUi();
+}
+function _refreshGcashMemberUi(){
+  const mem=currentUser?Members.one(currentUser.memberId||currentUser.id):null;
+  const pg=document.getElementById('pendingGate');
+  if(pg&&pg.style.display!=='none'){updatePgGcash(mem);return;}
+  if(typeof _lastPanel!=='undefined'&&_lastPanel&&typeof renderPanel==='function')renderPanel(_lastPanel);
+}
+function updatePgGcash(mem){
+  const box=document.getElementById('pgGcash');if(!box)return;
+  if(!mem||mem.status==='Archived'){box.style.display='none';box.innerHTML='';return;}
+  const p=latestGcashProof(mem.id);
+  let html='';
+  if(p&&p.status==='open'){
+    html='<div style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.6;color:var(--gray-300)">⏳ <strong style="color:var(--gold)">GCash payment submitted</strong><br>Ref <span style="font-family:monospace">'+esc(p.reference)+'</span> · waiting for the front desk to verify. Your account unlocks automatically once confirmed.</div>';
+  }else{
+    if(p&&p.status==='rejected'){
+      html+='<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.6;color:var(--gray-300);margin-bottom:10px">❌ <strong style="color:var(--red)">Your GCash payment was rejected</strong><br>'+esc(p.rejectReason||'Could not be verified.')+'<br>You can submit it again below.</div>';
+    }
+    html+='<div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500);margin-bottom:8px">Choose how to pay</div>'
+      +'<div style="display:grid;gap:8px"><div style="padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:12px;line-height:1.5;color:var(--gray-300)">🏋️ <strong style="color:var(--white)">Pay at the gym</strong> — visit the front desk and pay in Cash or GCash.</div>'
+      +(gcashReady()?'<button class="btn-primary" onclick="openGcashPay()">📱 Pay via GCash (QR)</button>':'')+'</div>';
+  }
+  box.innerHTML=html;box.style.display='block';
+}
+function mbGcashCta(mem){
+  const p=latestGcashProof(mem.id);
+  if(p&&p.status==='open')return '<span class="mb-banner-btn" style="cursor:default">⏳ GCash payment awaiting verification</span>';
+  if(!gcashReady())return '';
+  if(p&&p.status==='rejected')return '<button class="mb-banner-btn" onclick="openGcashPay()" title="'+esc(p.rejectReason||'')+'">❌ Rejected — submit again</button>';
+  return '<button class="mb-banner-btn" onclick="openGcashPay()">📱 Renew via GCash</button>';
+}
+// ---- Admin/Staff: verify proofs ----
+function gcashVerifyHtml(){
+  const open=openGcashProofs();
+  const notSet=(currentUser&&currentUser.role==='admin'&&!gcashReady())
+    ?'<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--gray-300);margin-bottom:14px">📱 Online GCash payment is off. Click <strong>GCash Settings</strong> to add your QR and number so members can pay online.</div>':'';
+  if(!open.length)return notSet;
+  const rows=open.map(p=>{
+    const img=_safeImg(p.receipt);
+    return `<tr>
+      <td>${img?`<img src="${img}" alt="Receipt" title="Click to enlarge" style="width:48px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(p.id)}')">`:'—'}</td>
+      <td>${esc(p.memberName)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(p.memberId)}</div></td>
+      <td>${esc(p.planName)}</td>
+      <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
+      <td style="font-family:monospace">${esc(p.reference)}</td>
+      <td>${formatDateTime(p.createdAt)}</td>
+      <td><div class="td-actions"><button class="btn-primary btn-sm" onclick="confirmGcashProof('${esc(p.id)}')">✔ Confirm</button><button class="btn-danger btn-sm" onclick="rejectGcashProof('${esc(p.id)}')">✖ Reject</button></div></td>
+    </tr>`;}).join('');
+  return notSet+`<div class="table-card" style="margin-bottom:16px;border:1px solid rgba(251,191,36,.35)">
+    <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${open.length}</span></h3></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Member</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+function viewGcashReceipt(id){
+  const p=Notifications.one(id);
+  if(!p||p.type!=='gcash_proof'){return;}
+  openAvatarZoom(_safeImg(p.receipt),'GCash receipt '+(p.reference||''));
+}
+function confirmGcashProof(id){
+  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+  const p=Notifications.one(id);
+  if(!p||p.type!=='gcash_proof'||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  const m=Members.one(p.memberId);
+  if(!m){toast('Member not found.','error');return;}
+  if(bgCheckBlocksActivation(m)){toast('Background check is Flagged — clear it in the member profile first.','error');return;}
+  const msg='Confirm that you received this GCash payment?'
+    +'<div style="margin-top:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Member:</span> <strong style="color:var(--white)">'+esc(m.name)+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Plan:</span> <strong style="color:var(--white)">'+esc(p.planName)+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Amount:</span> <strong style="color:var(--green)">₱'+Number(p.amount).toLocaleString()+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Reference:</span> <strong style="color:var(--white);font-family:monospace">'+esc(p.reference)+'</strong></div></div>'
+    +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8">&#128161; Check that the amount and reference match your GCash history before confirming.</div>';
+  openConfirm('📱 Confirm GCash Payment',msg,async function(){
+    try{
+      const fresh=Notifications.one(id);
+      if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
+      const result=await applyPaymentConfirmation(m.id,Number(p.amount),'GCash',p.reference,{planId:p.planId,date:today(),notes:'GCash proof '+p.id,source:m.status==='pending_payment'?'activation':'renewal'});
+      if(!result||!result.member){toast('Member not found.','error');return;}
+      Notifications.update(id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:result.payment.id});
+      _dismissedIds.add(m.id);
+      toast('GCash payment confirmed. Membership is active.','success');
+      renderBilling();updateQueueBadge();scanRenewals();
+    }catch(e){
+      toast((e&&e.message)?e.message:'Could not confirm the payment.','error');
+      console.error(e);
+    }
+  },'Confirm','btn-primary');
+}
+function rejectGcashProof(id){
+  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+  const p=Notifications.one(id);
+  if(!p||p.type!=='gcash_proof'||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  const msg='Reject this GCash payment from <strong>'+esc(p.memberName)+'</strong> (Ref '+esc(p.reference)+')?'
+    +'<div style="margin-top:12px"><label style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Reason</label>'
+    +'<select id="gcRejReason" style="width:100%;margin-top:6px;padding:9px 10px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white)">'
+    +'<option>Reference number not found in GCash</option><option>Amount does not match the plan price</option><option>Receipt is unclear or invalid</option><option>Payment not received</option></select>'
+    +'<input id="gcRejNote" type="text" maxlength="120" placeholder="Optional note for the member" style="width:100%;margin-top:8px;padding:9px 10px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white)"></div>';
+  openConfirm('✖ Reject GCash Payment',msg,function(){
+    const sel=(document.getElementById('gcRejReason')||{}).value||'Could not be verified';
+    const note=sanitizeText((document.getElementById('gcRejNote')||{}).value||'').trim();
+    const fresh=Notifications.one(id);
+    if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
+    Notifications.update(id,{status:'rejected',rejectReason:note?sel+' — '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
+    try{logActivity('Rejected','GCash Payment',p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
+    toast('GCash payment rejected. The member can submit again.','success');
+    renderBilling();updateQueueBadge();
+  },'Reject','btn-danger');
+}
+
 let _renewalPaymentSource=null;
 function openPaymentModal(prefillMemberId=null){
   const _isFromRenewal=!!_renewalPaymentSource;_renewalPaymentSource=null;
