@@ -190,7 +190,11 @@ function pruneMemberActivity(){
 const LoginAttempts=new AttemptTracker(KEY.loginAttempts);
 const Settings=new Repository(KEY.settings);
 function getWalkinFee(){return Number((Settings.one('walkin')||{}).fee)||100;}
-function setWalkinFee(fee){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{id:'walkin',fee:Number(fee)}]);}
+function setWalkinFee(fee){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{...(Settings.one('walkin')||{}),id:'walkin',fee:Number(fee)}]);}
+function setWalkinConfig(fee,hours){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{...(Settings.one('walkin')||{}),id:'walkin',fee:Number(fee),hours:Number(hours)}]);}
+function getWalkinHours(){const h=Number((Settings.one('walkin')||{}).hours);return(h>0&&h<=12)?h:2;}
+function setWalkinHours(hours){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{...(Settings.one('walkin')||{}),id:'walkin',hours:Number(hours)}]);}
+function fmtHours(h){return h===1?'1 hour':(h+' hours');}
 function formatPeso(n){return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function syncStaticWalkinPrice(){document.querySelectorAll('.js-walkin-price').forEach(el=>{el.textContent='₱'+getWalkinFee().toLocaleString()+'/day';});document.querySelectorAll('.js-walkin-price-prose').forEach(el=>{el.textContent='₱'+getWalkinFee().toLocaleString();});}
 function cleanDigits(s){return String(s||'').replace(/\D/g,'');}
@@ -8223,13 +8227,18 @@ function renderWalkin(){
   <div class="page-actions">
     <div class="table-controls">
       <input class="search-input" placeholder="Search visitor name…" value="${esc(walkinSearch)}" oninput="walkinSearch=this.value;walkinPage=1;refreshWalkinTable()">
-      ${currentUser.role==='admin'?`<button class="btn-secondary" onclick="openWalkinSettingsModal()">⚙ Walk-In Price: ₱${getWalkinFee().toLocaleString()}</button>`:''}
+      ${currentUser.role==='admin'?`<button class="btn-secondary" onclick="openWalkinSettingsModal()">⚙ Walk-In: ₱${getWalkinFee().toLocaleString()} · ${fmtHours(getWalkinHours())}</button>`:''}
     </div>
     <button class="btn-primary btn-inline" onclick="openWalkinModal()">🚶 Register Walk-In</button>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px" id="walkinStats"></div>
   <div class="table-card" id="walkinTableCard"></div>`;
   refreshWalkinTable();
+}
+function walkinUntilCell(w){
+  if(!w.until)return'<span style="color:var(--gray-500)">—</span>';
+  const live=w.date===today()&&w.until>_hhmm(new Date());
+  return esc(_fmtTime12(w.until))+' '+(live?'<span class="badge badge-active" style="margin-left:4px">Ongoing</span>':'<span class="badge badge-expired" style="margin-left:4px">Ended</span>');
 }
 function refreshWalkinTable(){
   let data=Walkins.all();
@@ -8252,14 +8261,15 @@ function refreshWalkinTable(){
     <td>${esc(w.visitorName)}</td>
     <td>${formatDate(w.date)}</td>
     <td>${esc(w.time)}</td>
+    <td>${walkinUntilCell(w)}</td>
     <td style="color:var(--green);font-weight:600">₱${Number(w.fee).toLocaleString()}</td>
     <td>${esc(w.recordedBy||'—')}</td>
     <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewWalkinReceipt('${w.id}')">🧾</button></div></td>
-  </tr>`).join(''):`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🚶</div><p>No walk-in records found</p></div></td></tr>`;
+  </tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🚶</div><p>No walk-in records found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="walkinPage=${walkinPage-1};refreshWalkinTable()" ${walkinPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===walkinPage?'active':''}" onclick="walkinPage=${i+1};refreshWalkinTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="walkinPage=${walkinPage+1};refreshWalkinTable()" ${walkinPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
   document.getElementById('walkinTableCard').innerHTML=`
     <div class="table-header"><h3>Walk-In Records <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${total} record${total!==1?'s':''}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Visitor Name</th><th>Date</th><th>Time</th><th>Fee</th><th>Recorded By</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
+    <div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Visitor Name</th><th>Date</th><th>Time In</th><th>Until</th><th>Fee</th><th>Recorded By</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
 }
 // ======================================================================
 // RECEIPT PRINT (receipt-only clean sheet via hidden iframe)
@@ -8359,6 +8369,7 @@ function viewWalkinReceipt(id){
       <div class="receipt-row"><span>Visitor Name</span><strong>${esc(w.visitorName)}</strong></div>
       <div class="receipt-row"><span>Visit Type</span><strong>Walk-In (Single Visit)</strong></div>
       <div class="receipt-row"><span>Time In</span><strong>${esc(recordedTime)}</strong></div>
+      ${w.until?`<div class="receipt-row"><span>Valid Until</span><strong>${esc(_fmtTime12(w.until))}</strong></div>`:''}
       <div class="receipt-row"><span>Payment Method</span><strong>Cash</strong></div>
     </div>
     <div class="receipt-total">
@@ -8373,8 +8384,26 @@ function viewWalkinReceipt(id){
   </div>`;
   openModal('receiptModal');
 }
+function _hhmm(d){return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function _fmtTime12(hhmm){const m=/^(\d{2}):(\d{2})$/.exec(hhmm||'');if(!m)return'—';let h=+m[1];const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+m[2]+' '+ap;}
+function walkinComputeUntil(){
+  const d=new Date(Date.now()+getWalkinHours()*3600000);
+  return d.getDate()===new Date().getDate()?_hhmm(d):'23:59';
+}
+function refreshWalkinUntil(){
+  const u=walkinComputeUntil();
+  const el=document.getElementById('wi_until');if(el)el.value=u;
+  const t=document.getElementById('wi_untilText');if(t)t.textContent=_fmtTime12(u);
+  const h=document.getElementById('wi_hours');if(h)h.textContent=fmtHours(getWalkinHours());
+}
+function walkinUntilError(){
+  const v=walkinComputeUntil();
+  if(v<=_hhmm(new Date()))return'It is too late today to register a walk-in.';
+  return'';
+}
 function openWalkinModal(){
   document.getElementById('wi_name').value='';
+  refreshWalkinUntil();
   document.getElementById('walkinError').style.display='none';
   const fee=getWalkinFee();
   const feeEl=document.getElementById('walkinFeeDisplay');
@@ -8390,8 +8419,10 @@ function walkinAskConfirm(){
   const err=document.getElementById('walkinError');
   err.style.display='none';
   if(!name){err.textContent="Please enter the visitor's full name to proceed.";err.style.display='block';return;}
+  const ue=walkinUntilError();
+  if(ue){err.textContent=ue;err.style.display='block';return;}
   const confEl=document.getElementById('walkinConfirmText');
-  if(confEl)confEl.innerHTML=`⚠️ Are you sure you want to record this walk-in and collect <strong>₱${formatPeso(getWalkinFee())}</strong>?`;
+  if(confEl)confEl.innerHTML=`⚠️ Are you sure you want to record this walk-in and collect <strong>₱${formatPeso(getWalkinFee())}</strong>? Time limit <strong>${fmtHours(getWalkinHours())}</strong>, until <strong>${_fmtTime12(walkinComputeUntil())}</strong>.`;
   document.getElementById('walkinFooterDefault').style.display='none';
   document.getElementById('walkinFooterConfirm').style.display='flex';
 }
@@ -8404,14 +8435,18 @@ function saveWalkin(){
   const err=document.getElementById('walkinError');
   err.style.display='none';
   if(!name){err.textContent="Please enter the visitor's full name to proceed.";err.style.display='block';return;}
+  const ue=walkinUntilError();
+  if(ue){err.textContent=ue;err.style.display='block';walkinCancelConfirm();return;}
+  const until=walkinComputeUntil();
+  const hours=getWalkinHours();
   const walkins=Walkins.all();
   const now=new Date();
   const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
   const newId='WI-'+String(walkins.length+1).padStart(4,'0');
   const fee=getWalkinFee();
-  walkins.push({id:newId,visitorName:sanitizeText(name),date:today(),time,fee,recordedBy:currentUser.username,createdAt:today()});
+  walkins.push({id:newId,visitorName:sanitizeText(name),date:today(),time,until,hours,fee,recordedBy:currentUser.username,createdAt:today()});
   Walkins.save(walkins);
-  toast(`Walk-in recorded for ${name}. Fee: ₱${fee.toLocaleString()}.00`);
+  toast(`Walk-in recorded for ${name}. Fee: ₱${fee.toLocaleString()}.00 · until ${_fmtTime12(until)}`);
   closeModal('walkinModal');renderWalkin();
 }
 function deleteWalkin(id){
@@ -8422,6 +8457,7 @@ function deleteWalkin(id){
 function openWalkinSettingsModal(){
   if(currentUser.role!=='admin'){toast('Only admins can change the walk-in price.','error');return;}
   document.getElementById('wiFeeInput').value=getWalkinFee();
+  document.getElementById('wiHoursInput').value=getWalkinHours();
   document.getElementById('walkinFeeError').style.display='none';
   openModal('walkinSettingsModal');
 }
@@ -8432,9 +8468,11 @@ function saveWalkinFee(){
   const val=parseFloat(document.getElementById('wiFeeInput').value);
   if(!val||val<=0){err.textContent='Please enter a valid price greater than zero.';err.style.display='block';return;}
   if(val>10000){err.textContent='Price looks too high. Enter a reasonable daily rate.';err.style.display='block';return;}
-  setWalkinFee(val);
-  logActivity('Updated','Settings','Walk-in daily rate set to ₱'+val.toLocaleString(),'Daily walk-in fee');
-  toast(`Walk-in price updated to ₱${val.toLocaleString()}.00`);
+  const hrs=parseFloat(document.getElementById('wiHoursInput').value);
+  if(!hrs||hrs<0.5||hrs>12){err.textContent='Enter a time limit between 0.5 and 12 hours.';err.style.display='block';return;}
+  setWalkinConfig(val,hrs);
+  logActivity('Updated','Settings','Walk-in rate set to ₱'+val.toLocaleString()+', time limit '+fmtHours(hrs),'Walk-in settings');
+  toast(`Walk-in updated: ₱${val.toLocaleString()}.00 · ${fmtHours(hrs)} limit`);
   closeModal('walkinSettingsModal');
   renderWalkin();
   const explore=document.getElementById('landingExplore');
