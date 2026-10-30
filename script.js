@@ -4677,13 +4677,22 @@ let _gcashSeen=null;
 // fetched directly and kept here as a fallback.
 let _gcashFallback=null;
 function getGcashSettings(){return Settings.one('gcash')||_gcashFallback||{};}
+// Human-readable reason for a failed secondary sign-in (shown in the GCash renewal flow).
+function _signInFailMsg(si){
+  const c=String((si&&si.code)||'');
+  if(/invalid-credential|wrong-password|invalid-login/.test(c))return'Incorrect password. Please re-type your password in the login form and try again.';
+  if(/user-not-found/.test(c))return'We could not find your login account. Please renew at the front desk.';
+  if(/too-many-requests/.test(c))return'Too many attempts. Please wait a few minutes and try again.';
+  if(/network/.test(c))return'Network error. Please check your internet connection.';
+  return'Could not verify your password'+(c?' ('+c+')':'')+'. Please try again.';
+}
 async function _loadGcashViaSecondary(mem,pw,keepSignedIn){
   if(!(window.GMSFB&&GMSFB.enabled&&GMSFB.secondary))return{ok:false};
   let signed=false;
   try{
     if(mem&&pw){
       const si=await GMSFB.secSignIn(GMSFB.authEmailFor(mem),pw);
-      if(!si.ok)return{ok:false,badPw:true};
+      if(!si.ok)return{ok:false,badPw:true,msg:_signInFailMsg(si)};
       signed=true;
     }
     const d=await GMSFB.secondary.firestore().collection('settings').doc('gcash').get();
@@ -4873,7 +4882,7 @@ async function openExpiredRenewal(){
     if(!pw){toast('Type your password in the login form first.','info');return;}
     toast('Loading GCash details…','info');
     const r=await _loadGcashViaSecondary(mem,pw,false);
-    if(r.badPw){toast('Incorrect password. Please check the login form.','error');return;}
+    if(r.badPw){toast(r.msg||'Incorrect password. Please check the login form.','error');return;}
   }
   if(!gcashReady()){toast('Online GCash payment is not available yet. Please renew at the front desk.','info');return;}
   _fillGcashModal(mem,plan,'📱 Renew via GCash');
@@ -4900,7 +4909,7 @@ async function submitExpiredRenewal(){
   try{
     if(window.GMSFB&&GMSFB.enabled){
       const si=await GMSFB.secSignIn(GMSFB.authEmailFor(mem),pw);
-      if(!si.ok){reset();return fail('Incorrect password. Please check the login form.');}
+      if(!si.ok){reset();return fail(_signInFailMsg(si));}
       const conflict=await _secProofConflict(mem.id,ref);
       if(conflict){GMSFB.secondarySignOut();reset();return fail(conflict);}
       const wr=await GMSFB.secSetDoc('notifications',proof);
