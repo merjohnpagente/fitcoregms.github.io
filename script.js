@@ -1114,17 +1114,18 @@ async function doLogin(){
     if(!result.ok){
       if(result.expiredMemberId){
         _expRenew={memberId:result.expiredMemberId};
-        const ready=gcashReady();
         showLoginError('Your membership has expired. Choose how you want to renew:');
         if(lr){
+          const em=Members.one(result.expiredMemberId)||{};
+          const ep=em.planId?Plans.one(em.planId):null;
+          const ago=em.expiryDate?Math.abs(daysUntil(em.expiryDate)):null;
           const card='padding:11px 13px;border:1px solid rgba(255,255,255,.12);border-radius:12px;font-size:13px;line-height:1.55;color:var(--gray-300);text-align:left';
           lr.innerHTML='<div style="display:grid;gap:10px">'
+            +'<div style="'+card+';border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.06)">⏰ <strong style="color:var(--white)">Plan expired</strong>'
+            +'<div style="margin-top:4px">Plan: <strong style="color:var(--white)">'+esc(ep?ep.name:'—')+'</strong></div>'
+            +'<div>Expired on: <strong style="color:var(--red)">'+(em.expiryDate?esc(formatDate(em.expiryDate)):'—')+'</strong>'+(ago!==null?' ('+ago+' day'+(ago!==1?'s':'')+' ago)':'')+'</div></div>'
             +'<div style="'+card+'">🏋️ <strong style="color:var(--white)">Pay at the front desk</strong><br>Visit the gym and pay in Cash or GCash. Staff will renew your membership.</div>'
-            +'<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet</strong><br>'
-            +(ready
-              ?'No need to visit the gym. Send the payment, then upload your receipt screenshot and reference number.<button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="openExpiredRenewal()">📱 Renew via GCash</button>'
-              :'<span style="color:var(--gray-500)">Online GCash payment is not available yet. Please renew at the front desk.</span>')
-            +'</div></div>';
+            +'<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet</strong><br>No need to visit the gym. Send the payment, then upload your receipt screenshot and reference number.<button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="openExpiredRenewal()">📱 Renew via GCash</button></div></div>';
           lr.style.display='block';
         }
       }else showLoginError(result.error);
@@ -2245,6 +2246,10 @@ async function submitMemberSignup(){
 let _msRegMember=null;
 function renderMsPayOptions(member){
   _msRegMember=member||null;
+  if(!gcashReady()&&member&&!renderMsPayOptions._loading){
+    renderMsPayOptions._loading=true;
+    _loadGcashViaSecondary(null,null,true).then(function(){renderMsPayOptions._loading=false;if(gcashReady()&&_msRegMember===member)renderMsPayOptions(member);});
+  }
   const box=document.getElementById('msPayOptions');if(!box)return;
   const plan=member&&member.planId?Plans.one(member.planId):null;
   const amt=plan?'₱'+Number(plan.price).toLocaleString():'';
@@ -4667,7 +4672,26 @@ function refreshBillingTable(){
 // receipt screenshot. The proof is stored as a Notification (type 'gcash_proof')
 // and shows up in Billing for admin/staff, who Confirm (activates the member) or Reject.
 let _gcashSeen=null;
-function getGcashSettings(){return Settings.one('gcash')||{};}
+// Guests may not be allowed to read the settings collection (Firestore rules), so
+// after a member authenticates through the secondary app the GCash details are
+// fetched directly and kept here as a fallback.
+let _gcashFallback=null;
+function getGcashSettings(){return Settings.one('gcash')||_gcashFallback||{};}
+async function _loadGcashViaSecondary(mem,pw,keepSignedIn){
+  if(!(window.GMSFB&&GMSFB.enabled&&GMSFB.secondary))return{ok:false};
+  let signed=false;
+  try{
+    if(mem&&pw){
+      const si=await GMSFB.secSignIn(GMSFB.authEmailFor(mem),pw);
+      if(!si.ok)return{ok:false,badPw:true};
+      signed=true;
+    }
+    const d=await GMSFB.secondary.firestore().collection('settings').doc('gcash').get();
+    if(d.exists)_gcashFallback=d.data();
+    return{ok:true};
+  }catch(e){console.warn('[gcash] load settings',e);return{ok:false};}
+  finally{if(signed&&!keepSignedIn)GMSFB.secondarySignOut();}
+}
 function gcashReady(){const g=getGcashSettings();return !!(g.name&&(g.number||g.qr));}
 function _normRef(v){return String(v||'').replace(/[\s-]+/g,'').toUpperCase();}
 function _safeImg(s){return(typeof s==='string'&&/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(s))?s:'';}
@@ -4811,12 +4835,19 @@ async function _secProofConflict(memberId,ref){
 // the password is re-checked through the secondary Firebase app, the proof is
 // written, then the secondary session is signed out again.
 let _expRenew=null;
-function openExpiredRenewal(){
+async function openExpiredRenewal(){
   const mem=_expRenew?Members.one(_expRenew.memberId):null;
   if(!mem){toast('Member not found.','error');return;}
   const plan=mem.planId?Plans.one(mem.planId):null;
   if(!plan){toast('No plan on file. Please visit the front desk to renew.','error');return;}
-  if(!gcashReady()){toast('Online GCash renewal is not available. Please visit the front desk.','info');return;}
+  if(!gcashReady()){
+    const pw=(document.getElementById('loginPass')||{}).value||'';
+    if(!pw){toast('Type your password in the login form first.','info');return;}
+    toast('Loading GCash details…','info');
+    const r=await _loadGcashViaSecondary(mem,pw,false);
+    if(r.badPw){toast('Incorrect password. Please check the login form.','error');return;}
+  }
+  if(!gcashReady()){toast('Online GCash payment is not available yet. Please renew at the front desk.','info');return;}
   _fillGcashModal(mem,plan,'📱 Renew via GCash');
   document.getElementById('gcashPayModal').dataset.mode='expired';
 }
