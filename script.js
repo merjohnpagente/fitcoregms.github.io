@@ -3329,6 +3329,15 @@ function buildMemberDashboard(){
     const totalDays=(mem.planStart&&mem.expiryDate)?Math.round((new Date(mem.expiryDate)-new Date(mem.planStart))/86400000):0;
     const pctLeft=totalDays>0?Math.max(0,Math.min(100,Math.round(d/totalDays*100))):null;
     const soon=d<=7;
+    if(soon){
+      try{
+        const fk='gms_renew_notice_'+mem.id+'_'+mem.expiryDate;
+        if(!sessionStorage.getItem(fk)){
+          sessionStorage.setItem(fk,'1');
+          setTimeout(function(){toast('⚠️ Your membership ends in '+d+' day'+(d!==1?'s':'')+'. Renew now so you do not lose access.','info');},700);
+        }
+      }catch(e){}
+    }
     banner=`<div class="mb-banner active${soon?' soon':''}">
       <div class="mb-banner-ico">${soon?'⚠️':'✅'}</div>
       <div class="mb-banner-main">
@@ -4696,6 +4705,7 @@ function openGcashPay(){
   const latest=latestGcashProof(mem.id);
   if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
   const g=getGcashSettings();
+  const gt=document.getElementById('gp_title');if(gt)gt.textContent=mem.status==='pending_payment'?'📱 Pay via GCash':'📱 Renew via GCash';
   document.getElementById('gp_error').style.display='none';
   document.getElementById('gp_plan').textContent=plan.name;
   document.getElementById('gp_amount').textContent='₱'+Number(plan.price).toLocaleString();
