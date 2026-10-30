@@ -384,7 +384,7 @@ class AuthService{
       const effMember=effMemberRaw?_withLocalPwOverride(effMemberRaw):null;
       if(effMember){
         if(effMember.status==='Archived')return{ok:false,error:'Your account has been archived. Please contact the front desk.'};
-        if(isMemberExpired(effMember))return{ok:false,error:EXPIRED_LOGIN_MSG};
+        if(isMemberExpired(effMember))return{ok:false,error:EXPIRED_LOGIN_MSG,expiredMemberId:effMember.id};
         if(bgCheckFlagged(effMember))return{ok:false,error:'Your account is flagged pending a background check. Please contact the front desk.'};
         const r=await GMSFB.signIn(GMSFB.authEmailFor(effMember),password);
         if(r.ok){
@@ -505,7 +505,7 @@ class AuthService{
           if(m.status==='Archived'){GMSFB.signOut();return{ok:false,error:'Your account has been archived. Please contact the front desk.'};}
           // Note: pending_payment is ALLOWED to log in — they land on pendingGate
           // with auto-refresh, so they see their status live. No block here.
-          if(isMemberExpired(m)){GMSFB.signOut();return{ok:false,error:EXPIRED_LOGIN_MSG};}
+          if(isMemberExpired(m)){GMSFB.signOut();return{ok:false,error:EXPIRED_LOGIN_MSG,expiredMemberId:m.id};}
           if(bgCheckFlagged(m)){GMSFB.signOut();return{ok:false,error:'Your account is flagged pending a background check. Please contact the front desk.'};}
           LoginAttempts.reset(username);
           const sess={id:m.id,email:m.email||'',username:m.username,name:m.name,contact:m.contact,role:'member',memberId:m.id,status:m.status,authEmail:GMSFB.authEmailFor(m)};
@@ -1108,8 +1108,17 @@ async function doLogin(){
   const btn=document.querySelector('#loginForm .btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Logging in…';}
   try{
+    const lr=document.getElementById('loginRenew');if(lr){lr.style.display='none';lr.innerHTML='';}
+    _expRenew=null;
     const result=await Auth.login(u,p);
-    if(!result.ok){showLoginError(result.error);return;}
+    if(!result.ok){
+      if(result.expiredMemberId&&gcashReady()){
+        _expRenew={memberId:result.expiredMemberId};
+        showLoginError('Your membership has expired. You can renew online with GCash below, or visit the front desk.');
+        if(lr){lr.innerHTML='<button type="button" class="btn-primary" style="width:100%" onclick="openExpiredRenewal()">📱 Renew via GCash</button>';lr.style.display='block';}
+      }else showLoginError(result.error);
+      return;
+    }
     currentUser=result.user;
     loadApp();
   }catch(e){
@@ -1877,7 +1886,7 @@ function regStep2Next(){
     doRegister();
   }
 }
-function showLogin(){document.getElementById('loginForm').style.display='block';document.getElementById('registerForm').style.display='none';const rd=document.getElementById('regDone');if(rd)rd.style.display='none';document.getElementById('loginError').style.display='none';const ms=document.getElementById('memberSignup');if(ms)ms.style.display='none';const lc=document.getElementById('loginCard');if(lc)lc.style.display='block';_resetPwVis();}
+function showLogin(){document.getElementById('loginForm').style.display='block';document.getElementById('registerForm').style.display='none';const rd=document.getElementById('regDone');if(rd)rd.style.display='none';document.getElementById('loginError').style.display='none';const lrn=document.getElementById('loginRenew');if(lrn)lrn.style.display='none';const ms=document.getElementById('memberSignup');if(ms)ms.style.display='none';const lc=document.getElementById('loginCard');if(lc)lc.style.display='block';_resetPwVis();}
 function showRegister(){
   resetRegisterForm();
   document.getElementById('loginForm').style.display='none';
@@ -4733,6 +4742,8 @@ async function msSubmitGcashProof(){
   if(btn){btn.disabled=true;btn.textContent='Sending…';}
   try{
     if(window.GMSFB&&GMSFB.enabled){
+      const conflict=await _secProofConflict(mem.id,ref);
+      if(conflict)throw new Error(conflict);
       const wr=await GMSFB.secSetDoc('notifications',proof);
       if(!wr||!wr.ok)throw new Error('Could not send your payment. Please check your connection and try again.');
       GMSFB.secondarySignOut();
@@ -4748,17 +4759,9 @@ async function msSubmitGcashProof(){
   if(f)f.innerHTML='<div style="background:rgba(127,250,136,.1);border:1px solid rgba(127,250,136,.3);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--gray-300)">✅ <strong style="color:var(--green)">Payment submitted!</strong><br>The front desk will verify it and activate your membership. Tap <strong>Back to Login</strong> to check your status.</div>';
   err.style.display='none';
 }
-function openGcashPay(){
-  if(!currentUser||currentUser.role!=='member'){toast('Please log in as a member.','error');return;}
-  const mem=Members.one(currentUser.memberId||currentUser.id);
-  if(!mem||mem.status==='Archived'){toast('Member account not found.','error');return;}
-  const plan=mem.planId?Plans.one(mem.planId):null;
-  if(!plan){toast('No plan selected. Please contact the front desk.','error');return;}
-  if(!gcashReady()){toast('GCash payment is not set up yet. Please pay at the front desk.','info');return;}
-  const latest=latestGcashProof(mem.id);
-  if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
+function _fillGcashModal(mem,plan,title){
   const g=getGcashSettings();
-  const gt=document.getElementById('gp_title');if(gt)gt.textContent=mem.status==='pending_payment'?'📱 Pay via GCash':'📱 Renew via GCash';
+  const gt=document.getElementById('gp_title');if(gt)gt.textContent=title;
   document.getElementById('gp_error').style.display='none';
   document.getElementById('gp_plan').textContent=plan.name;
   document.getElementById('gp_amount').textContent='₱'+Number(plan.price).toLocaleString();
@@ -4770,8 +4773,91 @@ function openGcashPay(){
   document.getElementById('gp_file').value='';
   document.getElementById('gp_receipt').value='';
   const pv=document.getElementById('gp_preview');pv.src='';pv.style.display='none';
+  const sb=document.getElementById('gp_submit');if(sb){sb.disabled=false;sb.textContent='Submit Payment';}
+  document.getElementById('gcashPayModal').dataset.mode='';
   openModal('gcashPayModal');
 }
+// Duplicate checks that need a signed-in Firebase session (used right after the
+// secondary app signs the member in, before a proof is written).
+async function _secProofConflict(memberId,ref){
+  try{
+    const db=GMSFB.secondary.firestore();
+    const mine=await db.collection('notifications').where('memberId','==',memberId).get();
+    let open=false;mine.forEach(d=>{const x=d.data();if(x.type==='gcash_proof'&&x.status==='open')open=true;});
+    if(open)return'You already submitted a payment that is waiting for verification.';
+    let used=false;
+    const same=await db.collection('notifications').where('reference','==',ref).get();
+    same.forEach(d=>{const x=d.data();if(x.type==='gcash_proof'&&x.status!=='rejected')used=true;});
+    const pay=await db.collection('payments').where('reference','==',ref).get();
+    pay.forEach(()=>{used=true;});
+    if(used)return'This reference number was already used.';
+  }catch(e){console.warn('[gcash] conflict check',e);}
+  return'';
+}
+// Expired members cannot log in, but they can renew from the login screen:
+// the password is re-checked through the secondary Firebase app, the proof is
+// written, then the secondary session is signed out again.
+let _expRenew=null;
+function openExpiredRenewal(){
+  const mem=_expRenew?Members.one(_expRenew.memberId):null;
+  if(!mem){toast('Member not found.','error');return;}
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  if(!plan){toast('No plan on file. Please visit the front desk to renew.','error');return;}
+  if(!gcashReady()){toast('Online GCash renewal is not available. Please visit the front desk.','info');return;}
+  _fillGcashModal(mem,plan,'📱 Renew via GCash');
+  document.getElementById('gcashPayModal').dataset.mode='expired';
+}
+async function submitExpiredRenewal(){
+  const err=document.getElementById('gp_error');err.style.display='none';
+  const fail=m=>{err.textContent=m;err.style.display='block';};
+  const mem=_expRenew?Members.one(_expRenew.memberId):null;
+  if(!mem)return fail('Session expired. Please try logging in again.');
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  if(!plan)return fail('No plan on file. Please visit the front desk.');
+  const ref=_normRef(document.getElementById('gp_ref').value);
+  const receipt=_safeImg(document.getElementById('gp_receipt').value);
+  if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number (letters/numbers, at least 8 characters).');
+  if(!receipt)return fail('Please upload a screenshot of your GCash receipt.');
+  const pw=(document.getElementById('loginPass')||{}).value||'';
+  if(!pw)return fail('Type your password in the login form first, then try again.');
+  if(!rateLimitOk('gms_gcash_exp_'+mem.id,5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
+  const proof={id:'GCP-'+uid(),type:'gcash_proof',status:'open',memberId:mem.id,memberName:mem.name,planId:plan.id,planName:plan.name,amount:Number(plan.price),reference:ref,receipt,createdAt:new Date().toISOString(),date:today()};
+  const btn=document.getElementById('gp_submit');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  const reset=()=>{if(btn){btn.disabled=false;btn.textContent='Submit Payment';}};
+  try{
+    if(window.GMSFB&&GMSFB.enabled){
+      const si=await GMSFB.secSignIn(GMSFB.authEmailFor(mem),pw);
+      if(!si.ok){reset();return fail('Incorrect password. Please check the login form.');}
+      const conflict=await _secProofConflict(mem.id,ref);
+      if(conflict){GMSFB.secondarySignOut();reset();return fail(conflict);}
+      const wr=await GMSFB.secSetDoc('notifications',proof);
+      GMSFB.secondarySignOut();
+      if(!wr||!wr.ok){reset();return fail('Could not send your payment. Please check your connection and try again.');}
+    }else{
+      Notifications.add(proof);
+    }
+  }catch(e){reset();return fail((e&&e.message)||'Could not send your payment.');}
+  reset();
+  closeModal('gcashPayModal');
+  _expRenew=null;
+  const lr=document.getElementById('loginRenew');if(lr){lr.style.display='none';lr.innerHTML='';}
+  const le=document.getElementById('loginError');
+  if(le){le.textContent='✅ Renewal payment submitted. The front desk will verify it and renew your membership. You can log in once it is confirmed.';le.style.display='block';}
+  toast('Payment submitted. Please wait for the front desk to confirm.','success');
+}
+function openGcashPay(){
+  if(!currentUser||currentUser.role!=='member'){toast('Please log in as a member.','error');return;}
+  const mem=Members.one(currentUser.memberId||currentUser.id);
+  if(!mem||mem.status==='Archived'){toast('Member account not found.','error');return;}
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  if(!plan){toast('No plan selected. Please contact the front desk.','error');return;}
+  if(!gcashReady()){toast('GCash payment is not set up yet. Please pay at the front desk.','info');return;}
+  const latest=latestGcashProof(mem.id);
+  if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
+  _fillGcashModal(mem,plan,mem.status==='pending_payment'?'📱 Pay via GCash':'📱 Renew via GCash');
+}
+
 function onGcashReceiptPick(input){
   _pickImage(input,1000,260000,function(d){
     document.getElementById('gp_receipt').value=d;
@@ -4779,6 +4865,8 @@ function onGcashReceiptPick(input){
   });
 }
 async function submitGcashProof(){
+  const _m=document.getElementById('gcashPayModal');
+  if(_m&&_m.dataset.mode==='expired')return submitExpiredRenewal();
   const err=document.getElementById('gp_error');err.style.display='none';
   const fail=m=>{err.textContent=m;err.style.display='block';};
   if(!currentUser||currentUser.role!=='member')return fail('Please log in as a member.');
