@@ -1114,8 +1114,15 @@ async function doLogin(){
     if(!result.ok){
       if(result.expiredMemberId&&gcashReady()){
         _expRenew={memberId:result.expiredMemberId};
-        showLoginError('Your membership has expired. You can renew online with GCash below, or visit the front desk.');
-        if(lr){lr.innerHTML='<button type="button" class="btn-primary" style="width:100%" onclick="openExpiredRenewal()">📱 Renew via GCash</button>';lr.style.display='block';}
+        showLoginError('Your membership has expired. Choose how you want to renew:');
+        if(lr){
+          const card='padding:11px 13px;border:1px solid rgba(255,255,255,.12);border-radius:12px;font-size:13px;line-height:1.55;color:var(--gray-300);text-align:left';
+          lr.innerHTML='<div style="display:grid;gap:10px">'
+            +'<div style="'+card+'">🏋️ <strong style="color:var(--white)">Pay at the front desk</strong><br>Visit the gym and pay in Cash or GCash. Staff will renew your membership.</div>'
+            +'<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet</strong><br>No need to visit the gym. Send the payment, then upload your receipt screenshot and reference number.'
+            +'<button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="openExpiredRenewal()">📱 Renew via GCash</button></div></div>';
+          lr.style.display='block';
+        }
       }else showLoginError(result.error);
       return;
     }
