@@ -4726,7 +4726,32 @@ function openGcashSettings(){
   _setGcashQrPreview(_safeImg(g.qr));
   openModal('gcashSettingsModal');
 }
-function onGcashQrPick(input){_pickImage(input,600,200000,_setGcashQrPreview);}
+function onGcashQrPick(input){
+  // Re-encode through a canvas so any image the browser can display (PNG, JPG,
+  // WebP, HEIC on iOS, screenshots, ...) is saved as a plain PNG/JPEG data URL.
+  const f=input.files&&input.files[0];if(!f)return;
+  const err=document.getElementById('gs_error');err.style.display='none';
+  const bad=m=>{err.textContent=m;err.style.display='block';input.value='';};
+  if(f.size>25*1024*1024)return bad('Image is too large (max 25MB).');
+  const url=URL.createObjectURL(f);
+  const img=new Image();
+  img.onload=function(){
+    try{
+      const max=900,r=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+      const w=Math.max(1,Math.round(img.naturalWidth*r)),h=Math.max(1,Math.round(img.naturalHeight*r));
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,w,h);cx.drawImage(img,0,0,w,h);
+      let out=cv.toDataURL('image/png');
+      if(out.length>200000)out=cv.toDataURL('image/jpeg',0.85);
+      if(out.length>240000)out=cv.toDataURL('image/jpeg',0.6);
+      URL.revokeObjectURL(url);
+      if(!_safeImg(out)||out.length>260000)return bad('Could not use this image. Please crop it to just the QR code and try again.');
+      _setGcashQrPreview(out);
+    }catch(e){bad('Could not read this image. Please try another one.');}
+  };
+  img.onerror=function(){URL.revokeObjectURL(url);bad('This image type is not supported. Please use a JPG or PNG picture of your QR.');};
+  img.src=url;
+}
 function clearGcashQr(){_setGcashQrPreview('');document.getElementById('gs_file').value='';}
 function saveGcashSettings(){
   const err=document.getElementById('gs_error');err.style.display='none';
@@ -4735,11 +4760,13 @@ function saveGcashSettings(){
   const name=sanitizeText(document.getElementById('gs_name').value).trim().slice(0,60);
   const number=document.getElementById('gs_number').value.replace(/[\s-]+/g,'');
   const qr=_safeImg(document.getElementById('gs_qr').value);
+  const fileEl=document.getElementById('gs_file');
+  if(fileEl&&fileEl.files&&fileEl.files.length&&!qr)return fail('The QR image could not be loaded. Please choose it again.');
   if(!name)return fail('Please enter the GCash account name.');
   if(!/^(09\d{9}|\+639\d{9})$/.test(number))return fail('Enter a valid GCash number (09XXXXXXXXX).');
   Settings.save([...Settings.all().filter(x=>x.id!=='gcash'),{id:'gcash',name,number,qr}]);
   closeModal('gcashSettingsModal');
-  toast('GCash payment details saved.','success');
+  toast(qr?'GCash details saved with QR image.':'GCash details saved. No QR image yet.','success');
   try{logActivity('Updated','Settings','GCash payment details');}catch(e){}
   if(typeof _lastPanel!=='undefined'&&_lastPanel==='billing')renderBilling();
 }
@@ -4806,6 +4833,7 @@ function _fillGcashModal(mem,plan,title){
   document.getElementById('gp_accNum').textContent=g.number||'—';
   const q=document.getElementById('gp_qr'),qs=_safeImg(g.qr);
   q.src=qs;q.style.display=qs?'inline-block':'none';
+  const nq=document.getElementById('gp_noqr');if(nq)nq.style.display=qs?'none':'block';
   document.getElementById('gp_ref').value='';
   document.getElementById('gp_file').value='';
   document.getElementById('gp_receipt').value='';

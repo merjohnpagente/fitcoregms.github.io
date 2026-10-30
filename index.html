@@ -2109,6 +2109,7 @@
       </div>
       <div style="text-align:center;margin-bottom:14px">
         <img id="gp_qr" alt="GCash QR" style="display:none;width:200px;max-width:70%;border-radius:12px;background:#fff;padding:6px;cursor:zoom-in" onclick="openAvatarZoom(this.src,'GCash QR')">
+        <div id="gp_noqr" style="display:none;margin-top:8px;font-size:12px;color:var(--gray-500)">QR image is not available. Please send to the GCash number below.</div>
         <div style="margin-top:8px;font-size:13px">Account name: <strong id="gp_accName">—</strong></div>
         <div style="font-size:13px">GCash number: <strong id="gp_accNum" style="font-family:monospace">—</strong></div>
       </div>
@@ -2143,7 +2144,7 @@
         <input type="hidden" id="gs_qr">
         <button type="button" class="btn-secondary btn-sm" id="gs_clear" style="display:none;margin-top:8px" onclick="clearGcashQr()">Remove QR</button>
       </div>
-      <div style="font-size:11px;color:var(--gray-500)">Members will see this QR and number when they choose Pay via GCash.</div>
+      <div style="font-size:11px;color:var(--gray-500)">Upload a cropped picture of your GCash QR (JPG or PNG). Members will see this QR and number when they choose Pay via GCash.</div>
     </div>
     <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('gcashSettingsModal')">Cancel</button><button class="btn-primary" onclick="saveGcashSettings()">Save</button></div>
   </div>
