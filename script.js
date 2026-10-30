@@ -4868,9 +4868,9 @@ async function _secProofConflict(memberId,ref){
   }catch(e){console.warn('[gcash] conflict check',e);}
   return'';
 }
-// Expired members cannot log in, but they can renew from the login screen:
-// the password is re-checked through the secondary Firebase app, the proof is
-// written, then the secondary session is signed out again.
+// Expired members cannot log in, but they can renew from the login screen.
+// The proof is written by /api/gcash-proof (server) because these accounts may
+// have no usable Firebase Auth password (admin temp / reset passwords).
 let _expRenew=null;
 async function openExpiredRenewal(){
   const mem=_expRenew?Members.one(_expRenew.memberId):null;
@@ -4899,25 +4899,17 @@ async function submitExpiredRenewal(){
   const receipt=_safeImg(document.getElementById('gp_receipt').value);
   if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number (letters/numbers, at least 8 characters).');
   if(!receipt)return fail('Please upload a screenshot of your GCash receipt.');
-  const pw=(document.getElementById('loginPass')||{}).value||'';
-  if(!pw)return fail('Type your password in the login form first, then try again.');
   if(!rateLimitOk('gms_gcash_exp_'+mem.id,5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
-  const proof={id:'GCP-'+uid(),type:'gcash_proof',status:'open',memberId:mem.id,memberName:mem.name,planId:plan.id,planName:plan.name,amount:Number(plan.price),reference:ref,receipt,createdAt:new Date().toISOString(),date:today()};
+  const base=fpApiBase();
+  if(!base&&/\.github\.io$/i.test(location.hostname))return fail('Online GCash renewal is not available on this site. Please renew at the front desk.');
   const btn=document.getElementById('gp_submit');
   if(btn){btn.disabled=true;btn.textContent='Sending…';}
   const reset=()=>{if(btn){btn.disabled=false;btn.textContent='Submit Payment';}};
   try{
-    if(window.GMSFB&&GMSFB.enabled){
-      const si=await GMSFB.secSignIn(GMSFB.authEmailFor(mem),pw);
-      if(!si.ok){reset();return fail(_signInFailMsg(si));}
-      const conflict=await _secProofConflict(mem.id,ref);
-      if(conflict){GMSFB.secondarySignOut();reset();return fail(conflict);}
-      const wr=await GMSFB.secSetDoc('notifications',proof);
-      GMSFB.secondarySignOut();
-      if(!wr||!wr.ok){reset();return fail('Could not send your payment. Please check your connection and try again.');}
-    }else{
-      Notifications.add(proof);
-    }
+    const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memberId:mem.id,reference:ref,receipt})});
+    let data=null;try{data=await res.json();}catch(e){}
+    if(!data)throw new Error('Server error. Please try again.');
+    if(!data.ok)throw new Error(data.error||'Could not send your payment.');
   }catch(e){reset();return fail((e&&e.message)||'Could not send your payment.');}
   reset();
   closeModal('gcashPayModal');

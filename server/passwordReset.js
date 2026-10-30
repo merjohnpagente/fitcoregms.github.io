@@ -342,4 +342,4 @@ async function adminSetMemberPassword(idToken, memberId, email, newPassword) {
   return { status: 200, body: { ok: true } };
 }
 
-module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail };
+module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail, init };
