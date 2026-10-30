@@ -2818,6 +2818,8 @@ function toast(msg,type='success'){
 // Runs after every render so both static markup and JS-generated HTML get
 // the same treatment. Icons scale with the surrounding font size.
 const ICONS={
+  smartphone:`<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>`,
+  xcircle:`<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>`,
   search:`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
   calendar:`<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
   clipboard:`<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/>`,
@@ -2886,7 +2888,7 @@ const ICON_EMOJI={
   '🕒':'clock',
   '📍':'mapPin','✉':'mail',
   '🗄':'archive','☁':'cloud','🚫':'ban','💬':'message','🔑':'key','🗓':'calendar','⭐':'star','⚑':'flag',
-  '✓':'check','✔':'check','✕':'x','🙈':'eyeOff','👋':'wave','🎟':'ticket','★':'star','✦':'star'
+  '✓':'check','✔':'check','✕':'x','✖':'x','📱':'smartphone','❌':'xcircle','🙈':'eyeOff','👋':'wave','🎟':'ticket','★':'star','✦':'star'
 };
 function iconSvg(name,size=16){
   const body=ICONS[name]||'';
