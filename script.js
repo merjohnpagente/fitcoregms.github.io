@@ -2216,8 +2216,25 @@ async function submitMemberSignup(){
   document.getElementById('msStep4').style.display='none';
   const done=document.getElementById('msStep5');
   const msg=document.getElementById('msDoneMsg');
-  if(msg)msg.textContent='Account registered! Please pay at the front desk (Cash or GCash) to activate your membership. You can log in once our staff confirms your payment.';
+  if(msg)msg.textContent='Account registered! Choose how to pay to activate your membership. You can log in now to see your payment status.';
+  renderMsPayOptions(member);
   if(done)done.style.display='block';
+}
+function renderMsPayOptions(member){
+  const box=document.getElementById('msPayOptions');if(!box)return;
+  const plan=member&&member.planId?Plans.one(member.planId):null;
+  const amt=plan?'₱'+Number(plan.price).toLocaleString():'';
+  const card='padding:12px 14px;border:1px solid rgba(255,255,255,.12);border-radius:12px;font-size:13px;line-height:1.6;color:var(--gray-300);text-align:left';
+  let html='<div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500);margin-bottom:8px;text-align:center">How would you like to pay?'+(amt?' ('+esc(plan.name)+' · '+amt+')':'')+'</div><div style="display:grid;gap:10px">';
+  html+='<div style="'+card+'">🏋️ <strong style="color:var(--white)">Pay at the front desk</strong><br>Visit the gym and pay in Cash or GCash. Staff will activate your membership.</div>';
+  if(gcashReady()){
+    const g=getGcashSettings(),qr=_safeImg(g.qr);
+    html+='<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet — no need to visit the gym</strong>'
+      +'<div style="text-align:center;margin:10px 0 6px">'+(qr?'<img src="'+qr+'" alt="GCash QR" style="width:170px;max-width:60%;border-radius:10px;background:#fff;padding:5px">':'')
+      +'<div>Account name: <strong style="color:var(--white)">'+esc(g.name||'')+'</strong></div><div>GCash number: <strong style="color:var(--white);font-family:monospace">'+esc(g.number||'')+'</strong></div></div>'
+      +'Send the exact amount'+(amt?' (<strong style="color:var(--green)">'+amt+'</strong>)':'')+', then tap <strong>Back to Login</strong>, log in, and press <strong>Pay via GCash</strong> to upload your receipt and reference number. The front desk will confirm it.</div>';
+  }
+  box.innerHTML=html+'</div>';
 }
 function onRegRoleChange(val){}
 async function doRegister(){
