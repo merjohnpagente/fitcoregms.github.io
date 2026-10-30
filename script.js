@@ -3439,9 +3439,9 @@ function buildMemberDashboard(){
       <div><span>Sessions Left</span><strong>${sessLeft}</strong></div>
     </div>
   </div>`;
-  // Early renewal from the member account. The banner above already carries the
-  // CTA when the plan ends within 7 days or has expired.
-  const renewCard=(mem.status!=='Archived'&&mem.status!=='pending_payment'&&!(d<=7))?`
+  // Renewal block in the member account. Shown for the whole running plan
+  // (including the final week, where the banner above also carries a CTA).
+  const renewCard=(mem.status!=='Archived'&&mem.status!=='pending_payment'&&!(d<=0))?`
   <div class="table-card" style="padding:18px 20px">
     <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Renew Membership</div>
     <div style="font-size:12px;color:var(--gray-300);margin-top:6px;line-height:1.6">Send your payment via GCash and upload the receipt — admin/staff will confirm it. Remaining days are added to your new expiry.</div>
