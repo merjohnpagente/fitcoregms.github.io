@@ -8860,10 +8860,31 @@ function renderExplorePlans(){
 // ======================================================================
 // LANDING: TRAINERS, COUNTERS, SCROLL REVEALS
 // ======================================================================
-function renderTrainers(){
+// Guests cannot read the `users` collection (Firestore rules require auth),
+// so the landing page loads the public trainer profiles from /api/trainers.
+// Logged-in sessions keep using the live `users` snapshot.
+let _publicTrainers=null;
+async function loadPublicTrainers(){
+  if(_publicTrainers)return _publicTrainers;
+  const base=fpApiBase();
+  if(!base&&/\.github\.io$/i.test(location.hostname))return null;
+  try{
+    const res=await fetch(base+'/api/trainers',{cache:'no-store'});
+    if(!res.ok)return null;
+    const data=await res.json();
+    if(!data||!data.ok||!Array.isArray(data.trainers))return null;
+    _publicTrainers=data.trainers;
+    return _publicTrainers;
+  }catch(e){return null;}
+}
+async function renderTrainers(){
   const container=document.getElementById('trainersGrid');
   if(!container)return;
-  const trainers=Users.all().filter(u=>u.role==='trainer'&&u.status==='active');
+  let trainers=Users.all().filter(u=>u.role==='trainer'&&u.status==='active');
+  if(!trainers.length){
+    const pub=await loadPublicTrainers();
+    if(pub&&pub.length)trainers=pub;
+  }
   if(!trainers.length){
     container.innerHTML=`<div class="empty-state" style="grid-column:1/-1;background:var(--glass-bg);border:var(--glass-border);border-radius:var(--radius)"><div class="empty-icon">&#127948;</div><p>Trainer profiles are being set up. Check back soon!</p></div>`;
     return;
