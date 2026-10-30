@@ -1923,3 +1923,130 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 .login-logos .login-tcgc{margin:0}
 .sidebar-brand .brand-logo{width:30px;height:30px}
 .sidebar-brand .brand-row{gap:8px}
+
+/* ============================================================
+   MOTION LAYER — smooth transitions + subtle loop animations
+   ============================================================ */
+
+/* ---- shared interactive transitions ---- */
+.btn-primary,.btn-secondary,.btn-danger,.btn-icon,.hero-join,.hero-btn,
+.ln-link,.filter-chip,.rtab,.vt-btn,.page-btn,.nav-item,.nav-logout,
+.search-input,select.filter-sel,.modal-close,.mb-banner-btn{
+  transition:transform .22s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease,
+             background .22s ease,border-color .22s ease,color .2s ease,filter .22s ease;
+}
+.btn-primary:hover,.btn-secondary:hover,.btn-danger:hover,.btn-icon:hover,
+.hero-btn:hover,.mb-banner-btn:hover{transform:translateY(-2px)}
+.btn-primary:active,.btn-secondary:active,.btn-danger:active,.btn-icon:active,
+.hero-join:active,.hero-btn:active,.mb-banner-btn:active{transform:translateY(0) scale(.98)}
+.btn-icon:hover{box-shadow:0 6px 16px rgba(0,0,0,.35)}
+.btn-secondary:hover{box-shadow:0 8px 22px rgba(0,0,0,.28)}
+.nav-item .nav-icon{transition:transform .2s ease}
+.nav-item:hover .nav-icon{transform:translateX(2px)}
+.nav-logout:hover{transform:translateX(2px)}
+.ln-link:hover{transform:translateY(-1px)}
+.filter-chip:hover,.rtab:hover{transform:translateY(-1px);border-color:rgba(127,250,136,.35)}
+.page-btn:hover{transform:translateY(-1px);border-color:rgba(127,250,136,.45);color:var(--white)}
+.modal-close:hover{transform:rotate(90deg)}
+tbody tr:hover{box-shadow:inset 3px 0 0 rgba(127,250,136,.45)}
+
+/* ---- landing nav + footer link underlines ---- */
+.ln-link:not(.ln-cta){position:relative}
+.ln-link:not(.ln-cta)::after{content:'';position:absolute;left:18px;right:18px;bottom:5px;
+  height:1.5px;background:linear-gradient(90deg,var(--orange),transparent);
+  transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+.ln-link:not(.ln-cta):hover::after,.ln-link:not(.ln-cta).active::after,.ln-link:not(.ln-cta):focus-visible::after{transform:scaleX(1)}
+.sf-col a{position:relative}
+.sf-col a::after{content:'';position:absolute;left:0;bottom:3px;width:0;height:1px;
+  background:var(--orange);transition:width .22s ease}
+.sf-col a:hover::after{width:100%}
+
+/* ---- brand wordmark shimmer ---- */
+@keyframes brandShimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes heroTextShimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .ln-brand span,.brand-name span,.login-logo h1 span,.pending-gate-logo span{
+    background:linear-gradient(90deg,var(--orange) 0%,#eaffe9 45%,var(--orange) 65%,#a4fcab 100%);
+    background-size:220% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:brandShimmer 7s ease-in-out infinite;
+  }
+  .hh-start{
+    background:linear-gradient(90deg,var(--orange) 0%,#eaffe9 40%,var(--orange) 60%,#a4fcab 100%);
+    background-size:220% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:heroTextShimmer 8s ease-in-out infinite;
+  }
+}
+
+/* ---- hero ----
+   Only box-shadow/background/child transforms loop here; the .reveal
+   wrappers keep their own opacity/transform transitions untouched. */
+@keyframes todayGlow{0%,100%{text-shadow:0 0 0 rgba(127,250,136,0)}50%{text-shadow:0 0 38px rgba(127,250,136,.25)}}
+.hh-today{animation:todayGlow 4.5s ease-in-out infinite}
+@keyframes heroArtDrift{from{transform:scale(1) translate3d(0,0,0)}to{transform:scale(1.04) translate3d(-1.2%,0,0)}}
+.hero-art{animation:heroArtDrift 20s ease-in-out infinite alternate}
+@keyframes chipGlow{0%,100%{box-shadow:0 0 0 0 rgba(127,250,136,0)}50%{box-shadow:0 0 26px rgba(127,250,136,.16)}}
+.hero-chip{animation:chipGlow 4s ease-in-out infinite}
+.hero-join{position:relative;overflow:hidden}
+.hero-join>*{position:relative;z-index:1}
+.hero-join::after{content:'';position:absolute;top:-20%;left:-140%;width:65%;height:140%;
+  background:linear-gradient(105deg,transparent,rgba(127,250,136,.35),transparent);
+  transform:skewX(-18deg);animation:joinShine 5s ease-in-out infinite;pointer-events:none}
+@keyframes joinShine{0%,65%{left:-140%}100%{left:150%}}
+
+/* ---- primary calls to action breathe, gently ---- */
+@keyframes ctaBreathe{0%,100%{box-shadow:0 6px 18px rgba(127,250,136,.32)}50%{box-shadow:0 10px 30px rgba(127,250,136,.5)}}
+.ln-link.ln-cta,.explore-card .btn-primary:not(.btn-gold){animation:ctaBreathe 3.8s ease-in-out infinite}
+.ln-link.ln-cta:hover,.explore-card .btn-primary:not(.btn-gold):hover{animation:none}
+
+/* ---- dashboard / app chrome ---- */
+.dash-hero::before{content:'';position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(110deg,transparent 25%,rgba(127,250,136,.1) 45%,transparent 65%);
+  background-size:220% 100%;animation:heroSheen 8s linear infinite;pointer-events:none}
+@keyframes heroSheen{from{background-position:180% 0}to{background-position:-100% 0}}
+.stat-card{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease,border-color .25s ease}
+.stat-card:hover{transform:translateY(-4px);border-top-color:var(--green);
+  box-shadow:0 18px 42px rgba(0,0,0,.35),0 0 0 1px rgba(127,250,136,.15)}
+.stat-ico{animation:statBob 3.4s ease-in-out infinite}
+.stats-grid .stat-card:nth-child(2) .stat-ico{animation-delay:.3s}
+.stats-grid .stat-card:nth-child(3) .stat-ico{animation-delay:.6s}
+.stats-grid .stat-card:nth-child(4) .stat-ico{animation-delay:.9s}
+@keyframes statBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.table-header h3::before{animation:barGlow 3.2s ease-in-out infinite}
+@keyframes barGlow{0%,100%{box-shadow:0 0 10px rgba(127,250,136,.5)}50%{box-shadow:0 0 20px rgba(127,250,136,.9)}}
+.nav-item.active{animation:navGlow 4s ease-in-out infinite}
+@keyframes navGlow{0%,100%{box-shadow:inset 0 0 22px rgba(127,250,136,.1)}50%{box-shadow:inset 0 0 32px rgba(127,250,136,.22)}}
+
+/* ---- cards ---- */
+.plan-card,.mp-plan-card,.mb-plan-card{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s ease,border-color .25s ease}
+.plan-card:hover,.mp-plan-card:hover,.mb-plan-card:hover{transform:translateY(-3px);
+  box-shadow:0 18px 40px rgba(0,0,0,.35),0 0 0 1px rgba(127,250,136,.18)}
+@keyframes featuredGlow{0%,100%{box-shadow:0 0 44px rgba(127,250,136,.14)}
+  50%{box-shadow:0 0 70px rgba(127,250,136,.3),0 0 0 1px rgba(127,250,136,.25)}}
+.explore-card.featured{animation:featuredGlow 5s ease-in-out infinite}
+
+/* ---- badges, renewal CTA, empty states, login card ---- */
+@keyframes badgeSoft{0%,100%{filter:brightness(1)}50%{filter:brightness(1.25)}}
+.badge-active,.badge-paid,.badge-pending,.badge-expiring,.badge-urgent{animation:badgeSoft 3s ease-in-out infinite}
+@keyframes renewPulse{0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,0)}50%{box-shadow:0 0 0 7px rgba(251,191,36,.12)}}
+.mb-banner-btn{animation:renewPulse 3s ease-in-out infinite}
+@keyframes emptyFloat{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-6px);opacity:.65}}
+.empty-state .empty-icon{animation:emptyFloat 3.6s ease-in-out infinite}
+@keyframes cardRise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.login-card,.pending-gate-card{animation:cardRise .7s cubic-bezier(.2,.8,.2,1) both}
+
+/* ---- logo micro-interaction ---- */
+.sidebar-brand .brand-logo,.ln-brand .brand-logo{transition:transform .3s ease,box-shadow .3s ease}
+.sidebar-brand .brand-logo:hover,.ln-brand .brand-logo:hover{transform:scale(1.06) rotate(-3deg);box-shadow:0 0 0 3px rgba(127,250,136,.18)}
+
+/* ---- accessibility: stop all motion when the user asks ---- */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation:none!important;
+    transition-duration:.001ms!important;
+    scroll-behavior:auto!important;
+  }
+}

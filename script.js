@@ -8829,10 +8829,10 @@ function renderExplorePlans(){
   html+=`<div class="explore-card walkin-card reveal reveal-d3">
     <div class="ec-badge">No Commitment</div>
     <div class="ec-name">Walk-In</div>
-    <div class="ec-price">&#8369;${getWalkinFee().toLocaleString()}<span>/day</span></div>
-    <ul class="ec-features"><li>&#10003; Full Gym Access</li><li>&#10003; Single Day Pass</li><li>&#10003; No Registration</li><li>&#10003; Pay at Front Desk</li></ul>
+    <div class="ec-price">&#8369;${getWalkinFee().toLocaleString()}<span>/visit</span></div>
+    <ul class="ec-features"><li>&#10003; Full Gym Access</li><li>&#10003; Up to ${fmtHours(getWalkinHours())}</li><li>&#10003; No Registration</li><li>&#10003; Pay at Front Desk</li></ul>
     <button class="btn-primary ec-btn btn-gold" onclick="showLandingSection('register',null)">Visit Us →</button>
-    <div class="walkin-note">&#9888; For occasional visitors.<br>No membership required.</div>
+    <div class="walkin-note">&#9888; Time-limited pass.<br>No membership required.</div>
   </div>`;
   container.innerHTML=html;
   initReveals();

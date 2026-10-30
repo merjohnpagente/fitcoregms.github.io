@@ -218,7 +218,10 @@
             populateMsPlanSelect(pick);
           }
         }
-        if(storageKey==='gms_settings'&&typeof syncStaticWalkinPrice==='function')syncStaticWalkinPrice();
+        if(storageKey==='gms_settings'){
+          if(typeof syncStaticWalkinPrice==='function')syncStaticWalkinPrice();
+          if(typeof renderExplorePlans==='function')renderExplorePlans();
+        }
         var appEl=document.getElementById('app');
         if(appEl&&appEl.classList.contains('active')&&typeof _lastPanel!=='undefined'&&_lastPanel&&typeof renderPanel==='function'){renderPanel(_lastPanel);}
         if(typeof updateSyncWarning==='function')updateSyncWarning();
