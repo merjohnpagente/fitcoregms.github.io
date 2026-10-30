@@ -2414,7 +2414,7 @@ function showPendingGate(mem){
     const msg=document.getElementById('pgMsg');
     if(msg)msg.innerHTML=archived
       ?'Your sign-up was archived. Please visit the front desk to sign up again.'
-      :'Your account is pending. Please visit the front desk to complete your payment (<strong>Cash</strong> or <strong>GCash</strong>) and activate your account.';
+      :(gcashReady()?'Pay online with your <strong>GCash</strong> wallet below (no need to visit the gym), or visit the front desk to pay in Cash or GCash.':'Your account is pending. Please visit the front desk to complete your payment (<strong>Cash</strong> or <strong>GCash</strong>) and activate your account.');
     const note=document.getElementById('pgNote');
     if(note)note.textContent=archived?'Visit the front desk to register again.':'Your QR code unlocks automatically once payment is confirmed.';
     set('pgName',mem.name);
@@ -3344,7 +3344,7 @@ function buildMemberDashboard(){
       <div class="mb-banner-ico">⏳</div>
       <div>
         <div class="mb-banner-title">Awaiting Payment</div>
-        <div class="mb-banner-sub">Your account is active as soon as the front desk confirms your payment. Visit the counter and pay in <strong>Cash</strong> or <strong>GCash</strong>.</div>
+        <div class="mb-banner-sub">Your account is active as soon as the front desk confirms your payment. Pay with your <strong>GCash</strong> wallet online, or visit the counter and pay in <strong>Cash</strong> or <strong>GCash</strong>.</div>
       </div>
       <button class="mb-banner-btn" onclick="mbToggleHowToPay()">💳 How to Pay</button>
     </div>`;
@@ -3392,7 +3392,7 @@ function buildMemberDashboard(){
   const paySteps=locked?`
     <div class="mb-pay-steps" id="mbPaySteps" style="display:none">
       <div class="mb-pay-steps-title">💳 How to Pay</div>
-      <div class="mb-pay-step"><span class="mb-pay-step-n">1</span>Visit the front desk counter at the gym.</div>
+      <div class="mb-pay-step"><span class="mb-pay-step-n">1</span>Pay online with your GCash wallet (no need to visit the gym), or visit the front desk counter at the gym.</div>
       <div class="mb-pay-step"><span class="mb-pay-step-n">2</span>Tell the staff your name: <strong>${esc(mem.name)}</strong> (<span style="font-family:monospace">${esc(mem.id)}</span>).</div>
       <div class="mb-pay-step"><span class="mb-pay-step-n">3</span>Pay in <strong>Cash</strong> or <strong>GCash</strong>${plan?` — <strong>₱${Number(plan.price).toLocaleString()}</strong> (${esc(plan.name)} plan)`:''}.</div>
       <div class="mb-pay-step"><span class="mb-pay-step-n">4</span>Your QR activates instantly once payment is confirmed.</div>
