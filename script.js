@@ -3409,7 +3409,7 @@ function buildMemberDashboard(){
   </div>`;
   const helpRow=`<div class="mb-help-strip">
     <div class="mb-help-title">Need Help?</div>
-    <div class="mb-help-msg">Payments, renewals &amp; plan changes are handled at the front desk.</div>
+    <div class="mb-help-msg">Renew online via GCash, or pay in Cash / GCash at the front desk. Plan changes are handled at the counter.</div>
     <div class="mb-help-actions">
       <button class="btn-secondary btn-sm" onclick="navigate('myMessages')" style="cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Message the Gym</button>
     </div>
@@ -3439,6 +3439,17 @@ function buildMemberDashboard(){
       <div><span>Sessions Left</span><strong>${sessLeft}</strong></div>
     </div>
   </div>`;
+  // Early renewal from the member account. The banner above already carries the
+  // CTA when the plan ends within 7 days or has expired.
+  const renewCard=(mem.status!=='Archived'&&mem.status!=='pending_payment'&&!(d<=7))?`
+  <div class="table-card" style="padding:18px 20px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Renew Membership</div>
+    <div style="font-size:12px;color:var(--gray-300);margin-top:6px;line-height:1.6">Send your payment via GCash and upload the receipt — admin/staff will confirm it. Remaining days are added to your new expiry.</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+      ${mbGcashCta(mem)}
+      <span style="font-size:12px;color:var(--gray-500)">Or pay in <strong style="color:var(--gray-300)">Cash / GCash</strong> at the front desk.</span>
+    </div>
+  </div>`:'';
   const qrBlock=`<div class="mb-qr-box${locked?' locked':''}">
     ${locked?'<div class="mb-qr-pending">⏳ Pending payment — this QR activates once the front desk confirms it</div>':''}
     <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:10px;text-align:center">Entrance QR — Daily</div>
@@ -3454,6 +3465,7 @@ function buildMemberDashboard(){
   panel=`<div class="mb-grid">
     <div style="display:grid;gap:16px">
       ${planCard}
+      ${renewCard}
       ${changePlan}
       <div class="table-card">
         <div class="table-header"><h3>Recent Attendance</h3><button class="btn-secondary btn-sm" onclick="navigate('myattendance')">View All</button></div>
@@ -4957,17 +4969,15 @@ async function submitGcashProof(){
     ||Payments.all().some(p=>String(p.method||'')==='GCash'&&_normRef(p.reference)===ref);
   if(used)return fail('This reference number was already used.');
   if(!rateLimitOk('gms_gcash_'+mem.id,5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
-  const proof={id:'GCP-'+uid(),type:'gcash_proof',status:'open',memberId:mem.id,memberName:mem.name,planId:plan.id,planName:plan.name,amount:Number(plan.price),reference:ref,receipt,createdAt:new Date().toISOString(),date:today()};
+  const base=fpApiBase();
+  if(!base&&/\.github\.io$/i.test(location.hostname))return fail('Online GCash payment is not available on this site. Please pay at the front desk.');
   const btn=document.getElementById('gp_submit');
   if(btn){btn.disabled=true;btn.textContent='Sending…';}
   try{
-    if(window.GMSFB&&GMSFB.enabled){
-      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Session expired — please log out and log in again.');
-      const res=await GMSFB.commitDocs([{col:'notifications',id:proof.id,data:proof,merge:false}]);
-      if(!res||!res.ok)throw new Error('Could not send your payment. Please check your connection and try again.');
-    }else{
-      Notifications.add(proof);
-    }
+    const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memberId:mem.id,reference:ref,receipt})});
+    let data=null;try{data=await res.json();}catch(e){}
+    if(!data)throw new Error('Server error. Please try again.');
+    if(!data.ok)throw new Error(data.error||'Could not send your payment.');
   }catch(e){
     if(btn){btn.disabled=false;btn.textContent='Submit Payment';}
     return fail((e&&e.message)||'Could not send your payment.');
