@@ -10,11 +10,12 @@ function deepClone(v){
   try{return JSON.parse(JSON.stringify(v));}catch(e){return v;}
 }
 // Business data is online-only: Firestore is the single source of truth and
-// nothing is mirrored to localStorage. Only device-local security counters
-// (login lockouts) stay on the device. This prevents a stale browser cache
-// from resurrecting a paid member or showing payments that were deleted.
+// nothing is read from or written to localStorage. Only device-local security
+// counters (login lockouts) are kept, in sessionStorage, so they disappear
+// when the tab closes. This prevents a stale browser cache from resurrecting a
+// paid member or showing payments that were deleted.
 const LOCAL_ONLY_KEYS=new Set(['gms_login_attempts']);
-function _cloudDataKey(k){return !!(!LOCAL_ONLY_KEYS.has(k)&&window.GMSFB&&GMSFB.enabled);}
+function _localOnly(k){return LOCAL_ONLY_KEYS.has(k);}
 function _cloudMap(k){
   if(!window.GMSFB||!GMSFB.ready||!GMSFB._lastCloud)return null;
   if(GMSFB._lastCloud[k])return GMSFB._lastCloud[k];
@@ -23,37 +24,38 @@ function _cloudMap(k){
 }
 const DB={
   // Reads come from the live Firestore snapshot. Before the first snapshot
-  // the list is empty (never the old localStorage copy).
+  // the list is empty (never a browser-storage copy).
   get:(k)=>{
-    if(_cloudDataKey(k)){
+    if(!_localOnly(k)){
       const m=_cloudMap(k);
       if(!m)return[];
       return Object.keys(m).map(function(id){return m[id];});
     }
-    try{return JSON.parse(localStorage.getItem(k))||[];}catch{return[];}
+    try{return JSON.parse(sessionStorage.getItem(k))||[];}catch{return[];}
   },
   getObj:(k)=>{
-    if(_cloudDataKey(k))return _cloudMap(k)||{};
-    try{const v=JSON.parse(localStorage.getItem(k));return(v&&typeof v==='object'&&!Array.isArray(v))?v:{};}catch{return{};}
+    if(!_localOnly(k))return _cloudMap(k)||{};
+    try{const v=JSON.parse(sessionStorage.getItem(k));return(v&&typeof v==='object'&&!Array.isArray(v))?v:{};}catch{return{};}
   },
   set:(k,v)=>{
-    if(_cloudDataKey(k)){
-      // Do NOT write business data to localStorage. Update the in-memory
+    if(!_localOnly(k)){
+      // Never write business data to browser storage. Update the in-memory
       // snapshot so this tab updates immediately, then push to Firestore.
-      const mapped=!!(GMSFB._colmap&&GMSFB._colmap[k]);
-      if(mapped&&GMSFB.ready&&!GMSFB._applying){
-        GMSFB._lastCloud[k]={};
-        (Array.isArray(v)?v:[]).forEach(function(item){if(item&&item.id)GMSFB._lastCloud[k][item.id]=item;});
-        try{GMSFB.pushCollection(k,v);}catch(e){try{GMSFB.queuePush(k,v);}catch(_){}}
-      }else if(mapped&&typeof GMSFB.queuePush==='function'){
-        try{GMSFB.queuePush(k,v);}catch(e){}
+      const fb=window.GMSFB;
+      const mapped=!!(fb&&fb.enabled&&fb._colmap&&fb._colmap[k]);
+      if(mapped&&fb.ready&&!fb._applying){
+        fb._lastCloud[k]={};
+        (Array.isArray(v)?v:[]).forEach(function(item){if(item&&item.id)fb._lastCloud[k][item.id]=item;});
+        try{fb.pushCollection(k,v);}catch(e){try{fb.queuePush(k,v);}catch(_){}}
+      }else if(mapped&&typeof fb.queuePush==='function'){
+        try{fb.queuePush(k,v);}catch(e){}
       }
       return;
     }
-    try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+    try{sessionStorage.setItem(k,JSON.stringify(v));}catch(e){}
   },
   getOne:(k,id)=>{
-    if(_cloudDataKey(k)){
+    if(!_localOnly(k)){
       const m=_cloudMap(k);
       return (m&&m[id])||null;
     }
@@ -62,7 +64,7 @@ const DB={
 };
 
 // ============================= OOP DATA LAYER (Repository Pattern) =============================
-// Every collection in localStorage is now accessed through a Repository instance instead of
+// Every business collection is now accessed through a Repository instance instead of
 // raw DB.get(KEY.x) / DB.set(KEY.x, ...) calls scattered through the app. This gives each
 // entity a single owner of its persistence logic and a place to hang domain behaviour.
 class Repository{
@@ -123,15 +125,15 @@ const SIGNUP_RATE_LIMIT=5;
 const SIGNUP_RATE_WINDOW_MS=10*60*1000;
 function signupRateCheck(){
   const key='gms_signup_rate';
-  let count=parseInt(localStorage.getItem(key)||'0',10);
-  let first=parseInt(localStorage.getItem(key+'_t')||'0',10);
+  let count=parseInt(sessionStorage.getItem(key)||'0',10);
+  let first=parseInt(sessionStorage.getItem(key+'_t')||'0',10);
   const now=Date.now();
-  // Anti-spam: one account-creation attempt per 30 seconds per browser.
-  const last=parseInt(localStorage.getItem(key+'_last')||'0',10);
-  if(last&&now-last<30*1000){localStorage.setItem(key,String(count+1));return true;}
-  localStorage.setItem(key+'_last',String(now));
-  if(!first||now-first>SIGNUP_RATE_WINDOW_MS){first=now;count=0;localStorage.setItem(key+'_t',String(now));}
-  localStorage.setItem(key,String(count+1));
+  // Anti-spam: one account-creation attempt per 30 seconds per tab.
+  const last=parseInt(sessionStorage.getItem(key+'_last')||'0',10);
+  if(last&&now-last<30*1000){sessionStorage.setItem(key,String(count+1));return true;}
+  sessionStorage.setItem(key+'_last',String(now));
+  if(!first||now-first>SIGNUP_RATE_WINDOW_MS){first=now;count=0;sessionStorage.setItem(key+'_t',String(now));}
+  sessionStorage.setItem(key,String(count+1));
   return count>=SIGNUP_RATE_LIMIT;
 }
 // Generic client-side anti-spam limiter. It stops accidental/rapid abuse but
@@ -140,12 +142,12 @@ function signupRateCheck(){
 function rateLimitOk(key,max,windowMs){
   const now=Date.now();
   let hits=[];
-  try{hits=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+  try{hits=JSON.parse(sessionStorage.getItem(key)||'[]');}catch(e){}
   if(!Array.isArray(hits))hits=[];
   hits=hits.filter(t=>typeof t==='number'&&now-t<windowMs);
   if(hits.length>=max)return false;
   hits.push(now);
-  try{localStorage.setItem(key,JSON.stringify(hits));}catch(e){}
+  try{sessionStorage.setItem(key,JSON.stringify(hits));}catch(e){}
   return true;
 }
 function pushPendingPaymentNotif(member){
@@ -196,7 +198,13 @@ function getWalkinHours(){const h=Number((Settings.one('walkin')||{}).hours);ret
 function setWalkinHours(hours){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{...(Settings.one('walkin')||{}),id:'walkin',hours:Number(hours)}]);}
 function fmtHours(h){return h===1?'1 hour':(h+' hours');}
 function formatPeso(n){return Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function syncStaticWalkinPrice(){document.querySelectorAll('.js-walkin-price').forEach(el=>{el.textContent='₱'+getWalkinFee().toLocaleString()+'/day';});document.querySelectorAll('.js-walkin-price-prose').forEach(el=>{el.textContent='₱'+getWalkinFee().toLocaleString();});}
+function syncStaticWalkinPrice(){
+  const fee=getWalkinFee().toLocaleString();
+  const limit=fmtHours(getWalkinHours());
+  document.querySelectorAll('.js-walkin-price').forEach(el=>{el.textContent='₱'+fee+' / visit';});
+  document.querySelectorAll('.js-walkin-price-prose').forEach(el=>{el.textContent='₱'+fee;});
+  document.querySelectorAll('.js-walkin-limit').forEach(el=>{el.textContent=limit;});
+}
 function cleanDigits(s){return String(s||'').replace(/\D/g,'');}
 function isPhDial(code){return String(code||'').trim()==='+63';}
 function validatePhone(raw,dialCode){
@@ -906,58 +914,11 @@ function compressDataUrl(dataUrl,maxDim=700,maxChars=650000){
 function sanitizeText(v){
   return String(v==null?'':v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'').replace(/[<>]/g,'').trim();
 }
-// Upgrade records saved by pre-v14 seeds: convert plaintext staff passwords to salted hashes.
-// Member h1$ (FNV) hashes are upgraded lazily on successful login (plaintext is never recoverable).
-function migrateLegacyPasswords(){
-  const users=Users.all();
-  let changed=false;
-  users.forEach(u=>{
-    if(!u.passwordHash&&typeof u.password==='string'&&u.password){
-      u.passwordHash=hashPassword(u.password);
-      delete u.password;
-      changed=true;
-    }
-  });
-  if(changed)Users.save(users);
-}
-
 // ============================= SEED DATA =============================
 function seedData(){
-  // Online (Firebase) mode: cloud is the source of truth — start with a clean
-  // local mirror and let onSnapshot listeners populate it. No local seeds.
-  if(window.GMSFB&&GMSFB.enabled){GMSFB.bootstrapLocal();return;}
-  if(localStorage.getItem('gms_seeded')==='15'){
-    migrateLegacyPasswords();
-    return;
-  }
-  // Clean production: wipe any legacy demo data (MEM-0001..0006) and start empty.
-  // Previous versions seeded 6 demo members + 5 payments which re-appeared every
-  // reload due to version guard mismatch (13 vs 14). Bump to 15 does a
-  // one-time purge and thereafter stays idempotent — no pre-filled members.
-  Object.values(KEY).forEach(k=>localStorage.removeItem(k));
-  localStorage.removeItem('gms_login_attempts');
-  LoginAttempts.save({});
-  // Users — NONE. All accounts live in Firebase Auth + cloud. No local creds.
-  Users.save([]);
-  // Plans — keep default catalogue (required for landing page & member signup)
-  const plans=[
-    {id:'pl1',name:'Basic',price:500,duration:1,sessions:8,benefits:'Gym access\nLocker use',status:'Active'},
-    {id:'pl2',name:'Standard',price:900,duration:1,sessions:16,benefits:'Gym access\nLocker use\n1 trainer session',status:'Active'},
-    {id:'pl3',name:'Premium',price:1500,duration:3,sessions:'Unlimited',benefits:'Full access\nPriority trainer\nFree assessment',status:'Active'}
-  ];
-  Plans.save(plans);
-  // No demo members/payments in production — start empty (clean inbox)
-  Members.save([]);
-  Payments.save([]);
-  Sessions.save([]);
-  Walkins.save([]);
-  Attendance.save([]);
-  Notifications.save([]);
-  Messages.save([]);
-  Announcements.save([]);
-  setWalkinFee(100);
-  getQrSecret();
-  localStorage.setItem('gms_seeded','15');
+  // Online-only: Firestore is the source of truth. There is no local seed
+  // path; init() clears any cache left by older builds.
+  if(window.GMSFB&&GMSFB.enabled)GMSFB.bootstrapLocal();
 }
 let _wxMediaMap=null,_wxMediaByName=null,_wxMediaLoading=false,_wxMediaError='';
 function _wxNameKey(name){return String(name==null?'':name).trim().toLowerCase();}
@@ -8481,7 +8442,7 @@ function renderWalkin(){
   <div class="page-actions">
     <div class="table-controls">
       <input class="search-input" placeholder="Search visitor name…" value="${esc(walkinSearch)}" oninput="walkinSearch=this.value;walkinPage=1;refreshWalkinTable()">
-      ${currentUser.role==='admin'?`<button class="btn-secondary" onclick="openWalkinSettingsModal()">⚙ Walk-In: ₱${getWalkinFee().toLocaleString()} · ${fmtHours(getWalkinHours())}</button>`:''}
+      ${currentUser.role==='admin'?`<button class="btn-secondary" onclick="openWalkinSettingsModal()">⚙ Walk-In: ₱${getWalkinFee().toLocaleString()} · max ${fmtHours(getWalkinHours())}</button>`:''}
     </div>
     <button class="btn-primary btn-inline" onclick="openWalkinModal()">🚶 Register Walk-In</button>
   </div>
@@ -8492,7 +8453,9 @@ function renderWalkin(){
 function walkinUntilCell(w){
   if(!w.until)return'<span style="color:var(--gray-500)">—</span>';
   const live=w.date===today()&&w.until>_hhmm(new Date());
-  return esc(_fmtTime12(w.until))+' '+(live?'<span class="badge badge-active" style="margin-left:4px">Ongoing</span>':'<span class="badge badge-expired" style="margin-left:4px">Ended</span>');
+  const hrs=Number(w.hours);
+  const limit=hrs>0?` <span style="color:var(--gray-500);font-size:11px">(${fmtHours(hrs)})</span>`:'';
+  return esc(_fmtTime12(w.until))+limit+' '+(live?'<span class="badge badge-active" style="margin-left:4px">Ongoing</span>':'<span class="badge badge-expired" style="margin-left:4px">Ended</span>');
 }
 function refreshWalkinTable(){
   let data=Walkins.all();
@@ -8623,6 +8586,7 @@ function viewWalkinReceipt(id){
       <div class="receipt-row"><span>Visitor Name</span><strong>${esc(w.visitorName)}</strong></div>
       <div class="receipt-row"><span>Visit Type</span><strong>Walk-In (Single Visit)</strong></div>
       <div class="receipt-row"><span>Time In</span><strong>${esc(recordedTime)}</strong></div>
+      ${Number(w.hours)>0?`<div class="receipt-row"><span>Time Limit</span><strong>${fmtHours(Number(w.hours))}</strong></div>`:''}
       ${w.until?`<div class="receipt-row"><span>Valid Until</span><strong>${esc(_fmtTime12(w.until))}</strong></div>`:''}
       <div class="receipt-row"><span>Payment Method</span><strong>Cash</strong></div>
     </div>
@@ -8640,30 +8604,46 @@ function viewWalkinReceipt(id){
 }
 function _hhmm(d){return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function _fmtTime12(hhmm){const m=/^(\d{2}):(\d{2})$/.exec(hhmm||'');if(!m)return'—';let h=+m[1];const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+m[2]+' '+ap;}
-function walkinComputeUntil(){
-  const d=new Date(Date.now()+getWalkinHours()*3600000);
-  return d.getDate()===new Date().getDate()?_hhmm(d):'23:59';
+function walkinComputeUntil(hours){
+  const h=Number(hours)>0?Number(hours):getWalkinHours();
+  const now=new Date();
+  const d=new Date(now.getTime()+h*3600000);
+  return d.getDate()===now.getDate()?_hhmm(d):'23:59';
+}
+function walkinSelectedHours(){
+  const el=document.getElementById('wi_hoursSelect');
+  const max=getWalkinHours();
+  const v=el?Number(el.value):NaN;
+  return (v>0&&v<=max)?v:max;
+}
+function populateWalkinHours(){
+  const el=document.getElementById('wi_hoursSelect');if(!el)return;
+  const max=getWalkinHours();
+  const opts=[];
+  for(let h=0.5;h<=max+1e-9;h+=0.5)opts.push(h);
+  if(!opts.length)opts.push(max);
+  el.innerHTML=opts.map(function(h){return `<option value="${h}">${fmtHours(h)}</option>`;}).join('');
+  el.value=String(max);
 }
 function refreshWalkinUntil(){
-  const u=walkinComputeUntil();
-  const el=document.getElementById('wi_until');if(el)el.value=u;
+  const u=walkinComputeUntil(walkinSelectedHours());
   const t=document.getElementById('wi_untilText');if(t)t.textContent=_fmtTime12(u);
-  const h=document.getElementById('wi_hours');if(h)h.textContent=fmtHours(getWalkinHours());
 }
 function walkinUntilError(){
-  const v=walkinComputeUntil();
+  const v=walkinComputeUntil(walkinSelectedHours());
   if(v<=_hhmm(new Date()))return'It is too late today to register a walk-in.';
   return'';
 }
 function openWalkinModal(){
   document.getElementById('wi_name').value='';
+  populateWalkinHours();
   refreshWalkinUntil();
   document.getElementById('walkinError').style.display='none';
   const fee=getWalkinFee();
   const feeEl=document.getElementById('walkinFeeDisplay');
   if(feeEl)feeEl.textContent='₱'+formatPeso(fee);
   const feeNote=document.getElementById('walkinFeeNote');
-  if(feeNote)feeNote.textContent='Daily rate · Single visit · Set by admin';
+  if(feeNote)feeNote.textContent='Time-limited pass · Set by admin';
   document.getElementById('walkinFooterDefault').style.display='flex';
   document.getElementById('walkinFooterConfirm').style.display='none';
   openModal('walkinModal');
@@ -8675,8 +8655,9 @@ function walkinAskConfirm(){
   if(!name){err.textContent="Please enter the visitor's full name to proceed.";err.style.display='block';return;}
   const ue=walkinUntilError();
   if(ue){err.textContent=ue;err.style.display='block';return;}
+  const hours=walkinSelectedHours();
   const confEl=document.getElementById('walkinConfirmText');
-  if(confEl)confEl.innerHTML=`⚠️ Are you sure you want to record this walk-in and collect <strong>₱${formatPeso(getWalkinFee())}</strong>? Time limit <strong>${fmtHours(getWalkinHours())}</strong>, until <strong>${_fmtTime12(walkinComputeUntil())}</strong>.`;
+  if(confEl)confEl.innerHTML=`⚠️ Are you sure you want to record this walk-in and collect <strong>₱${formatPeso(getWalkinFee())}</strong>? Time limit <strong>${fmtHours(hours)}</strong>, until <strong>${_fmtTime12(walkinComputeUntil(hours))}</strong>.`;
   document.getElementById('walkinFooterDefault').style.display='none';
   document.getElementById('walkinFooterConfirm').style.display='flex';
 }
@@ -8691,8 +8672,8 @@ function saveWalkin(){
   if(!name){err.textContent="Please enter the visitor's full name to proceed.";err.style.display='block';return;}
   const ue=walkinUntilError();
   if(ue){err.textContent=ue;err.style.display='block';walkinCancelConfirm();return;}
-  const until=walkinComputeUntil();
-  const hours=getWalkinHours();
+  const hours=walkinSelectedHours();
+  const until=walkinComputeUntil(hours);
   const walkins=Walkins.all();
   const now=new Date();
   const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
@@ -10564,7 +10545,7 @@ function restoreSession(sess){
   var KEY='fitcore_sidebar_collapsed';
   function setCollapsed(c){
     document.body.classList.toggle('sidebar-collapsed',c);
-    try{localStorage.setItem(KEY,c?'1':'0');}catch(e){}
+    try{sessionStorage.setItem(KEY,c?'1':'0');}catch(e){}
   }
   function makeBtn(id,cls,title,inner,onClick){
     var b=document.createElement('button');
@@ -10588,7 +10569,7 @@ function restoreSession(sess){
       '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
       function(){setCollapsed(false);}),top.firstChild);
     var saved=false;
-    try{saved=localStorage.getItem(KEY)==='1';}catch(e){}
+    try{saved=sessionStorage.getItem(KEY)==='1';}catch(e){}
     if(saved)document.body.classList.add('sidebar-collapsed');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initSidebarToggle);

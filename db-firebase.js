@@ -8,7 +8,7 @@
 //   2. Keeps every device live via onSnapshot listeners
 //   3. Replaces password auth with Firebase Authentication
 //      (usernames map to synthetic in-app email identities)
-// Only device-local security counters (login lockouts) stay in localStorage.
+// Only device-local security counters (login lockouts) stay in sessionStorage.
 // ============================================================
 (function(){
   'use strict';
@@ -44,12 +44,13 @@
         this.secondary=(firebase.apps.find(function(a){return a.name==='gms-admin-tasks';})
           ||firebase.initializeApp(window.FIREBASE_CONFIG,'gms-admin-tasks'));
         this.ready=true;
-        // Online-only: purge business collections cached by older builds.
-        // Device-local security counters (login lockouts) are left alone.
+        // Online-only: purge every app key cached by older builds. Nothing
+        // business-related is ever written to localStorage again; only
+        // session-local security counters remain (in sessionStorage).
         try{
-          Object.keys(COLMAP).forEach(function(k){localStorage.removeItem(k);});
-          localStorage.removeItem('gms_pw_overrides');
-          localStorage.removeItem('gms_seeded');
+          Object.keys(localStorage).forEach(function(k){
+            if(k.indexOf('gms_')===0||k==='fitcore_sidebar_collapsed')localStorage.removeItem(k);
+          });
         }catch(e){}
         var self=this;
         // Re-attach fresh listeners whenever the signed-in identity changes
@@ -104,11 +105,11 @@
     },
     // ---------- one-time fresh start on this device ----------
     bootstrapLocal:function(){
-      if(localStorage.getItem('gms_fb_fresh')==='2')return;
+      if(sessionStorage.getItem('gms_fb_fresh')==='2')return;
       Object.keys(COLMAP).forEach(function(k){localStorage.removeItem(k);});
       localStorage.removeItem('gms_login_attempts');
       localStorage.removeItem('gms_seeded');
-      localStorage.setItem('gms_fb_fresh','2');
+      sessionStorage.setItem('gms_fb_fresh','2');
     },
     // ---------- sync health ----------
     // True when at least one collection listener is failing (offline,
@@ -217,6 +218,7 @@
             populateMsPlanSelect(pick);
           }
         }
+        if(storageKey==='gms_settings'&&typeof syncStaticWalkinPrice==='function')syncStaticWalkinPrice();
         var appEl=document.getElementById('app');
         if(appEl&&appEl.classList.contains('active')&&typeof _lastPanel!=='undefined'&&_lastPanel&&typeof renderPanel==='function'){renderPanel(_lastPanel);}
         if(typeof updateSyncWarning==='function')updateSyncWarning();
