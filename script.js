@@ -1966,7 +1966,8 @@ function startMemberSignup(planId){
   showRegTab('member');
 }
 function msBackToLogin(){
-  _memberSignupPlanId=null;
+  _memberSignupPlanId=null;_msRegMember=null;
+  try{if(window.GMSFB&&GMSFB.secondarySignOut)GMSFB.secondarySignOut();}catch(e){}
   showLogin();
 }
 function msStep1Next(){
@@ -2209,7 +2210,8 @@ async function submitMemberSignup(){
   }
   const notif={id:'NTF-'+uid(),memberId:member.id,planId:member.planId||'',type:'pending_payment',status:'open',createdAt:member.createdAt||today()};
   await GMSFB.secSetDoc('notifications',notif);
-  GMSFB.secondarySignOut();
+  // Secondary session stays open so step 5 can upload a GCash receipt; it is
+  // signed out when the proof is sent or the member leaves (msBackToLogin).
   restoreBtn();
   _memberSignupPlanId=null;
   document.getElementById('msStep3').style.display='none';
@@ -2220,7 +2222,9 @@ async function submitMemberSignup(){
   renderMsPayOptions(member);
   if(done)done.style.display='block';
 }
+let _msRegMember=null;
 function renderMsPayOptions(member){
+  _msRegMember=member||null;
   const box=document.getElementById('msPayOptions');if(!box)return;
   const plan=member&&member.planId?Plans.one(member.planId):null;
   const amt=plan?'₱'+Number(plan.price).toLocaleString():'';
@@ -2232,7 +2236,16 @@ function renderMsPayOptions(member){
     html+='<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet — no need to visit the gym</strong>'
       +'<div style="text-align:center;margin:10px 0 6px">'+(qr?'<img src="'+qr+'" alt="GCash QR" style="width:170px;max-width:60%;border-radius:10px;background:#fff;padding:5px">':'')
       +'<div>Account name: <strong style="color:var(--white)">'+esc(g.name||'')+'</strong></div><div>GCash number: <strong style="color:var(--white);font-family:monospace">'+esc(g.number||'')+'</strong></div></div>'
-      +'Send the exact amount'+(amt?' (<strong style="color:var(--green)">'+amt+'</strong>)':'')+', then tap <strong>Back to Login</strong>, log in, and press <strong>Pay via GCash</strong> to upload your receipt and reference number. The front desk will confirm it.</div>';
+      +'Send the exact amount'+(amt?' (<strong style="color:var(--green)">'+amt+'</strong>)':'')+', then enter your reference number and upload the receipt screenshot below.'
+      +'<div id="ms_error" class="error-msg" style="margin-top:10px"></div>'
+      +'<div id="msGcashForm" style="margin-top:10px"><label style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500)">GCash Reference Number *</label>'
+      +'<input type="text" id="ms_ref" placeholder="e.g. 1234567890123" autocomplete="off" maxlength="24" style="width:100%;margin:6px 0 10px;padding:10px 12px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white)">'
+      +'<label style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500)">Receipt Screenshot *</label>'
+      +'<input type="file" id="ms_file" accept="image/*" onchange="onMsReceiptPick(this)" style="width:100%;margin:6px 0 8px">'
+      +'<img id="ms_preview" alt="Receipt preview" style="display:none;max-width:100%;max-height:170px;border-radius:8px;border:1px solid rgba(255,255,255,.12);margin-bottom:8px">'
+      +'<input type="hidden" id="ms_receipt">'
+      +'<button type="button" class="btn-primary" id="ms_submit" style="width:100%" onclick="msSubmitGcashProof()">Submit Payment</button>'
+      +'<div style="font-size:11px;color:var(--gray-500);margin-top:8px">The front desk will confirm it. You can also upload later after logging in.</div></div></div>';
   }
   box.innerHTML=html+'</div>';
 }
@@ -4695,6 +4708,46 @@ function openGcashProofs(){
     .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 // ---- Member: pay via GCash ----
+function onMsReceiptPick(input){
+  _pickImage(input,1000,260000,function(d){
+    document.getElementById('ms_receipt').value=d;
+    const pv=document.getElementById('ms_preview');pv.src=d;pv.style.display='block';
+  });
+}
+// Step 5 of member sign-up: the brand-new member uploads the GCash receipt
+// right away. Writes through the secondary (just-registered) Firebase session.
+async function msSubmitGcashProof(){
+  const err=document.getElementById('ms_error');err.style.display='none';
+  const fail=m=>{err.textContent=m;err.style.display='block';};
+  const mem=_msRegMember;
+  if(!mem)return fail('Session expired. Please log in and upload your receipt from the payment screen.');
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  if(!plan)return fail('No plan selected. Please contact the front desk.');
+  const ref=_normRef(document.getElementById('ms_ref').value);
+  const receipt=_safeImg(document.getElementById('ms_receipt').value);
+  if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number (letters/numbers, at least 8 characters).');
+  if(!receipt)return fail('Please upload a screenshot of your GCash receipt.');
+  if(!rateLimitOk('gms_gcash_signup',5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
+  const proof={id:'GCP-'+uid(),type:'gcash_proof',status:'open',memberId:mem.id,memberName:mem.name,planId:plan.id,planName:plan.name,amount:Number(plan.price),reference:ref,receipt,createdAt:new Date().toISOString(),date:today()};
+  const btn=document.getElementById('ms_submit');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  try{
+    if(window.GMSFB&&GMSFB.enabled){
+      const wr=await GMSFB.secSetDoc('notifications',proof);
+      if(!wr||!wr.ok)throw new Error('Could not send your payment. Please check your connection and try again.');
+      GMSFB.secondarySignOut();
+    }else{
+      Notifications.add(proof);
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='Submit Payment';}
+    return fail((e&&e.message)||'Could not send your payment.');
+  }
+  _msRegMember=null;
+  const f=document.getElementById('msGcashForm');
+  if(f)f.innerHTML='<div style="background:rgba(127,250,136,.1);border:1px solid rgba(127,250,136,.3);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--gray-300)">✅ <strong style="color:var(--green)">Payment submitted!</strong><br>The front desk will verify it and activate your membership. Tap <strong>Back to Login</strong> to check your status.</div>';
+  err.style.display='none';
+}
 function openGcashPay(){
   if(!currentUser||currentUser.role!=='member'){toast('Please log in as a member.','error');return;}
   const mem=Members.one(currentUser.memberId||currentUser.id);
@@ -4827,6 +4880,9 @@ function confirmGcashProof(id){
   const m=Members.one(p.memberId);
   if(!m){toast('Member not found.','error');return;}
   if(bgCheckBlocksActivation(m)){toast('Background check is Flagged — clear it in the member profile first.','error');return;}
+  const _dup=Notifications.all().some(n=>n.type==='gcash_proof'&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
+    ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
+  if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
   const msg='Confirm that you received this GCash payment?'
     +'<div style="margin-top:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">'
     +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Member:</span> <strong style="color:var(--white)">'+esc(m.name)+'</strong></div>'
