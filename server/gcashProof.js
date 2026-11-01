@@ -14,7 +14,54 @@ const MAX_RECEIPT_CHARS = 400000; // compressed client-side (~260k) + base64 ove
 const normRef = (v) => String(v || '').replace(/[\s-]+/g, '').toUpperCase();
 const bad = (msg, status) => ({ status: status || 400, body: { ok: false, error: msg } });
 
+// Walk-in visitors have no member record: the fee and time limit come from
+// the admin's settings/walkin doc, never from the browser.
+async function submitWalkinProof(body) {
+  const name = String(body.visitorName || '').replace(/[<>]/g, '').trim().slice(0, 60);
+  const reference = normRef(body.reference);
+  const receipt = String(body.receipt || '');
+  if (name.length < 2) return bad('Please enter your full name.');
+  if (!/^[A-Z0-9]{8,24}$/.test(reference)) return bad('Enter a valid GCash reference number (letters/numbers, at least 8 characters).');
+  if (!/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(receipt) || receipt.length > MAX_RECEIPT_CHARS) {
+    return bad('Please upload a screenshot of your GCash receipt (JPG or PNG).');
+  }
+  const ctx = init();
+  const ws = await ctx.db.collection('settings').doc('walkin').get();
+  const w = ws.exists ? (ws.data() || {}) : {};
+  const fee = Number(w.fee) > 0 ? Number(w.fee) : 100;
+  const hours = Number(w.hours) > 0 && Number(w.hours) <= 12 ? Number(w.hours) : 2;
+
+  const sameRef = await ctx.db.collection('notifications').where('reference', '==', reference).limit(10).get();
+  let used = false;
+  sameRef.forEach((doc) => {
+    const x = doc.data() || {};
+    if ((x.type === 'gcash_proof' || x.type === 'walkin_proof') && x.status !== 'rejected') used = true;
+  });
+  if (!used) {
+    const paid = await ctx.db.collection('payments').where('reference', '==', reference).limit(5).get();
+    paid.forEach(() => { used = true; });
+  }
+  if (used) return bad('This reference number was already used.');
+
+  const id = 'WIP-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
+  await ctx.db.collection('notifications').doc(id).set({
+    id,
+    type: 'walkin_proof',
+    status: 'open',
+    visitorName: name,
+    hours,
+    amount: fee,
+    reference,
+    receipt,
+    createdAt: new Date().toISOString(),
+    date: new Date().toISOString().slice(0, 10),
+    source: 'online-walkin'
+  });
+  return { status: 200, body: { ok: true, id } };
+}
+
 async function submitGcashProof(body) {
+  if (body && body.type === 'walkin') return submitWalkinProof(body);
   const memberId = String(body.memberId || '').trim().slice(0, 80);
   const reference = normRef(body.reference);
   const receipt = String(body.receipt || '');

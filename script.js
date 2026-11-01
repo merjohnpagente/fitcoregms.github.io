@@ -4759,7 +4759,7 @@ function gcashProofsOf(memberId){
 }
 function latestGcashProof(memberId){return gcashProofsOf(memberId)[0]||null;}
 function openGcashProofs(){
-  return Notifications.all().filter(n=>n.type==='gcash_proof'&&n.status==='open')
+  return Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status==='open')
     .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 // ---- Member: pay via GCash ----
@@ -4822,6 +4822,8 @@ function _fillGcashModal(mem,plan,title){
   const pv=document.getElementById('gp_preview');pv.src='';pv.style.display='none';
   const sb=document.getElementById('gp_submit');if(sb){sb.disabled=false;sb.textContent='Submit Payment';}
   document.getElementById('gcashPayModal').dataset.mode='';
+  const _nw=document.getElementById('gp_nameWrap');if(_nw)_nw.style.display='none';
+  const _wn=document.getElementById('gp_walkinNote');if(_wn)_wn.style.display='none';
   openModal('gcashPayModal');
 }
 // Duplicate checks that need a signed-in Firebase session (used right after the
@@ -4913,6 +4915,7 @@ function onGcashReceiptPick(input){
 async function submitGcashProof(){
   const _m=document.getElementById('gcashPayModal');
   if(_m&&_m.dataset.mode==='expired')return submitExpiredRenewal();
+  if(_m&&_m.dataset.mode==='walkin')return submitWalkinProof();
   const err=document.getElementById('gp_error');err.style.display='none';
   const fail=m=>{err.textContent=m;err.style.display='block';};
   if(!currentUser||currentUser.role!=='member')return fail('Please log in as a member.');
@@ -4988,8 +4991,8 @@ function gcashVerifyHtml(){
     const img=_safeImg(p.receipt);
     return `<tr>
       <td>${img?`<img src="${img}" alt="Receipt" title="Click to enlarge" style="width:48px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(p.id)}')">`:'—'}</td>
-      <td>${esc(p.memberName)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(p.memberId)}</div></td>
-      <td>${esc(p.planName)}</td>
+      <td>${esc(p.type==='walkin_proof'?p.visitorName:p.memberName)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${p.type==='walkin_proof'?'Walk-in visitor':esc(p.memberId)}</div></td>
+      <td>${esc(p.type==='walkin_proof'?'Walk-in · '+fmtHours(Number(p.hours)||getWalkinHours()):p.planName)}</td>
       <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
       <td style="font-family:monospace">${esc(p.reference)}</td>
       <td>${formatDateTime(p.createdAt)}</td>
@@ -4997,18 +5000,19 @@ function gcashVerifyHtml(){
     </tr>`;}).join('');
   return notSet+`<div class="table-card" style="margin-bottom:16px;border:1px solid rgba(251,191,36,.35)">
     <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${open.length}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Member</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
 function viewGcashReceipt(id){
   const p=Notifications.one(id);
-  if(!p||p.type!=='gcash_proof'){return;}
+  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')){return;}
   openAvatarZoom(_safeImg(p.receipt),'GCash receipt '+(p.reference||''));
 }
 function confirmGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
   const p=Notifications.one(id);
-  if(!p||p.type!=='gcash_proof'||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  if(p.type==='walkin_proof')return confirmWalkinProof(p);
   const m=Members.one(p.memberId);
   if(!m){toast('Member not found.','error');return;}
   if(bgCheckBlocksActivation(m)){toast('Background check is Flagged — clear it in the member profile first.','error');return;}
@@ -5041,8 +5045,8 @@ function confirmGcashProof(id){
 function rejectGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
   const p=Notifications.one(id);
-  if(!p||p.type!=='gcash_proof'||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
-  const msg='Reject this GCash payment from <strong>'+esc(p.memberName)+'</strong> (Ref '+esc(p.reference)+')?'
+  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  const msg='Reject this GCash payment from <strong>'+esc(p.type==='walkin_proof'?p.visitorName:p.memberName)+'</strong> (Ref '+esc(p.reference)+')?'
     +'<div style="margin-top:12px"><label style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Reason</label>'
     +'<select id="gcRejReason" style="width:100%;margin-top:6px;padding:9px 10px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white)">'
     +'<option>Reference number not found in GCash</option><option>Amount does not match the plan price</option><option>Receipt is unclear or invalid</option><option>Payment not received</option></select>'
@@ -5053,10 +5057,82 @@ function rejectGcashProof(id){
     const fresh=Notifications.one(id);
     if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
     Notifications.update(id,{status:'rejected',rejectReason:note?sel+' — '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
-    try{logActivity('Rejected','GCash Payment',p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
+    try{logActivity('Rejected','GCash Payment',p.type==='walkin_proof'?p.visitorName:p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
     toast('GCash payment rejected. The member can submit again.','success');
     renderBilling();updateQueueBadge();
   },'Reject','btn-danger');
+}
+
+// ---- Walk-in: pay by GCash (guest) ----
+async function openWalkinGcash(){
+  if(!gcashReady()){
+    toast('Loading GCash details…','info');
+    await _loadGcashViaSecondary(null,null,false);
+  }
+  if(!gcashReady()){toast('Online GCash is not available yet. Please pay at the front desk.','info');return;}
+  const g=getGcashSettings();
+  _fillGcashModal(null,{name:'Walk-in pass · up to '+fmtHours(getWalkinHours()),price:getWalkinFee()},'📱 Walk-In via GCash');
+  document.getElementById('gcashPayModal').dataset.mode='walkin';
+  const nw=document.getElementById('gp_nameWrap');if(nw)nw.style.display='block';
+  const nm=document.getElementById('gp_name');if(nm)nm.value='';
+  const nt=document.getElementById('gp_walkinNote');if(nt)nt.style.display='block';
+}
+async function submitWalkinProof(){
+  const err=document.getElementById('gp_error');err.style.display='none';
+  const fail=m=>{err.textContent=m;err.style.display='block';};
+  const name=sanitizeText((document.getElementById('gp_name')||{}).value||'').trim();
+  const ref=_normRef(document.getElementById('gp_ref').value);
+  const receipt=_safeImg(document.getElementById('gp_receipt').value);
+  if(name.length<2)return fail('Please enter your full name.');
+  if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number (letters/numbers, at least 8 characters).');
+  if(!receipt)return fail('Please upload a screenshot of your GCash receipt.');
+  if(!rateLimitOk('gms_gcash_walkin',3,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
+  const base=fpApiBase();
+  if(!base&&/\.github\.io$/i.test(location.hostname))return fail('Online GCash is not available on this site. Please pay at the front desk.');
+  const btn=document.getElementById('gp_submit');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  const reset=()=>{if(btn){btn.disabled=false;btn.textContent='Submit Payment';}};
+  try{
+    const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'walkin',visitorName:name,reference:ref,receipt})});
+    let data=null;try{data=await res.json();}catch(e){}
+    if(!data)throw new Error('Server error. Please try again.');
+    if(!data.ok)throw new Error(data.error||'Could not send your payment.');
+  }catch(e){reset();return fail((e&&e.message)||'Could not send your payment.');}
+  reset();
+  closeModal('gcashPayModal');
+  toast('Payment sent! Go to the front desk and give your name ('+name+'). They will confirm and record your walk-in pass.','success');
+}
+function confirmWalkinProof(p){
+  const ue=walkinUntilError();
+  const _dup=Notifications.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
+    ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
+  if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
+  if(ue){toast(ue,'error');return;}
+  const hrs=Number(p.hours)>0?Number(p.hours):getWalkinHours();
+  const msg='Confirm that you received this GCash walk-in payment?'
+    +'<div style="margin-top:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Visitor:</span> <strong style="color:var(--white)">'+esc(p.visitorName)+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Time limit:</span> <strong style="color:var(--white)">'+esc(fmtHours(hrs))+'</strong> (starts now)</div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Amount:</span> <strong style="color:var(--green)">₱'+Number(p.amount).toLocaleString()+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Reference:</span> <strong style="color:var(--white);font-family:monospace">'+esc(p.reference)+'</strong></div></div>'
+    +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8">&#128161; Check that the amount and reference match your GCash history before confirming.</div>';
+  openConfirm('📱 Confirm GCash Walk-In',msg,function(){
+    const fresh=Notifications.one(p.id);
+    if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
+    const ue2=walkinUntilError();if(ue2){toast(ue2,'error');return;}
+    const until=walkinComputeUntil(hrs);
+    const walkins=Walkins.all();
+    const time=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    const newId='WI-'+String(walkins.length+1).padStart(4,'0');
+    walkins.push({id:newId,visitorName:sanitizeText(p.visitorName),date:today(),time,until,hours:hrs,fee:Number(p.amount),method:'GCash',reference:p.reference,proofId:p.id,recordedBy:currentUser.username,createdAt:today()});
+    Walkins.save(walkins);
+    Notifications.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),walkinId:newId});
+    toast('Walk-in recorded for '+p.visitorName+' · until '+_fmtTime12(until),'success');
+    try{logActivity('Confirmed','GCash Walk-In',p.visitorName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
+    if(typeof renderWalkin==='function'&&document.getElementById('panelWalkin')&&document.getElementById('panelWalkin').innerHTML)renderWalkin();
+    renderBilling&&document.getElementById('panelBilling')&&document.getElementById('panelBilling').innerHTML&&renderBilling();
+    updateQueueBadge();
+  },'Confirm','btn-primary');
 }
 
 let _renewalPaymentSource=null;
@@ -8447,6 +8523,7 @@ function renderWalkin(){
     <button class="btn-primary btn-inline" onclick="openWalkinModal()">🚶 Register Walk-In</button>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px" id="walkinStats"></div>
+  <div id="walkinGcashQueue">${gcashVerifyHtml()}</div>
   <div class="table-card" id="walkinTableCard"></div>`;
   refreshWalkinTable();
 }
@@ -8830,8 +8907,8 @@ function renderExplorePlans(){
     <div class="ec-badge">No Commitment</div>
     <div class="ec-name">Walk-In</div>
     <div class="ec-price">&#8369;${getWalkinFee().toLocaleString()}<span>/visit</span></div>
-    <ul class="ec-features"><li>&#10003; Full Gym Access</li><li>&#10003; Up to ${fmtHours(getWalkinHours())}</li><li>&#10003; No Registration</li><li>&#10003; Pay at Front Desk</li></ul>
-    <button class="btn-primary ec-btn btn-gold" onclick="showLandingSection('register',null)">Visit Us →</button>
+    <ul class="ec-features"><li>&#10003; Full Gym Access</li><li>&#10003; Up to ${fmtHours(getWalkinHours())}</li><li>&#10003; No Registration</li><li>&#10003; Pay at Front Desk or GCash</li></ul>
+    <button class="btn-primary ec-btn btn-gold" onclick="openWalkinGcash()">Visit Us →</button>
     <div class="walkin-note">&#9888; Time-limited pass.<br>No membership required.</div>
   </div>`;
   container.innerHTML=html;
