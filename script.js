@@ -8359,7 +8359,9 @@ function renderScanner(){
       </div>
       <div id="scanResult" class="scan-result-wrap"></div>
     </div>
-  </div>`;
+  </div>
+  <div class="table-card" id="scanTodayCard" style="margin-top:16px"></div>`;
+  refreshScanToday();
   stopScanner();
   const manual=document.getElementById('scanManualInput');
   if(manual)manual.value='';
@@ -8524,7 +8526,15 @@ function scanManualToken(){
   if(err)err.style.display='none';
   processQrToken(val);
 }
+function refreshScanToday(){
+  const card=document.getElementById('scanTodayCard');if(!card)return;
+  const rows=Attendance.all().filter(a=>a.date===today()).sort((a,b)=>(b.checkInTs||0)-(a.checkInTs||0));
+  const inGym=rows.filter(a=>!a.checkOut).length;
+  card.innerHTML=`<div class="table-header"><h3>Today's Attendance <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${rows.length} check-in${rows.length!==1?'s':''} · ${inGym} in gym</span></h3></div>
+  <div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Check-In</th><th>Check-Out</th><th>Duration</th><th>Source</th></tr></thead><tbody>${rows.length?rows.map(a=>{const m=Members.one(a.memberId);const nm=a.memberName||(m&&m.name)||a.memberId;return `<tr><td>${esc(nm)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(a.memberId)}</div></td><td>${esc(a.checkIn||a.time||'—')}</td><td>${a.checkOut?esc(a.checkOut):'<span class="badge badge-active">In Gym</span>'}</td><td>${esc(a.duration||'—')}</td><td>${a.source==='qr'?'QR Scan':'Manual'}</td></tr>`;}).join(''):`<tr><td colspan="5"><div class="empty-state"><p>No check-ins yet today</p></div></td></tr>`}</tbody></table></div>`;
+}
 function showScanResult(type,title,sub){
+  setTimeout(refreshScanToday,50);
   const wrap=document.getElementById('scanResult');
   if(!wrap)return;
   const meta={
