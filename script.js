@@ -4571,7 +4571,7 @@ function _pagBar(varName,page,pages,total,refresh){
   if(pages<=1)return '';
   return `<div class="pagination"><button class="page-btn" onclick="${varName}=${page-1};${refresh}" ${page===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===page?'active':''}" onclick="${varName}=${i+1};${refresh}">${i+1}</button>`).join('')}<button class="page-btn" onclick="${varName}=${page+1};${refresh}" ${page===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;
 }
-let historyPage=1,activityPage=1,msgPage=1;
+let historyPage=1,activityPage=1,msgPage=1,gcashQPage=1,gcashHPage=1;
 function renderHistory(){
   const el=document.getElementById('panelHistory');
   const counts={All:0,Active:0,'Expiring Soon':0,Expired:0,pending_payment:0,Archived:0};
@@ -5059,9 +5059,12 @@ function mbGcashCta(mem){
 // ---- Admin/Staff: verify proofs ----
 function gcashHistoryHtml(){
   const done=Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='open')
-    .sort((a,b)=>String(b.reviewedAt||b.createdAt).localeCompare(String(a.reviewedAt||a.createdAt))).slice(0,10);
+    .sort((a,b)=>String(b.reviewedAt||b.createdAt).localeCompare(String(a.reviewedAt||a.createdAt)));
   if(!done.length)return '';
-  const rows=done.map(p=>{
+  const hPages=Math.ceil(done.length/10)||1;
+  if(gcashHPage>hPages)gcashHPage=hPages;
+  const pageRows=done.slice((gcashHPage-1)*10,gcashHPage*10);
+  const rows=pageRows.map(p=>{
     const ok=p.status==='confirmed';
     const img=_safeImg(p.receipt);
     return `<tr>
@@ -5071,16 +5074,19 @@ function gcashHistoryHtml(){
       <td style="font-family:monospace">${esc(p.reference)}</td>
       <td><span class="badge ${ok?'badge-paid':'badge-expired'}">${ok?'Confirmed':'Rejected'}</span>${!ok&&p.rejectReason?`<div style="font-size:11px;color:var(--gray-500);margin-top:3px">${esc(p.rejectReason)}</div>`:''}</td>
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
+      <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
-  return `<details class="table-card gcash-hist" style="margin-bottom:16px"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">last ${done.length} · tap to show</span></h3><span style="font-size:11px;color:var(--gray-500)">▾</span></summary>
-    <div style="overflow:auto;max-height:340px"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  return `<details class="table-card gcash-hist" style="margin-bottom:16px"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="font-size:11px;color:var(--gray-500)">▾</span></summary>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'renderBilling()')}</details>`;
 }
 function gcashVerifyHtml(){
   const open=openGcashProofs();
   const notSet=(currentUser&&currentUser.role==='admin'&&!gcashReady())
     ?'<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--gray-300);margin-bottom:14px">📱 Online GCash payment is off. Click <strong>GCash Settings</strong> to add your QR and number so members can pay online.</div>':'';
   if(!open.length)return notSet;
-  const rows=open.map(p=>{
+  const qPages=Math.ceil(open.length/10)||1;
+  if(gcashQPage>qPages)gcashQPage=qPages;
+  const rows=open.slice((gcashQPage-1)*10,gcashQPage*10).map(p=>{
     const img=_safeImg(p.receipt);
     return `<tr>
       <td>${img?`<img src="${img}" alt="Receipt" title="Click to enlarge" style="width:48px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(p.id)}')">`:'-'}</td>
@@ -5089,12 +5095,27 @@ function gcashVerifyHtml(){
       <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
       <td style="font-family:monospace">${esc(p.reference)}</td>
       <td>${formatDateTime(p.createdAt)}</td>
-      <td><div class="td-actions"><button class="btn-primary btn-sm" onclick="confirmGcashProof('${esc(p.id)}')">✔ Confirm</button><button class="btn-danger btn-sm" onclick="rejectGcashProof('${esc(p.id)}')">✖ Reject</button></div></td>
+      <td><div class="td-actions"><button class="btn-primary btn-sm" onclick="confirmGcashProof('${esc(p.id)}')">✔ Confirm</button><button class="btn-danger btn-sm" onclick="rejectGcashProof('${esc(p.id)}')">✖ Reject</button><button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button></div></td>
     </tr>`;}).join('');
   return notSet+`<div class="table-card" style="margin-bottom:16px;border:1px solid rgba(251,191,36,.35)">
     <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${open.length}</span></h3></div>
-    <div style="overflow:auto;max-height:380px"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${_pagBar('gcashQPage',gcashQPage,qPages,open.length,'renderBilling()')}
   </div>`;
+}
+function deleteGcashProof(id){
+  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+  const p=Notifications.one(id);
+  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof'))return;
+  if(p.status==='confirmed'){toast('A confirmed payment cannot be deleted here.','error');return;}
+  const who=p.type==='walkin_proof'?p.visitorName:p.memberName;
+  openConfirm('Delete Submission','Delete the GCash submission of <strong>'+esc(who)+'</strong> (Ref '+esc(p.reference)+')? This removes the receipt picture and cannot be undone.',function(){
+    Notifications.remove(id);
+    try{logActivity('Deleted','GCash Submission',who,'Ref: '+p.reference);}catch(e){}
+    toast('Submission deleted.','success');
+    renderBilling();
+    const wp=document.getElementById('panelWalkin');if(wp&&wp.classList.contains('active'))renderWalkin();
+    updateQueueBadge();
+  },'Delete','btn-danger');
 }
 function viewGcashReceipt(id){
   const p=Notifications.one(id);
