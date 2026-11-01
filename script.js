@@ -2751,6 +2751,7 @@ function navigate(panel){
   if(panel==='schedule'&&_lastPanel!=='schedule'&&currentUser&&currentUser.role==='trainer'){
     schedTrainerFilter=currentUser.id;
   }
+  _dashPlay=(panel==='dashboard'&&_lastPanel!=='dashboard');
   _lastPanel=panel;
   renderPanel(panel);
   if(panel!=='scanner')stopScanner();
@@ -3029,6 +3030,30 @@ function dashHero(actions){
     ${actions?`<div class="dh-actions">${actions}</div>`:''}
   </div>`;
 }
+let _dashPlay=false;
+// Entrance animation: cards fade/slide in one after another, numbers count up
+// and chart bars grow. Plays when the user enters the dashboard, not on
+// background refreshes.
+function animateDashboard(el){
+  if(!el||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches))return;
+  const items=el.querySelectorAll('.dash-hero,.stat-card,.chart-card,.table-card,.mb-tile,.announce-strip,.dash-section,.panel-card');
+  items.forEach(function(n,i){n.classList.remove('dash-in');void n.offsetWidth;n.style.setProperty('--di',Math.min(i,14)*70+'ms');n.classList.add('dash-in');});
+  el.querySelectorAll('.stat-value').forEach(function(n){
+    const t=n.textContent.trim();const m=t.match(/^(\D*)([\d,]+(?:\.\d+)?)(\D*)$/);
+    if(!m)return;
+    const end=parseFloat(m[2].replace(/,/g,''));if(!isFinite(end)||end<=0)return;
+    const dec=(m[2].split('.')[1]||'').length,t0=performance.now(),dur=900;
+    (function tick(now){
+      const k=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-k,3),v=end*e;
+      n.textContent=m[1]+(dec?v.toFixed(dec):Math.round(v).toLocaleString())+m[3];
+      if(k<1)requestAnimationFrame(tick);else n.textContent=t;
+    })(t0);
+  });
+  el.querySelectorAll('.chart-card svg rect').forEach(function(r,i){
+    r.style.transformBox='fill-box';r.style.transformOrigin='bottom';
+    r.animate([{transform:'scaleY(0)',opacity:.3},{transform:'scaleY(1)',opacity:1}],{duration:700,delay:300+i*80,easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'});
+  });
+}
 function renderDashboard(){
   const el=document.getElementById('panelDashboard');
   const role=currentUser.role;
@@ -3042,6 +3067,7 @@ function renderDashboard(){
       else el.insertAdjacentHTML('afterbegin',strip);
     }
   }
+  if(_dashPlay){_dashPlay=false;animateDashboard(el);}
 }
 function updateQueueBadge(){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
