@@ -1,6 +1,6 @@
 'use strict';
 // ============================================================
-// FitCore GMS — password reset via 6-digit Gmail OTP (server-side)
+// FitCore GMS - password reset via 6-digit Gmail OTP (server-side)
 // The code is generated, hashed, stored, verified and expired HERE,
 // never in the browser. The browser only ever sees the final result.
 // ============================================================
@@ -19,7 +19,7 @@ function env(name) {
   return v;
 }
 
-// Accepts the service account as raw JSON, JSON wrapped in quotes, or base64 —
+// Accepts the service account as raw JSON, JSON wrapped in quotes, or base64 -
 // Vercel env vars are often pasted with stray quotes/newlines, which made
 // JSON.parse throw and surfaced only as a generic "Server error".
 function parseServiceAccount(raw) {

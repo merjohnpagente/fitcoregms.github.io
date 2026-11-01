@@ -2,7 +2,7 @@
 const KEY={users:'gms_users',members:'gms_members',payments:'gms_payments',sessions:'gms_sessions',plans:'gms_plans',attendance:'gms_attendance',walkins:'gms_walkins',loginAttempts:'gms_login_attempts',activityLog:'gms_activity_log',settings:'gms_settings',notifications:'gms_notifications',messages:'gms_messages',announcements:'gms_announcements',workouts:'gms_workouts',workoutPlans:'gms_workout_plans',measurements:'gms_measurements',goals:'gms_goals',exerciseLibrary:'gms_exercise_library'};
 const PENDING_ARCHIVE_DAYS=7;
 const QR_SCAN_DUP_WINDOW_MIN=30;
-// Safe deep clone for Repository reads — structuredClone when available,
+// Safe deep clone for Repository reads - structuredClone when available,
 // JSON fallback for older browsers. undefined/null pass through.
 function deepClone(v){
   if(v===null||v===undefined)return v;
@@ -79,7 +79,7 @@ class Repository{
   add(item){const arr=this.all();arr.push(item);this.save(arr);return item;}
   update(id,patch){const arr=this.all();const i=arr.findIndex(x=>x.id===id);if(i>-1){arr[i]={...arr[i],...patch};this.save(arr);}return arr[i];}
   remove(id){const arr=this.all().filter(x=>x.id!==id);this.save(arr);
-    // Explicit cloud delete — pushCollection NEVER deletes (stale-cache safety),
+    // Explicit cloud delete - pushCollection NEVER deletes (stale-cache safety),
     // so user-initiated remove must call deleteDocs or docs resurrect on refresh.
     try{if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.deleteDocs==='function')GMSFB.deleteDocs(this.storageKey,[id]);}catch(e){}
     return arr;}
@@ -137,7 +137,7 @@ function signupRateCheck(){
   return count>=SIGNUP_RATE_LIMIT;
 }
 // Generic client-side anti-spam limiter. It stops accidental/rapid abuse but
-// is NOT a security boundary — a determined attacker can clear storage.
+// is NOT a security boundary - a determined attacker can clear storage.
 // Real spam protection belongs in Firebase App Check + server-side quotas.
 function rateLimitOk(key,max,windowMs){
   const now=Date.now();
@@ -232,7 +232,7 @@ function normalizeContact(raw,dialCode){
   return String(dialCode||'').trim()+stripped;
 }
 function phoneErrorMsg(dialCode){
-  if(isPhDial(dialCode)) return 'Please enter a valid PH mobile number — 11 digits starting with 09 (e.g. 09171234567).';
+  if(isPhDial(dialCode)) return 'Please enter a valid PH mobile number - 11 digits starting with 09 (e.g. 09171234567).';
   return 'Please enter a valid contact number (6-15 digits).';
 }
 function playScanSound(kind){
@@ -353,7 +353,7 @@ class AuthService{
     if(!username||!password)return{ok:false,error:'Please fill in all required fields.'};
     const unameLower=String(username).trim().toLowerCase();
     const loginKey=unameLower.split('@')[0];
-    if(LoginAttempts.get(username)>=LOGIN_MAX_ATTEMPTS)return{ok:false,error:'Account locked. Too many failed attempts — try again in 15 minutes.'};
+    if(LoginAttempts.get(username)>=LOGIN_MAX_ATTEMPTS)return{ok:false,error:'Account locked. Too many failed attempts - try again in 15 minutes.'};
     // case-insensitive lookup so "Mike" == "mike" on any device
     const found=Users.all().find(x=>x.username&&x.username.toLowerCase()===unameLower) || Users.all().find(x=>x.authEmail&&x.authEmail.toLowerCase()===unameLower+'@fitcoregym.local');
     if(found&&found.status==='locked')return{ok:false,error:'Account locked. Please contact the administrator.'};
@@ -377,7 +377,7 @@ class AuthService{
       if(found){
         const r=await GMSFB.signIn(GMSFB.authEmailFor(found),password);
         if(r.ok){LoginAttempts.reset(username);if(found.role==='admin')GMSFB.ensureSeededPlans();this.setSession(found);return{ok:true,user:found};}
-        // Do not lock on network errors — only on credential failures
+        // Do not lock on network errors - only on credential failures
         if(r.code&&r.code.indexOf('network')>-1) return{ok:false,error:r.error};
         // SECURITY: no hash fallback for privileged accounts. A forged
         // passwordHash must never become an admin/staff session.
@@ -417,7 +417,7 @@ class AuthService{
       // (admin@fitcoregym.local). If it has never been created, the FIRST
       // admin login bootstraps it in the cloud with the password entered,
       // then self-heals the Firestore profile doc. From then on every device
-      // authenticates the same cloud admin — never a device-local copy.
+      // authenticates the same cloud admin - never a device-local copy.
       if(unameLower==='admin' || loginKey==='admin'){
         let admin=Users.all().find(x=>x.role==='admin'&&x.username.toLowerCase()==='admin');
         // Try canonical admin email first, then fall back to any stored authEmail
@@ -439,7 +439,7 @@ class AuthService{
           }
         }
         // First-run bootstrap: create the admin identity in Firebase Auth
-        // Always try when signIn fails for admin — the account may have been
+        // Always try when signIn fails for admin - the account may have been
         // deleted from Firebase Console even though the Firestore doc exists.
         if(!r.ok){
           const notFound=r.code==='auth/user-not-found'||(r.code&&r.code.indexOf('user-not-found')>-1)||(r.code&&r.code.indexOf('invalid-credential')>-1);
@@ -449,7 +449,7 @@ class AuthService{
             if(cu.ok){
               r=await GMSFB.signIn(GMSFB.adminAuthEmail,password);
             } else if(cu.code&&cu.code.indexOf('email-already-in-use')>-1){
-              // Account exists with different password — can't recover from client
+              // Account exists with different password - can't recover from client
               return{ok:false,error:'Admin account exists with a different password. Please contact support or reset via Firebase Console.'};
             }
           }
@@ -513,7 +513,7 @@ class AuthService{
         }
         if(m){
           if(m.status==='Archived'){GMSFB.signOut();return{ok:false,error:'Your account has been archived. Please contact the front desk.'};}
-          // Note: pending_payment is ALLOWED to log in — they land on pendingGate
+          // Note: pending_payment is ALLOWED to log in - they land on pendingGate
           // with auto-refresh, so they see their status live. No block here.
           if(isMemberExpired(m)){GMSFB.signOut();return{ok:false,error:EXPIRED_LOGIN_MSG,expiredMemberId:m.id};}
           if(bgCheckFlagged(m)){GMSFB.signOut();return{ok:false,error:'Your account is flagged pending a background check. Please contact the front desk.'};}
@@ -552,8 +552,8 @@ class AuthService{
       // Hint for pending Payment Queue: check local cache before locking
       const hintPending=Members.all().find(x=>x.username&&x.username.toLowerCase()===loginKey&&x.status==='pending_payment');
       if(hintPending){
-        // Do not lock — guide them
-        return{ok:false,error:'Invalid username or password. If you just registered, your payment may still be pending — please wait for front-desk confirmation, then try again.'};
+        // Do not lock - guide them
+        return{ok:false,error:'Invalid username or password. If you just registered, your payment may still be pending - please wait for front-desk confirmation, then try again.'};
       }
       LoginAttempts.register(username);
       return{ok:false,error:'Invalid username or password.'};
@@ -561,7 +561,7 @@ class AuthService{
     // ---------- ONLINE-ONLY ----------
     // There is no offline/local fallback anymore: every account lives in
     // Firebase. Without a cloud connection nobody can log in.
-    return{ok:false,error:'No internet connection. FitCore runs live in the cloud — please connect to the internet and try again. If you are online, please refresh (Ctrl+F5) and try again.'};
+    return{ok:false,error:'No internet connection. FitCore runs live in the cloud - please connect to the internet and try again. If you are online, please refresh (Ctrl+F5) and try again.'};
   }
   logout(){this.clearSession();}
   async register(role,payload){
@@ -569,7 +569,7 @@ class AuthService{
     // case-insensitive check across cached users AND cloud (admin approval relies on this)
     const unameLower=String(payload.username||'').trim().toLowerCase();
     if(users.find(x=>x.username&&x.username.toLowerCase()===unameLower))return{ok:false,error:'Username already taken. Please choose a different username.'};
-    // All staff/trainer registrations require admin approval — no instant login (fixes "can log in right after register" bug)
+    // All staff/trainer registrations require admin approval - no instant login (fixes "can log in right after register" bug)
     const status='pending';
     const {password,...rest}=payload;
     // Sanitize free-text fields at write time (defense in depth against stored XSS)
@@ -577,7 +577,7 @@ class AuthService{
     const user={id:uid(),role,status,createdAt:today(),...rest};
     // ---------- CLOUD-ONLY REGISTRATION ----------
     // The profile doc is written straight to Firestore through the secondary
-    // app's authenticated context. Nothing is stored in localStorage here —
+    // app's authenticated context. Nothing is stored in localStorage here -
     // every device (including this one) receives the record via the live
     // snapshot, so Firebase stays the single source of truth.
     if(!(window.GMSFB&&GMSFB.enabled)){
@@ -590,7 +590,7 @@ class AuthService{
     const r=await GMSFB.createUserCreds(authEmail,password,payload.contact);
     if(!r.ok){
       // Auth account may exist from an earlier attempt whose profile never
-      // reached the cloud — recover by verifying the password on the SECONDARY
+      // reached the cloud - recover by verifying the password on the SECONDARY
       // app (the context secSetDoc writes through).
       if(r.code==='auth/email-already-in-use'){
         const si=await GMSFB.secSignIn(authEmail,password);
@@ -607,7 +607,7 @@ class AuthService{
     }
     GMSFB.secondarySignOut();
     if(!wr||!wr.ok){
-      // NEVER keep a cloud-bound registration as a local-only record — it
+      // NEVER keep a cloud-bound registration as a local-only record - it
       // would be invisible to admins on other devices. Fail loudly instead.
       return{ok:false,error:'Registration could not reach the server. Please check your internet connection and try again.'};
     }
@@ -649,7 +649,7 @@ function renewalExpiry(member,startDate,months){
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysUntil(dateStr){const ms=new Date(dateStr)-new Date(today());return Math.ceil(ms/(1000*60*60*24));}
 // Expired member check for login gate + session force-logout.
-// pending_payment and Archived are intentionally excluded — they have their own flows
+// pending_payment and Archived are intentionally excluded - they have their own flows
 // (pendingGate / archived block). A missing expiryDate is also not treated as expired.
 const EXPIRED_LOGIN_MSG='Your membership has expired. Please visit the front desk to renew your plan to continue.';
 function isMemberExpired(m){
@@ -672,10 +672,10 @@ function calcAge(dobStr){
 function dobPolicy(age){
   if(isNaN(age)) return {ok:false, color:'var(--gray-500)', msg:''};
   if(age<0) return {ok:false, color:'var(--red)', msg:'Invalid date of birth.'};
-  if(age<13) return {ok:false, color:'var(--red)', msg:'Under 13 — Not allowed. FitCore does not permit members under 13.'};
-  if(age<=15) return {ok:true, color:'var(--gold)', msg:'13–15 — Requires parent/guardian present + waiver (verified at front desk).'};
-  if(age<=17) return {ok:true, color:'var(--orange)', msg:'16–17 — Requires parent/guardian written consent on file.'};
-  return {ok:true, color:'var(--green)', msg:'✓ Eligible — 18+ Full access.'};
+  if(age<13) return {ok:false, color:'var(--red)', msg:'Under 13 - Not allowed. FitCore does not permit members under 13.'};
+  if(age<=15) return {ok:true, color:'var(--gold)', msg:'13–15 - Requires parent/guardian present + waiver (verified at front desk).'};
+  if(age<=17) return {ok:true, color:'var(--orange)', msg:'16–17 - Requires parent/guardian written consent on file.'};
+  return {ok:true, color:'var(--green)', msg:'✓ Eligible - 18+ Full access.'};
 }
 function onMsDobChange(){
   const dobEl=document.getElementById('msDob');
@@ -685,7 +685,7 @@ function onMsDobChange(){
   const age=calcAge(dob);
   if(!dob||isNaN(age)){hint.textContent=''; hint.style.display='none'; const gs=document.getElementById('msGuardianSection');if(gs)gs.classList.remove('show'); return;}
   const p=dobPolicy(age);
-  hint.textContent='Age: '+age+' — '+p.msg;
+  hint.textContent='Age: '+age+' - '+p.msg;
   hint.style.color=p.color;
   hint.style.display='block';
   hint.style.fontSize='11px';
@@ -717,7 +717,7 @@ function onMfDobChange(){
   if(hint){
     if(!dob||isNaN(age)){ hint.textContent=''; hint.style.display='none'; return; }
     const p=dobPolicy(age);
-    hint.textContent='Age: '+age+' — '+p.msg;
+    hint.textContent='Age: '+age+' - '+p.msg;
     hint.style.color=p.color;
     hint.style.display='block';
   }
@@ -837,8 +837,8 @@ function renderQrTo(el,token,cell=5){
     if(img){img.style.imageRendering='pixelated';img.style.display='block';}
   }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px">QR generation failed</div>';}
 }
-function formatDate(dateStr){if(!dateStr)return'—';const d=new Date(dateStr);return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
-function formatDateTime(dateStr){if(!dateStr)return'—';const d=new Date(dateStr);return d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function formatDate(dateStr){if(!dateStr)return'-';const d=new Date(dateStr);return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function formatDateTime(dateStr){if(!dateStr)return'-';const d=new Date(dateStr);return d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function formatFullDate(dateStr){const d=new Date(dateStr);return d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});}
 
 // ============================= XSS DEFENSE =============================
@@ -852,7 +852,7 @@ function onImagePick(input,urlField,previewId,clearId){
   if(!f)return;
   const isImg=/^image\//.test(f.type)||/\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(f.name||'');
   if(!isImg){toast('Please select an image file.','error');return;}
-  if(f.size>20*1024*1024){toast('Image too large — max 20MB (your file is '+(f.size/1024/1024).toFixed(1)+'MB).','error');return;}
+  if(f.size>20*1024*1024){toast('Image too large - max 20MB (your file is '+(f.size/1024/1024).toFixed(1)+'MB).','error');return;}
   const r=new FileReader();
   r.onload=async function(ev){
     let data=ev.target.result;
@@ -1098,8 +1098,8 @@ async function doLogin(){
           const card='padding:11px 13px;border:1px solid rgba(255,255,255,.12);border-radius:12px;font-size:13px;line-height:1.55;color:var(--gray-300);text-align:left';
           lr.innerHTML='<div style="display:grid;gap:10px">'
             +'<div style="'+card+';border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.06)">⏰ <strong style="color:var(--white)">Plan expired</strong>'
-            +'<div style="margin-top:4px">Plan: <strong style="color:var(--white)">'+esc(ep?ep.name:'—')+'</strong></div>'
-            +'<div>Expired on: <strong style="color:var(--red)">'+(em.expiryDate?esc(formatDate(em.expiryDate)):'—')+'</strong>'+(ago!==null?' ('+ago+' day'+(ago!==1?'s':'')+' ago)':'')+'</div></div>'
+            +'<div style="margin-top:4px">Plan: <strong style="color:var(--white)">'+esc(ep?ep.name:'-')+'</strong></div>'
+            +'<div>Expired on: <strong style="color:var(--red)">'+(em.expiryDate?esc(formatDate(em.expiryDate)):'-')+'</strong>'+(ago!==null?' ('+ago+' day'+(ago!==1?'s':'')+' ago)':'')+'</div></div>'
             +'<div style="'+card+'">🏋️ <strong style="color:var(--white)">Pay at the front desk</strong><br>Visit the gym and pay in Cash or GCash. Staff will renew your membership.</div>'
             +'<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet</strong><br>No need to visit the gym. Send the payment, then upload your receipt screenshot and reference number.<button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="openExpiredRenewal()">📱 Renew via GCash</button></div></div>';
           lr.style.display='block';
@@ -1154,7 +1154,7 @@ function doLogout(){
   _resetPwVis();
 }
 function showLoginError(msg){const el=document.getElementById('loginError');el.textContent=msg;el.style.display='block';}
-// ============================= FORGOT PASSWORD — 3-step (email only) =============================
+// ============================= FORGOT PASSWORD - 3-step (email only) =============================
 let _fpCode=null, _fpCodeExp=0, _fpCooldown=0, _fpVerified=null, _fpCodeTimer=null, _fpStep=1, _fpForcedMode=false;
 let _fpEmail='', _fpResetToken=null;
 try{
@@ -1337,7 +1337,7 @@ function fpBackToStep1(){
   showFpStep(1);
   const err=document.getElementById('forgotError'); if(err) err.style.display='none';
 }
-function toggleFpMethod(){ /* email-only flow — method fixed to email */ }
+function toggleFpMethod(){ /* email-only flow - method fixed to email */ }
 function updateFpVerifyBtnState(){
   const btn=document.getElementById('fp_verify_btn');
   if(!btn) return;
@@ -1450,7 +1450,7 @@ async function fpVerifyCode(){
   if(_fpCodeTimer){clearInterval(_fpCodeTimer); _fpCodeTimer=null;}
   showFpStep(3);
   setFpBtnLoading(verifyBtn,false);
-  toast('Code verified — now set your new password.','success');
+  toast('Code verified - now set your new password.','success');
 }
 async function handleForgotVerify(){ return _fpStep===2 ? fpVerifyCode() : fpSubmitCode(); }
 async function verifyForgotCode(){ return fpVerifyCode(); }
@@ -1643,7 +1643,7 @@ async function confirmForgotPassword(){
         }
       }catch(e){}
     }
-    if(suc){suc.textContent=isForcedMode?'Password updated — opening your dashboard…':'Password reset successful! You can now log in with your new password.'; suc.style.display='block';}
+    if(suc){suc.textContent=isForcedMode?'Password updated - opening your dashboard…':'Password reset successful! You can now log in with your new password.'; suc.style.display='block';}
     if(err) err.style.display='none';
     toast(isForcedMode?'Password updated successfully.':'Password reset - please log in with the new password.','success');
     _fpCode=null;
@@ -1745,10 +1745,10 @@ async function loadPhCities(prefix,provinceCode){
     const cities=await phAddrFetch(path);
     if(req!==_phReq[prefix].city)return;
     const items=cities.map(c=>({code:c.code,name:String(c.name||'').trim()})).filter(c=>c.code&&c.name).sort((a,b)=>a.name.localeCompare(b.name));
-    if(!items.length){phAddrError(city,'No cities found — reselect province');return;}
+    if(!items.length){phAddrError(city,'No cities found - reselect province');return;}
     phAddrFill(city,items,'Select City');
   }catch(e){
-    if(req===_phReq[prefix].city)phAddrError(city,'Unable to load cities — reselect province');
+    if(req===_phReq[prefix].city)phAddrError(city,'Unable to load cities - reselect province');
   }
 }
 async function loadPhBarangays(prefix,cityCode){
@@ -1761,10 +1761,10 @@ async function loadPhBarangays(prefix,cityCode){
     const data=await phAddrFetch('cities-municipalities/'+encodeURIComponent(cityCode)+'/barangays/');
     if(req!==_phReq[prefix].brgy)return;
     const items=data.map(b=>({code:b.code,name:String(b.name||'').trim()})).filter(b=>b.code&&b.name).sort((a,b)=>a.name.localeCompare(b.name));
-    if(!items.length){phAddrError(sel,'No barangays found — reselect city');return;}
+    if(!items.length){phAddrError(sel,'No barangays found - reselect city');return;}
     phAddrFill(sel,items,'Select Barangay');
   }catch(e){
-    if(req===_phReq[prefix].brgy)phAddrError(sel,'Unable to load barangays — reselect city');
+    if(req===_phReq[prefix].brgy)phAddrError(sel,'Unable to load barangays - reselect city');
   }
 }
 function resetPhAddress(prefix){
@@ -1952,8 +1952,8 @@ function pickMsPlan(planId){
 function updateMsPlanCard(){
   const sel=document.getElementById('msPlanSelect');
   const plan=sel?Plans.one(sel.value):null;
-  const nameEl=document.getElementById('msPlanName');if(nameEl)nameEl.textContent=plan?plan.name:'—';
-  const priceEl=document.getElementById('msPlanPrice');if(priceEl)priceEl.textContent=plan?'₱'+Number(plan.price).toLocaleString()+(plan.duration===1?'/mo':'/'+plan.duration+'mo'):'—';
+  const nameEl=document.getElementById('msPlanName');if(nameEl)nameEl.textContent=plan?plan.name:'-';
+  const priceEl=document.getElementById('msPlanPrice');if(priceEl)priceEl.textContent=plan?'₱'+Number(plan.price).toLocaleString()+(plan.duration===1?'/mo':'/'+plan.duration+'mo'):'-';
   const durEl=document.getElementById('msPlanDur');if(durEl)durEl.textContent=plan?(plan.duration+' month(s) · '+(plan.sessions==='Unlimited'?'Unlimited sessions':plan.sessions+' sessions')):'';
   const perksEl=document.getElementById('msPlanPerks');if(perksEl)perksEl.innerHTML=plan?(plan.benefits||plan.perks||'').split(/\n|,/).map(b=>b.trim()).filter(Boolean).map(b=>`<li>✓ ${b}</li>`).join(''):'';
 }
@@ -2149,7 +2149,7 @@ async function submitMemberSignup(){
   // ---------- CLOUD-ONLY REGISTRATION ----------
   // The member doc and pending-payment notification are written straight to
   // Firestore through the secondary app's authenticated context. Nothing is
-  // stored in localStorage here — the live snapshot delivers the new member
+  // stored in localStorage here - the live snapshot delivers the new member
   // to every device, including this one. Member activity is intentionally
   // kept out of the internal activity log (member privacy).
   if(!(window.GMSFB&&GMSFB.enabled)){
@@ -2234,7 +2234,7 @@ function renderMsPayOptions(member){
   html+='<div style="'+card+'">🏋️ <strong style="color:var(--white)">Pay at the front desk</strong><br>Visit the gym and pay in Cash or GCash. Staff will activate your membership.</div>';
   if(gcashReady()){
     const g=getGcashSettings(),qr=_safeImg(g.qr);
-    html+='<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet — no need to visit the gym</strong>'
+    html+='<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet - no need to visit the gym</strong>'
       +'<div style="text-align:center;margin:10px 0 6px">'+(qr?'<img src="'+qr+'" alt="GCash QR" style="width:170px;max-width:60%;border-radius:10px;background:#fff;padding:5px">':'')
       +'<div>Account name: <strong style="color:var(--white)">'+esc(g.name||'')+'</strong></div><div>GCash number: <strong style="color:var(--white);font-family:monospace">'+esc(g.number||'')+'</strong></div></div>'
       +'Send the exact amount'+(amt?' (<strong style="color:var(--green)">'+amt+'</strong>)':'')+', then enter your reference number and upload the receipt screenshot below.'
@@ -2395,8 +2395,8 @@ function showPendingGate(mem){
     if(note)note.textContent=archived?'Visit the front desk to register again.':'Your QR code unlocks automatically once payment is confirmed.';
     set('pgName',mem.name);
     set('pgId',mem.id);
-    set('pgPlanName',plan?plan.name:'—');
-    set('pgPlanPrice',plan?'₱'+Number(plan.price).toLocaleString()+(plan.duration===1?'/mo':'/'+plan.duration+'mo'):'—');
+    set('pgPlanName',plan?plan.name:'-');
+    set('pgPlanPrice',plan?'₱'+Number(plan.price).toLocaleString()+(plan.duration===1?'/mo':'/'+plan.duration+'mo'):'-');
     updatePgGcash(mem);
     g.style.display='flex';
   }
@@ -2416,13 +2416,13 @@ function showPendingGate(mem){
         // Try direct cloud fetch first (most reliable right after admin confirms)
         if(window.GMSFB&&GMSFB.enabled&&GMSFB.auth&&GMSFB.auth.currentUser&&typeof GMSFB.fetchDoc==='function'){
           live=await GMSFB.fetchDoc('members', mem.id);
-          // fetchDoc returns raw data without id wrapper in some paths — ensure id
+          // fetchDoc returns raw data without id wrapper in some paths - ensure id
           if(live&&!live.id) live.id=mem.id;
         }
         if(!live) live=Members.one(mem.id);
         if(live&&live.status==='Active'){
           clearInterval(_pendingPoll); _pendingPoll=null;
-          toast('Payment confirmed — welcome to FitCore!');
+          toast('Payment confirmed - welcome to FitCore!');
           // update session status
           try{
             const sess=JSON.parse(sessionStorage.getItem('gms_session')||'null');
@@ -2472,18 +2472,18 @@ function checkPendingStatus(){
     if(!live) live=Members.one(mid);
     if(live&&live.status==='Active'){
       if(_pendingPoll){ clearInterval(_pendingPoll); _pendingPoll=null; }
-      toast('Payment confirmed — welcome!');
+      toast('Payment confirmed - welcome!');
       try{ const s=JSON.parse(sessionStorage.getItem('gms_session')||'null'); if(s){ s.status='Active'; sessionStorage.setItem('gms_session',JSON.stringify(s)); } }catch(e){}
       if(currentUser) currentUser.status='Active';
       loadApp();
     } else if(live&&live.status==='Archived'){
       if(_pendingPoll){ clearInterval(_pendingPoll); _pendingPoll=null; }
       showPendingGate(live);
-      toast('Account archived — please visit front desk.','error');
+      toast('Account archived - please visit front desk.','error');
     } else {
-      toast('Still pending — please wait for front-desk confirmation.','info');
+      toast('Still pending - please wait for front-desk confirmation.','info');
       const note=document.getElementById('pgNote');
-      if(note) note.textContent='Still pending. Last checked '+new Date().toLocaleTimeString()+' — auto-checks every 4s.';
+      if(note) note.textContent='Still pending. Last checked '+new Date().toLocaleTimeString()+' - auto-checks every 4s.';
     }
   })();
 }
@@ -2508,7 +2508,7 @@ function showForcePasswordChange(mem){
   const fs=document.getElementById('fpsSuccess');if(fs)fs.style.display='none';
   const fl=document.getElementById('fpsLabel');if(fl)fl.textContent='';
   ['fps1','fps2','fps3'].forEach(id=>{const b=document.getElementById(id);if(b)b.className='pw-strength-bar';});
-  // Forced mode is a single step — hide 1-2-3 dots so it doesn't look unfinished
+  // Forced mode is a single step - hide 1-2-3 dots so it doesn't look unfinished
   const prog=document.getElementById('fpProgress');if(prog)prog.style.display='none';
   const t=document.getElementById('fpModalTitle');if(t)t.textContent='Set New Password';
   const closeBtn=document.querySelector('#forgotModal .modal-close');if(closeBtn)closeBtn.style.display='none';
@@ -2518,14 +2518,14 @@ function showForcePasswordChange(mem){
   if(banner){
     if(stillForced){
       banner.style.display='block';
-      banner.innerHTML='⚠️ <strong>Password Reset Required</strong> — An administrator has reset your password. Please set a new password to continue.';
+      banner.innerHTML='⚠️ <strong>Password Reset Required</strong> - An administrator has reset your password. Please set a new password to continue.';
     } else {
       banner.style.display='none';
     }
   }
   // Forced mode: Cancel becomes "Back to Login" so a member is never trapped
-  // on this screen. Logging out does not bypass the gate — it returns on the
-  // next login — but it lets them leave without finishing the change now.
+  // on this screen. Logging out does not bypass the gate - it returns on the
+  // next login - but it lets them leave without finishing the change now.
   const cancel=document.getElementById('fp_cancel_btn');
   if(cancel){
     cancel.style.display='';
@@ -2562,7 +2562,7 @@ function loadApp(){
       : Users.one(currentUser.id);
     if(!authSessionEmailOk(currentUser,liveCheck)){
       doLogout();
-      showLoginError('Session expired — please log in again.');
+      showLoginError('Session expired - please log in again.');
       return;
     }
   }
@@ -2584,13 +2584,13 @@ function loadApp(){
     // ── MUST-CHANGE-PASSWORD gate ──
     // After an admin/staff password reset, force the member to set a new
     // password before they can access the dashboard.
-    // Only boolean true gates — missing/undefined/false all pass (avoids
+    // Only boolean true gates - missing/undefined/false all pass (avoids
     // resurrecting the gate after a successful reset that didn't stringify).
     if(live&&live.mustChangePassword===true){
       showForcePasswordChange(live);
       return;
     }
-    // Stale truthy values from old docs ("true", 1) — clear and continue.
+    // Stale truthy values from old docs ("true", 1) - clear and continue.
     if(live&&live.mustChangePassword&&live.mustChangePassword!==true){
       try{ Members.update(live.id||live.memberId||'',{mustChangePassword:false}); }catch(e){}
     }
@@ -2917,7 +2917,7 @@ function iconize(root){
 // ============================= MODALS =============================
 function openModal(id){document.getElementById(id).classList.add('open');iconize(document.getElementById(id));}
 function closeModal(id){
-  // Force-change gate must be completed (or just completed) before dismiss —
+  // Force-change gate must be completed (or just completed) before dismiss -
   // otherwise the member is left on a blank shell with the flag still set.
   if(id==='forgotModal'&&_fpForcedMode===true){
     toast('Please set a new password to continue.','error');
@@ -2993,13 +2993,13 @@ function updateSyncWarning(){
   const el=ensureSyncWarnEl();
   if(!window.GMSFB||!GMSFB.enabled){
     el.className='sync-warn';
-    el.innerHTML='⚠️ <strong>Offline mode.</strong> Data is saved on this device only — it will NOT appear on your other devices. Connect to the internet and refresh the page.';
+    el.innerHTML='⚠️ <strong>Offline mode.</strong> Data is saved on this device only - it will NOT appear on your other devices. Connect to the internet and refresh the page.';
     el.style.display='flex';
     return;
   }
   if(typeof GMSFB.degraded==='function'&&GMSFB.degraded()){
     el.className='sync-warn warn';
-    el.innerHTML='⚠️ <strong>Cloud sync problem.</strong> This device may be showing outdated data — registrations and approvals from other devices may not appear here. Check your internet connection and refresh.';
+    el.innerHTML='⚠️ <strong>Cloud sync problem.</strong> This device may be showing outdated data - registrations and approvals from other devices may not appear here. Check your internet connection and refresh.';
     el.style.display='flex';
     return;
   }
@@ -3025,7 +3025,7 @@ function dashHero(actions){
   return`<div class="dash-hero">
     <div class="dh-left">
       <div class="dh-greet">${greet()}, <span>${first}</span> ${iconSvg('wave',18)}</div>
-      <div class="dh-sub">${formatFullDate(today())} — here's what's happening at FitCore today.</div>
+      <div class="dh-sub">${formatFullDate(today())} - here's what's happening at FitCore today.</div>
     </div>
     ${actions?`<div class="dh-actions">${actions}</div>`:''}
   </div>`;
@@ -3133,7 +3133,7 @@ function buildAdminDashboard(){
   <div class="checkin-btn-wrap" style="display:flex;align-items:center;gap:10px;margin:14px 0 16px;flex-wrap:wrap">
     <button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;width:auto;background:var(--green);color:#0a0a0a;border-color:var(--green);font-weight:800;box-shadow:0 4px 14px rgba(127,250,136,.25)" onclick="openCheckin()">${iconSvg('logIn',16)} Manual Check-In (No QR)</button>
     <button class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;width:auto;background:rgba(179,188,181,.15);color:var(--orange);border:1px solid rgba(179,188,181,.3)" onclick="openCheckout()">🚪 Manual Check-Out</button>
-    <span style="font-size:11px;color:var(--gray-500)">for members without QR — one entry per day</span>
+    <span style="font-size:11px;color:var(--gray-500)">for members without QR - one entry per day</span>
   </div>
   <div class="stats-grid">
     <div class="stat-card orange"><div class="stat-top"><div class="stat-label">Total Members</div><span class="stat-ico">👥</span></div><div class="stat-value">${members.length}</div><div class="stat-hint">Registered members</div></div>
@@ -3143,7 +3143,7 @@ function buildAdminDashboard(){
   </div>
   <div class="charts-grid">
     <div class="chart-card">
-      <div class="chart-title">Revenue — Last 6 Months</div>
+      <div class="chart-title">Revenue - Last 6 Months</div>
       <svg viewBox="0 0 320 160" style="height:160px">
         <defs><linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b3bcb5"/><stop offset="100%" stop-color="#fbbf24"/></linearGradient></defs>
         ${bars}
@@ -3171,7 +3171,7 @@ function buildAdminDashboard(){
     <div class="table-card">
       <div class="table-header"><h3>Expiring Memberships</h3></div>
       <table><thead><tr><th>Member</th><th>Plan</th><th>Expiry</th><th>Days Left</th></tr></thead><tbody>
-      ${expiring.length?expiring.map(m=>{const d=daysUntil(m.expiryDate);const pl=Plans.all().find(p=>p.id===m.planId);return`<tr style="background:${d<=3?'rgba(239,68,68,.06)':'rgba(251,191,36,.05)'}"><td>${esc(m.name)}</td><td>${esc(pl?pl.name:'—')}</td><td>${formatDate(m.expiryDate)}</td><td><span class="days-badge ${d<=3?'days-urgent':'days-warn'}">${d}d</span></td></tr>`}).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">✅</div><p>No expiring memberships</p></div></td></tr>`}
+      ${expiring.length?expiring.map(m=>{const d=daysUntil(m.expiryDate);const pl=Plans.all().find(p=>p.id===m.planId);return`<tr style="background:${d<=3?'rgba(239,68,68,.06)':'rgba(251,191,36,.05)'}"><td>${esc(m.name)}</td><td>${esc(pl?pl.name:'-')}</td><td>${formatDate(m.expiryDate)}</td><td><span class="days-badge ${d<=3?'days-urgent':'days-warn'}">${d}d</span></td></tr>`}).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">✅</div><p>No expiring memberships</p></div></td></tr>`}
       </tbody></table>
     </div>
   </div>
@@ -3201,7 +3201,7 @@ function buildStaffDashboard(){
   const attendance=Attendance.all().filter(a=>a.date===today_);
   const expiring3=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=1&&d<=3;});
   const newThisMonth=members.filter(m=>{const d=new Date(m.createdAt||m.startDate);const now=new Date();return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
-  const todayLog=attendance.map(a=>{const m=Members.all().find(x=>x.id===a.memberId);const pl=m?Plans.all().find(p=>p.id===m.planId):null;return{...a,memberName:m?m.name:'Unknown',planName:pl?pl.name:'—'};});
+  const todayLog=attendance.map(a=>{const m=Members.all().find(x=>x.id===a.memberId);const pl=m?Plans.all().find(p=>p.id===m.planId):null;return{...a,memberName:m?m.name:'Unknown',planName:pl?pl.name:'-'};});
   const todayWalkins=Walkins.all().filter(w=>w.date===today_).length;
   return `
   <div class="stats-grid">
@@ -3220,7 +3220,7 @@ function buildStaffDashboard(){
     <div class="table-card">
       <div class="table-header"><h3>Today's Check-Ins</h3></div>
       <table><thead><tr><th>Member</th><th>Check-In</th><th>Check-Out</th><th>Duration</th></tr></thead><tbody>
-       ${todayLog.length?todayLog.map(a=>`<tr><td>${esc(a.memberName)}</td><td>${esc(a.checkIn||a.time)}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'—')}</td></tr>`).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📋</div><p>No check-ins today</p></div></td></tr>`}
+       ${todayLog.length?todayLog.map(a=>`<tr><td>${esc(a.memberName)}</td><td>${esc(a.checkIn||a.time)}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'-')}</td></tr>`).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📋</div><p>No check-ins today</p></div></td></tr>`}
       </tbody></table>
     </div>
     <div class="table-card">
@@ -3255,8 +3255,8 @@ function buildTrainerDashboard(){
       <table><thead><tr><th>Time</th><th>Member</th><th>Type</th><th>Status</th></tr></thead><tbody>
       ${todaySessions.length?todaySessions.map(s=>`<tr>
         <td>${esc(s.start)}–${esc(s.end)}</td>
-        <td>${esc(s.memberName||'—')}</td>
-        <td>${esc(s.type||'—')}</td>
+        <td>${esc(s.memberName||'-')}</td>
+        <td>${esc(s.type||'-')}</td>
         <td>${statusBadge(s)}</td>
       </tr>`).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📅</div><p>No sessions today</p></div></td></tr>`}
       </tbody></table>
@@ -3267,8 +3267,8 @@ function buildTrainerDashboard(){
       ${weekSessions.length?weekSessions.map(s=>`<tr>
         <td>${formatDate(s.date)}</td>
         <td>${esc(s.start)}–${esc(s.end)}</td>
-        <td>${esc(s.memberName||'—')}</td>
-        <td>${esc(s.type||'—')}</td>
+        <td>${esc(s.memberName||'-')}</td>
+        <td>${esc(s.type||'-')}</td>
         <td>${statusBadge(s)}</td>
       </tr>`).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📅</div><p>No upcoming sessions</p></div></td></tr>`}
       </tbody></table>
@@ -3295,9 +3295,9 @@ function renderMyAssigned(){
     const left=sessLimit===null?'∞':Math.max(0,sessLimit-memberSessionsUsed(id));
     const statusCls=m&&(m.status==='Active'||m.status==='Expiring Soon')?'badge-active':m&&m.status==='Expired'?'badge-inactive':'badge-pending';
     return`<tr>
-      <td><div style="display:flex;align-items:center;gap:10px"><div class="user-avatar avatar-trainer" style="width:32px;height:32px;font-size:11px;flex-shrink:0;${m&&m.avatar?'padding:0;overflow:hidden':''}">${m&&m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m?m.name:'?'))}</div><div><div style="font-weight:600;color:var(--white)">${esc(m?m.name:'Unknown member')}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace">${esc(m?m.id:'—')}</div></div></div></td>
-      <td>${esc(plan?plan.name:'—')}</td>
-      <td><span class="badge ${statusCls}">${esc(m?(m.status==='Expiring Soon'?'Expiring Soon':m.status):'—')}</span></td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="user-avatar avatar-trainer" style="width:32px;height:32px;font-size:11px;flex-shrink:0;${m&&m.avatar?'padding:0;overflow:hidden':''}">${m&&m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m?m.name:'?'))}</div><div><div style="font-weight:600;color:var(--white)">${esc(m?m.name:'Unknown member')}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace">${esc(m?m.id:'-')}</div></div></div></td>
+      <td>${esc(plan?plan.name:'-')}</td>
+      <td><span class="badge ${statusCls}">${esc(m?(m.status==='Expiring Soon'?'Expiring Soon':m.status):'-')}</span></td>
       <td><span class="days-badge days-warn">${left}</span></td>
       <td>${completed}<span style="color:var(--gray-500);font-size:11px"> / ${mySessions.length} total</span></td>
       <td>${upcoming}</td>
@@ -3396,13 +3396,13 @@ function buildMemberDashboard(){
       <div class="mb-pay-steps-title">💳 How to Pay</div>
       <div class="mb-pay-step"><span class="mb-pay-step-n">1</span>Pay online with your GCash wallet (no need to visit the gym), or visit the front desk counter at the gym.</div>
       <div class="mb-pay-step"><span class="mb-pay-step-n">2</span>Tell the staff your name: <strong>${esc(mem.name)}</strong> (<span style="font-family:monospace">${esc(mem.id)}</span>).</div>
-      <div class="mb-pay-step"><span class="mb-pay-step-n">3</span>Pay in <strong>Cash</strong> or <strong>GCash</strong>${plan?` — <strong>₱${Number(plan.price).toLocaleString()}</strong> (${esc(plan.name)} plan)`:''}.</div>
+      <div class="mb-pay-step"><span class="mb-pay-step-n">3</span>Pay in <strong>Cash</strong> or <strong>GCash</strong>${plan?` - <strong>₱${Number(plan.price).toLocaleString()}</strong> (${esc(plan.name)} plan)`:''}.</div>
       <div class="mb-pay-step"><span class="mb-pay-step-n">4</span>Your QR activates instantly once payment is confirmed.</div>
       <div class="mb-pay-steps-contact">
         <a class="btn-secondary btn-sm" href="sms:+639150435696">💬 Message Front Desk</a>
       </div>
     </div>`:'';
-  const sessLeft=locked?'—':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-memberSessionsUsed(mem.id))):'—');
+  const sessLeft=locked?'-':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-memberSessionsUsed(mem.id))):'-');
   const workoutCta=locked?'':`<div class="mb-quick">
     <button class="mb-tile" onclick="navigate('myWorkoutPlan')"><span class="mb-tile-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5l11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/></svg></span><span class="mb-tile-txt"><strong>My Workout Plan</strong><small>See your assigned routine</small></span></button>
     <button class="mb-tile" onclick="navigate('myWorkouts')"><span class="mb-tile-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><span class="mb-tile-txt"><strong>Log Workout</strong><small>Record today's workout</small></span></button>
@@ -3420,7 +3420,7 @@ function buildMemberDashboard(){
     <div class="mb-change-plan">
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:10px">Change Plan (before paying)</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <select id="mbPlanSelect" style="flex:1;padding:9px 10px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white);outline:none;font-size:13px">${Plans.all().filter(p=>p.status==='Active').map(p=>`<option value="${p.id}" ${p.id===mem.planId?'selected':''}>${esc(p.name)} — ₱${Number(p.price).toLocaleString()}</option>`).join('')}</select>
+        <select id="mbPlanSelect" style="flex:1;padding:9px 10px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white);outline:none;font-size:13px">${Plans.all().filter(p=>p.status==='Active').map(p=>`<option value="${p.id}" ${p.id===mem.planId?'selected':''}>${esc(p.name)} - ₱${Number(p.price).toLocaleString()}</option>`).join('')}</select>
         <button class="btn-primary btn-sm" onclick="memberChangePlan('${mem.id}')">💾 Save</button>
       </div>
       <div style="font-size:11px;color:var(--gray-500);margin-top:8px;display:flex;gap:5px;align-items:center">💡 <span>Changes apply before payment is confirmed at the counter.</span></div>
@@ -3429,15 +3429,15 @@ function buildMemberDashboard(){
     <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
       <div>
         <div style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px;font-weight:700">Your Plan</div>
-        <div class="mb-plan-name">${esc(plan?plan.name:'—')}</div>
+        <div class="mb-plan-name">${esc(plan?plan.name:'-')}</div>
       </div>
       ${plan?`<div class="mb-plan-price">₱${Number(plan.price).toLocaleString()}<span>/${plan.duration===1?'mo':plan.duration+'mo'}</span></div>`:''}
     </div>
     ${plan?`<ul class="mb-plan-perks">${(plan.benefits||plan.perks||'').split(/\n|,/).map(b=>b.trim()).filter(Boolean).map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
     <div class="mb-plan-meta">
       <div><span>Duration</span><strong>${plan?plan.duration+' month(s)':'-'}</strong></div>
-      <div><span>Start</span><strong>${mem.planStart?formatDate(mem.planStart):'—'}</strong></div>
-      <div><span>Expiry</span><strong>${mem.expiryDate?formatDate(mem.expiryDate):'—'}</strong></div>
+      <div><span>Start</span><strong>${mem.planStart?formatDate(mem.planStart):'-'}</strong></div>
+      <div><span>Expiry</span><strong>${mem.expiryDate?formatDate(mem.expiryDate):'-'}</strong></div>
       <div><span>Sessions Left</span><strong>${sessLeft}</strong></div>
     </div>
   </div>`;
@@ -3446,15 +3446,15 @@ function buildMemberDashboard(){
   const renewCard=(mem.status!=='Archived'&&mem.status!=='pending_payment'&&!(d<=0))?`
   <div class="table-card" style="padding:18px 20px">
     <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Renew Membership</div>
-    <div style="font-size:12px;color:var(--gray-300);margin-top:6px;line-height:1.6">Send your payment via GCash and upload the receipt — admin/staff will confirm it. Remaining days are added to your new expiry.</div>
+    <div style="font-size:12px;color:var(--gray-300);margin-top:6px;line-height:1.6">Send your payment via GCash and upload the receipt - admin/staff will confirm it. Remaining days are added to your new expiry.</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
       ${mbGcashCta(mem)}
       <span style="font-size:12px;color:var(--gray-500)">Or pay in <strong style="color:var(--gray-300)">Cash / GCash</strong> at the front desk.</span>
     </div>
   </div>`:'';
   const qrBlock=`<div class="mb-qr-box${locked?' locked':''}">
-    ${locked?'<div class="mb-qr-pending">⏳ Pending payment — this QR activates once the front desk confirms it</div>':''}
-    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:10px;text-align:center">Entrance QR — Daily</div>
+    ${locked?'<div class="mb-qr-pending">⏳ Pending payment - this QR activates once the front desk confirms it</div>':''}
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:10px;text-align:center">Entrance QR - Daily</div>
     <div class="mb-qr-frame">
       ${locked?'<div class="mb-qr-lock">🔒</div>':''}
       <div class="mb-qr-canvas-wrap"><div id="mbQrCanvas"></div></div>
@@ -3472,7 +3472,7 @@ function buildMemberDashboard(){
       <div class="table-card">
         <div class="table-header"><h3>Recent Attendance</h3><button class="btn-secondary btn-sm" onclick="navigate('myattendance')">View All</button></div>
         <table><thead><tr><th>Date</th><th>Time In</th><th>Duration</th><th>Status</th></tr></thead><tbody>
-        ${myAtt.length?myAtt.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||'—')}</td><td>${esc(a.duration||'—')}</td><td><span class="badge ${a.checkOut?'badge-completed':'badge-scheduled'}">${a.checkOut?'Completed':'Checked In'}</span></td></tr>`).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📋</div><p>No check-ins yet</p><p class="empty-sub">${locked?'Your check-ins will appear here once your membership is active.':'Scan your QR at the entrance — your visits will show up here.'}</p></div></td></tr>`}
+        ${myAtt.length?myAtt.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||'-')}</td><td>${esc(a.duration||'-')}</td><td><span class="badge ${a.checkOut?'badge-completed':'badge-scheduled'}">${a.checkOut?'Completed':'Checked In'}</span></td></tr>`).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📋</div><p>No check-ins yet</p><p class="empty-sub">${locked?'Your check-ins will appear here once your membership is active.':'Scan your QR at the entrance - your visits will show up here.'}</p></div></td></tr>`}
         </tbody></table>
       </div>
       ${locked?'':helpRow}
@@ -3534,7 +3534,7 @@ function renderMyQr(){
   el.innerHTML=`
   <div style="max-width:480px;margin:0 auto">
     <div class="mb-qr-page${locked?' locked':''}">
-      ${locked?'<div class="mb-qr-pending">⏳ Pending payment — this QR activates once the front desk confirms it</div>':''}
+      ${locked?'<div class="mb-qr-pending">⏳ Pending payment - this QR activates once the front desk confirms it</div>':''}
       <div class="mb-qr-page-brand">FIT<span>CORE</span></div>
       ${mem.avatar?`<img class="mb-avatar-photo" src="${mem.avatar}" alt="${esc(mem.name)}" style="margin-top:10px">`:''}
       <div class="mb-qr-page-name">${esc(mem.name)}</div>
@@ -3545,7 +3545,7 @@ function renderMyQr(){
       </div>
       <div style="text-align:center;font-size:11px;color:var(--gray-500);line-height:1.7">
         ${plan?`<div>${esc(plan.name)} · ${mem.status==='pending_payment'?'payment pending':'valid until '+formatDate(mem.expiryDate)}</div>`:''}
-        <div>Show this QR at the entrance — the QR rotates daily.</div>
+        <div>Show this QR at the entrance - the QR rotates daily.</div>
       </div>
       ${locked?'':'<div style="display:flex;gap:10px;margin:14px auto 0;max-width:300px">'+
         '<button class="btn-secondary btn-sm" style="flex:1" onclick="refreshMyQr()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>'+
@@ -3644,12 +3644,12 @@ function renderMyAttendance(){
   <div class="stats-grid">
     <div class="stat-card orange"><div class="stat-label">Total Check-Ins</div><div class="stat-value">${total}</div><div class="stat-hint">All time</div></div>
     <div class="stat-card green"><div class="stat-label">This Month</div><div class="stat-value">${monthCount}</div><div class="stat-hint">${thisMonth.toLocaleString('en-US',{month:'long'})}</div></div>
-    <div class="stat-card gold"><div class="stat-label">Last Visit</div><div class="stat-value" style="font-size:20px">${rows.length?formatDate(rows[0].date):'—'}</div><div class="stat-hint">${rows.length?esc(rows[0].checkIn||''):''}</div></div>
+    <div class="stat-card gold"><div class="stat-label">Last Visit</div><div class="stat-value" style="font-size:20px">${rows.length?formatDate(rows[0].date):'-'}</div><div class="stat-hint">${rows.length?esc(rows[0].checkIn||''):''}</div></div>
   </div>
   <div class="table-card">
     <div class="table-header"><h3>My Attendance <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${total} record${total!==1?'s':''}</span></h3></div>
     <div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Duration</th><th>Status</th></tr></thead><tbody>
-    ${rows.length?rows.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||'—')}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'—')}</td><td><span class="badge ${a.checkOut?'badge-completed':'badge-scheduled'}">${a.checkOut?'Completed':'Checked In'}</span></td></tr>`).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📋</div><p>No check-ins yet. Scan your QR at the entrance to start.</p></div></td></tr>`}
+    ${rows.length?rows.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||'-')}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'-')}</td><td><span class="badge ${a.checkOut?'badge-completed':'badge-scheduled'}">${a.checkOut?'Completed':'Checked In'}</span></td></tr>`).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📋</div><p>No check-ins yet. Scan your QR at the entrance to start.</p></div></td></tr>`}
     </tbody></table></div>
   </div>`;
 }
@@ -3677,7 +3677,7 @@ function renderMembers(){
       <button class="btn-primary btn-inline pa-btn" onclick="openMemberModal()">+ Add New Member</button>
       <button class="btn-secondary pa-btn pa-ghost" onclick="renumberMembers()" title="Purge archived members and renumber IDs sequentially (MEM-0001, MEM-0002, …)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span>Renumber</span></button>
       <span class="pa-divider" aria-hidden="true"></span>
-      <button class="btn-danger pa-btn pa-icon" onclick="resetAllMembers()" title="Delete ALL members — empty member list" aria-label="Delete all members"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      <button class="btn-danger pa-btn pa-icon" onclick="resetAllMembers()" title="Delete ALL members - empty member list" aria-label="Delete all members"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
     </div>
   </div>
   <div class="table-card" id="memberTableCard"></div>`;
@@ -3708,7 +3708,7 @@ function refreshMemberTable(){
     const createdByUser=m.createdBy?allUsers.find(u=>u.name===m.createdBy||u.username===m.createdByUsername):null;
     const cRoleColor=createdByUser?roleColorMap[createdByUser.role]||'var(--gray-300)':'var(--gray-300)';
     const cRoleTag=createdByUser?`<span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.07);color:${cRoleColor};margin-left:4px;text-transform:uppercase">${createdByUser.role}</span>`:'';
-    const createdLine=m.createdBy?`<div style="font-size:12px;font-weight:600;color:var(--gray-100)">${esc(m.createdBy)}${cRoleTag}</div>`:`<span style="font-size:11px;color:var(--gray-500)">—</span>`;
+    const createdLine=m.createdBy?`<div style="font-size:12px;font-weight:600;color:var(--gray-100)">${esc(m.createdBy)}${cRoleTag}</div>`:`<span style="font-size:11px;color:var(--gray-500)">-</span>`;
     // Edited By
     const editedByUser=m.editedBy?allUsers.find(u=>u.name===m.editedBy||u.username===m.editedByUsername):null;
     const eRoleColor=editedByUser?roleColorMap[editedByUser.role]||'var(--gray-300)':'var(--gray-300)';
@@ -3718,7 +3718,7 @@ function refreshMemberTable(){
       <td>${esc(m.id)}</td>
       <td><div style="display:flex;align-items:center;gap:8px"><div class="member-avatar" style="${m.avatar?'padding:0;overflow:hidden':''}">${m.avatar?`<img src="${m.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(m.name))}</div>${esc(m.name)}</div></td>
       <td><div style="display:flex;align-items:center;gap:5px">${esc(m.contact)}${(contactCounts[normalizeContact(m.contact,'+63')]||0)>1?`<span title="Duplicate contact number!" style="display:inline-flex;align-items:center;background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:4px;padding:1px 5px;font-size:9px;font-weight:800;cursor:help">⚠ DUP</span>`:''}</div></td>
-      <td>${esc(pl?pl.name:'—')}</td>
+      <td>${esc(pl?pl.name:'-')}</td>
       <td>${formatDate(m.startDate)}</td>
       <td>${formatDate(m.expiryDate)}</td>
       <td>${attHtml}</td>
@@ -3876,14 +3876,14 @@ async function saveMember(){
   // Normalize contact to PH 09xxxxxxxxx format
   const normContact=normalizeContact(contact,'+63');
   if(!editingMemberId){
-    // Strict unique contact — no two active members may share a phone number
+    // Strict unique contact - no two active members may share a phone number
     const dupContact=members.find(m=>normalizeContact(m.contact,'+63')===normContact&&m.status!=='Archived');
     if(dupContact){err.textContent='Phone number already used by "'+dupContact.name+'" ('+dupContact.id+'). Each member must have a unique contact number.';err.style.display='block';return;}
     // Validate billing fields for new members
     const method=document.getElementById('mf_method').value;
     if(!method){err.textContent='Please select a payment method.';err.style.display='block';return;}
   }
-  // Strict unique contact — applies to both add and edit
+  // Strict unique contact - applies to both add and edit
   if(editingMemberId){
     const dupContact=members.find(m=>normalizeContact(m.contact,'+63')===normContact&&m.id!==editingMemberId&&m.status!=='Archived');
     if(dupContact){err.textContent='Phone number already used by "'+dupContact.name+'" ('+dupContact.id+'). Each member must have a unique contact number.';err.style.display='block';return;}
@@ -3891,16 +3891,16 @@ async function saveMember(){
   const plan=Plans.one(planId);
   const expiryDate=addMonths(startDate,plan?plan.duration:1);
   // Member login is created by the member's own registration (Firebase Auth).
-  // The admin profile only records the Gmail they used — no username/password
+  // The admin profile only records the Gmail they used - no username/password
   // fields here, and no duplicate Gmail across members or staff accounts.
   const mfEmail=(document.getElementById('mf_email')?document.getElementById('mf_email').value.trim().toLowerCase():'');
   if(mfEmail){
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mfEmail)){err.textContent='Please enter a valid Gmail / email address.';err.style.display='block';return;}
     if(mfEmail.endsWith('@fitcoregym.local')){err.textContent='Please use the member\u2019s real Gmail, not a staff-managed email.';err.style.display='block';return;}
     const dupMember=members.find(x=>x.id!==editingMemberId&&(String(x.email||'').toLowerCase()===mfEmail||String(x.authEmail||'').toLowerCase()===mfEmail));
-    if(dupMember){err.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
+    if(dupMember){err.textContent='Email already exists - used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
     const dupUser=Users.all().find(u=>String(u.authEmail||'').toLowerCase()===mfEmail||String(u.email||'').toLowerCase()===mfEmail);
-    if(dupUser){err.textContent='Email already exists — used by '+dupUser.name+'.';err.style.display='block';return;}
+    if(dupUser){err.textContent='Email already exists - used by '+dupUser.name+'.';err.style.display='block';return;}
   }
   // Admin sets a new password for this member (saved online through the server).
   const _np=(document.getElementById('mf_pass')||{}).value||'';
@@ -3941,7 +3941,7 @@ async function saveMember(){
   };
   if(editingMemberId){
     const existing=members.find(m=>m.id===editingMemberId);
-    // Never activate a pending member from the profile form — activation is
+    // Never activate a pending member from the profile form - activation is
     // owned by the Payment Queue (member + payment committed together).
     if(existing&&(existing.status==='pending_payment'||existing.status==='Archived'||bgCheckBlocksActivation(existing)))data.status=existing.status;
   }
@@ -3957,8 +3957,8 @@ async function saveMember(){
         // Capture old values BEFORE overwriting to build a change log
         const oldM=members[idx]||{};
         const allPlans=Plans.all();
-        const oldPlanName=(allPlans.find(p=>p.id===oldM.planId)||{name:oldM.planId||'—'}).name;
-        const newPlanName=plan?plan.name:(planId||'—');
+        const oldPlanName=(allPlans.find(p=>p.id===oldM.planId)||{name:oldM.planId||'-'}).name;
+        const newPlanName=plan?plan.name:(planId||'-');
         const fieldLabels={
           name:'Name', contact:'Contact', email:'Email', age:'Age', sex:'Sex',
           planId:'Plan', startDate:'Start Date', address:'Address',
@@ -3986,7 +3986,7 @@ async function saveMember(){
           return {col:'payments',id:p.id,data:patch,merge:true};
         });
         if(online){
-          if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+          if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
           const ops=[{col:'members',id:editingMemberId,data:memberPatch,merge:true}];
           if(currentUser.role==='admin')ops.push(...payPatches);
           const res=await GMSFB.commitDocs(ops);
@@ -4027,7 +4027,7 @@ async function saveMember(){
         };
         if(online){
           if(!GMSFB._lastCloud.members||!GMSFB._lastCloud.payments)throw new Error('Member and payment data are still loading from Firebase. Please wait a moment and try again.');
-          if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+          if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
           const res=await GMSFB.commitDocs([
             {col:'members',id:newId,data:memberDoc,merge:false},
             {col:'payments',id:newPayId,data:paymentDoc,merge:false}
@@ -4056,10 +4056,10 @@ function deleteMember(id){
   const m=Members.one(id);
   openConfirm('Delete Member',`Are you sure you want to delete ${m?esc(m.name):'this member'}? This cannot be undone.`,async ()=>{
     const members=Members.all();const idx=members.findIndex(m=>m.id===id);
-    if(idx>-1){logActivity('Deleted','Member',members[idx].name,'ID: '+members[idx].id+' | Plan: '+(Plans.all().find(p=>p.id===members[idx].planId)||{name:'—'}).name);members[idx].status='Archived';}
+    if(idx>-1){logActivity('Deleted','Member',members[idx].name,'ID: '+members[idx].id+' | Plan: '+(Plans.all().find(p=>p.id===members[idx].planId)||{name:'-'}).name);members[idx].status='Archived';}
     try{
       if(window.GMSFB&&GMSFB.enabled){
-        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
         const res=await GMSFB.commitDocs([{col:'members',id,data:{status:'Archived',archivedAt:new Date().toISOString()},merge:true}]);
         if(!res||!res.ok)throw new Error('Could not archive this member in Firebase ('+((res&&(res.error||res.reason))||'error')+').');
       }else{
@@ -4077,7 +4077,7 @@ function renumberMembers(){
   const remap={};
   live.forEach((m,i)=>{remap[m.id]='MEM-'+String(i+1).padStart(4,'0');});
   const changed=live.filter(m=>remap[m.id]!==m.id).length;
-  // Collect OLD IDs that will be renamed — these must be deleted from Firestore
+  // Collect OLD IDs that will be renamed - these must be deleted from Firestore
   const renamedOldIds=live.filter(m=>remap[m.id]!==m.id).map(m=>m.id);
   openConfirm('Renumber Members','This will permanently delete '+archived.length+' archived member(s) and renumber members so IDs run sequentially from MEM-0001 (e.g. MEM-0009 → MEM-0006, MEM-0010 → MEM-0007). Payments, notifications, attendance and sessions are updated to match. Continue?',function(){
     // Collect payment IDs belonging to archived members BEFORE filtering
@@ -4107,7 +4107,7 @@ function renumberMembers(){
 function resetAllMembers(){
   const n=Members.count();
   const p=Payments.count();
-  openConfirm('Reset All Members','This will permanently delete <strong>ALL '+n+' member(s)</strong> and their '+p+' payment record(s), attendance, sessions, notifications and messages. The member list will be empty — no member registered. Continue?',function(){
+  openConfirm('Reset All Members','This will permanently delete <strong>ALL '+n+' member(s)</strong> and their '+p+' payment record(s), attendance, sessions, notifications and messages. The member list will be empty - no member registered. Continue?',function(){
     // Collect all IDs before clearing so we can explicitly delete from cloud
     const allMemberIds=Members.all().map(m=>m.id);
     const allPaymentIds=Payments.all().map(p=>p.id);
@@ -4132,7 +4132,7 @@ function resetAllMembers(){
         GMSFB.deleteDocs('gms_messages',allMsgIds);
       }catch(e){}
     }
-    logActivity('Reset','Members','Deleted all members — list reset to empty');
+    logActivity('Reset','Members','Deleted all members - list reset to empty');
     renderMembers();scanRenewals();updateHeroMemberCount();renderDashboard();updatePendingBadge();updateQueueBadge();
     toast('All members removed. No member registered.');
   },'Reset All','btn-danger');
@@ -4158,19 +4158,19 @@ function viewMember(id){
     </div>
     <h4>Personal Information</h4>
         <div class="profile-grid">
-      <div class="profile-field"><label>Contact</label><p>${esc(m.contact||'—')}</p></div>
-      <div class="profile-field"><label>Gmail</label><p>${esc(memberEmail||'—')}</p></div>
-      <div class="profile-field"><label>Date of Birth</label><p>${m.dob?formatDate(m.dob)+' <span style="color:var(--gray-500)">('+esc(m.age||calcAge(m.dob) )+' yrs)</span>': esc(m.age||'—')}</p></div>
-      <div class="profile-field"><label>Sex</label><p>${esc(m.sex||'—')}</p></div>
-      <div class="profile-field"><label>Address</label><p>${esc(m.address||'—')}</p></div>
-      <div class="profile-field"><label>Emergency Contact</label><p>${esc(m.ecName||'—')} ${m.ecNum?'('+esc(m.ecNum)+')':''}</p></div>
+      <div class="profile-field"><label>Contact</label><p>${esc(m.contact||'-')}</p></div>
+      <div class="profile-field"><label>Gmail</label><p>${esc(memberEmail||'-')}</p></div>
+      <div class="profile-field"><label>Date of Birth</label><p>${m.dob?formatDate(m.dob)+' <span style="color:var(--gray-500)">('+esc(m.age||calcAge(m.dob) )+' yrs)</span>': esc(m.age||'-')}</p></div>
+      <div class="profile-field"><label>Sex</label><p>${esc(m.sex||'-')}</p></div>
+      <div class="profile-field"><label>Address</label><p>${esc(m.address||'-')}</p></div>
+      <div class="profile-field"><label>Emergency Contact</label><p>${esc(m.ecName||'-')} ${m.ecNum?'('+esc(m.ecNum)+')':''}</p></div>
     </div>
     ${(()=>{const a=m.dob?calcAge(m.dob):parseInt(m.age||'0',10); const p=dobPolicy(a); if(!isNaN(a)) return `<div style="margin-top:8px;font-size:11px;padding:6px 10px;border-radius:6px;border:1px solid ${p.color}20;background:${p.color}10;color:${p.color}">Age ${a}: ${esc(p.msg)}</div>`; return '';})()}
   </div>
   <div class="profile-section">
     <h4>Membership</h4>
     <div class="profile-grid">
-      <div class="profile-field"><label>Plan</label><p>${esc(plan?plan.name:'—')}</p></div>
+      <div class="profile-field"><label>Plan</label><p>${esc(plan?plan.name:'-')}</p></div>
       <div class="profile-field"><label>Start Date</label><p>${formatDate(m.startDate)}</p></div>
       <div class="profile-field"><label>Expiry Date</label><p>${formatDate(m.expiryDate)}</p></div>
       <div class="profile-field"><label>Days Remaining</label><p>${daysUntil(m.expiryDate)} days</p></div>
@@ -4178,7 +4178,7 @@ function viewMember(id){
     ${m.notes?`<div class="profile-field" style="margin-top:10px"><label>Notes</label><p>${esc(m.notes)}</p></div>`:''}
    </div>
    <div class="profile-section">
-     <h4>Entrance QR — Staff Check-In</h4>
+     <h4>Entrance QR - Staff Check-In</h4>
      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div style="background:#fff;padding:10px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.25);width:120px;height:120px;flex-shrink:0;display:flex;align-items:center;justify-content:center"><div id="profileQrCanvas"></div></div>
        <div style="flex:1;min-width:200px">
@@ -4196,9 +4196,9 @@ function viewMember(id){
     <h4>Background Check</h4>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
       <span class="badge ${bgBadgeCls}">${esc(m.bgCheckStatus||'Pending')}</span>
-      ${m.bgCheckDate?`<span style="font-size:11px;color:var(--gray-500)">${formatDate(m.bgCheckDate)} · by ${esc(m.bgCheckBy||'—')}</span>`:''}
+      ${m.bgCheckDate?`<span style="font-size:11px;color:var(--gray-500)">${formatDate(m.bgCheckDate)} · by ${esc(m.bgCheckBy||'-')}</span>`:''}
     </div>
-    ${bgCheckFlagged(m)?`<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;color:var(--red);font-size:12px;margin-bottom:10px">⚠ Flagged — login, entry and activation are blocked until cleared.</div>`:''}
+    ${bgCheckFlagged(m)?`<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;color:var(--red);font-size:12px;margin-bottom:10px">⚠ Flagged - login, entry and activation are blocked until cleared.</div>`:''}
     ${m.bgCheckNotes?`<div class="profile-field"><label>Notes</label><p>${esc(m.bgCheckNotes)}</p></div>`:''}
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button class="btn-sm" style="background:rgba(127,250,136,.15);color:var(--green);border:1px solid rgba(127,250,136,.4)" onclick="setBgCheck('${id}','Cleared')">✓ Cleared</button>
@@ -4218,7 +4218,7 @@ function viewMember(id){
   </div>
   <div class="profile-section">
     <h4>Attendance History <span style="font-size:11px;font-weight:400;color:var(--gray-500);margin-left:6px">${attendance.length} visit${attendance.length!==1?'s':''} • one entry per day</span></h4>
-    ${attendance.length?`<table style="width:100%"><thead><tr><th>Date</th><th>Check-In</th><th>Check-Out</th><th>Duration</th><th>Source</th><th>Recorded By</th></tr></thead><tbody>${attendance.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||a.time||'-')}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'—')}</td><td><span style="font-size:11px;padding:2px 7px;border-radius:6px;background:${a.source==='qr'?'rgba(127,250,136,.12)':'rgba(255,255,255,.06)'};border:1px solid ${a.source==='qr'?'rgba(127,250,136,.18)':'rgba(255,255,255,.1)'};color:var(--gray-300)">${a.source==='qr'?'QR Scan':'Manual'}</span></td><td>${esc(a.recordedBy||a.scannedBy||'-')}</td></tr>`).join('')}</tbody></table>`:
+    ${attendance.length?`<table style="width:100%"><thead><tr><th>Date</th><th>Check-In</th><th>Check-Out</th><th>Duration</th><th>Source</th><th>Recorded By</th></tr></thead><tbody>${attendance.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||a.time||'-')}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'-')}</td><td><span style="font-size:11px;padding:2px 7px;border-radius:6px;background:${a.source==='qr'?'rgba(127,250,136,.12)':'rgba(255,255,255,.06)'};border:1px solid ${a.source==='qr'?'rgba(127,250,136,.18)':'rgba(255,255,255,.1)'};color:var(--gray-300)">${a.source==='qr'?'QR Scan':'Manual'}</span></td><td>${esc(a.recordedBy||a.scannedBy||'-')}</td></tr>`).join('')}</tbody></table>`:
     '<div class="empty-state" style="padding:20px"><div class="empty-icon">📋</div><p>No attendance recorded</p></div>'}
   </div>`;
   document.getElementById('profileQrToken').value=qrTokenFor(m.id,today());
@@ -4239,7 +4239,7 @@ function setBgCheck(id,status){
     :status==='Flagged'
       ?`Mark <strong>${esc(m.name)}</strong> as <strong style="color:var(--red)">Flagged</strong>? This records that the background check needs review.`
       :`Reset <strong>${esc(m.name)}</strong>'s background check to <strong>Pending</strong>?`;
-  openConfirm('Background Check — '+status,msg,async ()=>{
+  openConfirm('Background Check - '+status,msg,async ()=>{
     const cur=Members.one(id);
     if(!cur){toast('Member not found.','error');return;}
     let nextStatus=cur.status, prevStatus=cur.statusBeforeFlag||'';
@@ -4258,7 +4258,7 @@ function setBgCheck(id,status){
     try{
       if(window.GMSFB&&GMSFB.enabled){
         // Write straight to Firestore and wait for it to confirm. Nothing is kept locally.
-        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
         const res=await GMSFB.commitDocs([{col:'members',id,data:patch,merge:true}]);
         if(!res||!res.ok)throw new Error('Could not save to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
       }else{
@@ -4301,7 +4301,7 @@ async function adminSendMemberResetLink(memberId){
     toast('Could not send the reset email: '+((e&&e.message)||'unknown error'),'error');
   }
 }
-// ============================= EDIT PROFILE — CHANGE EMAIL =============================
+// ============================= EDIT PROFILE - CHANGE EMAIL =============================
 // Shared by the member, staff/admin and trainer Edit Profile modals.
 // The server verifies the user's Firebase ID token and updates the Firebase Auth
 // login email + the Firestore profile, so the change is saved online.
@@ -4412,7 +4412,7 @@ function saveMemberProfileEdit(){
       const ec=await applyEmailChange('mep');
       if(!ec.ok){showErr(ec.error);return;}
       if(window.GMSFB&&GMSFB.enabled){
-        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+        if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
         const res=await GMSFB.commitDocs([{col:'members',id:m.id,data:patch,merge:true}]);
         if(!res||!res.ok)throw new Error('Could not save your profile to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
       }else{
@@ -4445,7 +4445,7 @@ function saveMemberProfileEdit(){
       ctx.drawImage(img,0,0,w,h);
       let q=0.78;let out=canvas.toDataURL('image/jpeg',q);
       while(out.length>850000&&q>0.35){q-=0.08;out=canvas.toDataURL('image/jpeg',q);}
-      toast('Photo was large — compressed for storage ('+(data.length/1024).toFixed(0)+'KB → '+(out.length/1024).toFixed(0)+'KB)','info');
+      toast('Photo was large - compressed for storage ('+(data.length/1024).toFixed(0)+'KB → '+(out.length/1024).toFixed(0)+'KB)','info');
       cb(out);
     };
     img.onerror=function(){cb(data);};
@@ -4494,8 +4494,8 @@ async function profileCheckIn(id){
 
   // Already checked out today -> block (no second check-in)
   if(rec&&rec.checkOut){
-    show(m.name+' already checked out at '+rec.checkOut+' (duration: '+(rec.duration||'—')+'). No second check-in today.',false);
-    toast('Already checked out — '+m.name,'error');
+    show(m.name+' already checked out at '+rec.checkOut+' (duration: '+(rec.duration||'-')+'). No second check-in today.',false);
+    toast('Already checked out - '+m.name,'error');
     refreshProfileCheckBtn(m.id);
     return;
   }
@@ -4520,28 +4520,28 @@ async function profileCheckIn(id){
       show('Saving check-out online…',true);
       const cloud=await confirmCloudPush(KEY.attendance);
       if(!cloud.ok){
-        show('⚠ Check-out for '+m.name+' is NOT saved online yet — '+cloud.reason+'. It will keep retrying; keep this page open.',false);
+        show('⚠ Check-out for '+m.name+' is NOT saved online yet - '+cloud.reason+'. It will keep retrying; keep this page open.',false);
         toast('Check-out not saved online yet.','error');
       }else{
         show(m.name+' checked out at '+time+' · Duration: '+duration+' (saved online).',true);
-        toast('Check-out recorded — '+m.name+' · '+duration,'success');
+        toast('Check-out recorded - '+m.name+' · '+duration,'success');
       }
       refreshProfileCheckBtn(m.id);
       return;
     }
 
     // No record today -> CHECK-IN (entry rules)
-    if(m.status==='pending_payment'){show(m.name+' has NOT paid yet — send to the counter first.',false);return;}
-    if(m.status==='Archived'){show('Account archived — entry blocked.',false);return;}
-    if(bgCheckFlagged(m)){show(m.name+' has a Flagged background check — entry blocked. Clear it in the member profile first.',false);return;}
-    if(daysUntil(m.expiryDate)<=0){show('Plan expired on '+formatDate(m.expiryDate)+' — renew at the counter, entry blocked.',false);return;}
+    if(m.status==='pending_payment'){show(m.name+' has NOT paid yet - send to the counter first.',false);return;}
+    if(m.status==='Archived'){show('Account archived - entry blocked.',false);return;}
+    if(bgCheckFlagged(m)){show(m.name+' has a Flagged background check - entry blocked. Clear it in the member profile first.',false);return;}
+    if(daysUntil(m.expiryDate)<=0){show('Plan expired on '+formatDate(m.expiryDate)+' - renew at the counter, entry blocked.',false);return;}
     Attendance.add({id:uid(),memberId:m.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'staff'});
     refreshProfileCheckBtn(m.id); // flips to "Check Out" right away so a double-click cannot add a duplicate
     show('Saving check-in online…',true);
     // Only report success once Firestore has actually accepted the write.
     const cloud=await confirmCloudPush(KEY.attendance);
     if(!cloud.ok){
-      show('⚠ '+m.name+' is NOT saved online yet — '+cloud.reason+'. It will keep retrying; keep this page open.',false);
+      show('⚠ '+m.name+' is NOT saved online yet - '+cloud.reason+'. It will keep retrying; keep this page open.',false);
       toast('Check-in not saved online yet.','error');
       return;
     }
@@ -4555,12 +4555,12 @@ async function profileCheckIn(id){
 async function confirmCloudPush(storageKey){
   try{
     if(!(window.GMSFB&&GMSFB.enabled))return {ok:false,reason:'cloud sync is off (offline mode)'};
-    if(!GMSFB.auth||!GMSFB.auth.currentUser)return {ok:false,reason:'not signed in to Firebase — log out and log in again'};
+    if(!GMSFB.auth||!GMSFB.auth.currentUser)return {ok:false,reason:'not signed in to Firebase - log out and log in again'};
     if(typeof navigator!=='undefined'&&navigator.onLine===false)return {ok:false,reason:'no internet connection'};
     const r=await GMSFB.pushCollection(storageKey,DB.get(storageKey));
     if(r&&r.ok)return {ok:true};
     const code=String((r&&(r.error||r.reason))||'unknown error');
-    const hint={'permission-denied':'Firestore rules blocked the write (publish docs/firestore.rules in Firebase Console)','not-ready':'cloud sync is still starting','unauthenticated':'login expired — log in again','unavailable':'Firebase is unreachable'};
+    const hint={'permission-denied':'Firestore rules blocked the write (publish docs/firestore.rules in Firebase Console)','not-ready':'cloud sync is still starting','unauthenticated':'login expired - log in again','unavailable':'Firebase is unreachable'};
     return {ok:false,reason:hint[code]||code};
   }catch(e){
     return {ok:false,reason:String((e&&(e.code||e.message))||'unknown error')};
@@ -4611,7 +4611,7 @@ function refreshHistoryTable(){
     const first=[...mp.map(p=>p.date),m.startDate].filter(Boolean).sort()[0]||m.createdAt||'';
     const last=[...mp.map(p=>p.date),...ma.map(a=>a.date),m.expiryDate].filter(Boolean).sort().slice(-1)[0]||'';
     const totalPaid=mp.reduce((s,p)=>s+Number(p.amount||0),0);
-    return{id:m.id,name:m.name,plan:pl?pl.name:'—',totalPaid,payCount:mp.length,attCount:ma.length,sessCount:ms.length,first,last,status:m.status};
+    return{id:m.id,name:m.name,plan:pl?pl.name:'-',totalPaid,payCount:mp.length,attCount:ma.length,sessCount:ms.length,first,last,status:m.status};
   });
   if(historySearch){const s=historySearch.toLowerCase();rows=rows.filter(r=>r.name.toLowerCase().includes(s)||r.id.toLowerCase().includes(s));}
   rows=rows.sort((a,b)=>String(b.last).localeCompare(String(a.last)));
@@ -4678,9 +4678,9 @@ function refreshBillingTable(){
     <td>${esc(p.id)}</td><td>${esc(p.memberName)}</td><td>${esc(p.planName)}</td>
     <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
     <td>${formatDate(p.date)}</td><td>${formatDate(p.newExpiry)}</td>
-    <td>${esc(p.recordedBy||'—')}</td><td>${esc(p.method||'—')}</td>
+    <td>${esc(p.recordedBy||'-')}</td><td>${esc(p.method||'-')}</td>
     <td><span class="badge badge-paid">Paid</span></td>
-    <td>${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">—</span>'}</td>
+    <td>${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">-</span>'}</td>
     <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button>${currentUser&&currentUser.role==='admin'?`<button class="btn-icon" title="Delete Payment" onclick="deletePayment('${p.id}')" style="color:#ef4444">🗑</button>`:''}</div></td>
   </tr>`).join(''):`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="billingPage=${billingPage-1};refreshBillingTable()" ${billingPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===billingPage?'active':''}" onclick="billingPage=${i+1};refreshBillingTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="billingPage=${billingPage+1};refreshBillingTable()" ${billingPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
@@ -4730,7 +4730,7 @@ function _pickImage(input,maxDim,maxChars,cb){
   const f=input.files&&input.files[0];
   if(!f)return;
   if(!(/^image\//.test(f.type)||/\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name||''))){toast('Please select an image file.','error');input.value='';return;}
-  if(f.size>20*1024*1024){toast('Image too large — max 20MB.','error');input.value='';return;}
+  if(f.size>20*1024*1024){toast('Image too large - max 20MB.','error');input.value='';return;}
   const r=new FileReader();
   r.onload=async function(ev){
     let data=ev.target.result;
@@ -4860,8 +4860,8 @@ function _fillGcashModal(mem,plan,title){
   document.getElementById('gp_error').style.display='none';
   document.getElementById('gp_plan').textContent=plan.name;
   document.getElementById('gp_amount').textContent='₱'+Number(plan.price).toLocaleString();
-  document.getElementById('gp_accName').textContent=g.name||'—';
-  document.getElementById('gp_accNum').textContent=g.number||'—';
+  document.getElementById('gp_accName').textContent=g.name||'-';
+  document.getElementById('gp_accNum').textContent=g.number||'-';
   const q=document.getElementById('gp_qr'),qs=_safeImg(g.qr);
   q.src=qs;q.style.display=qs?'inline-block':'none';
   const nq=document.getElementById('gp_noqr');if(nq)nq.style.display=qs?'none':'block';
@@ -5018,7 +5018,7 @@ function updatePgGcash(mem){
       html+='<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.6;color:var(--gray-300);margin-bottom:10px">❌ <strong style="color:var(--red)">Your GCash payment was rejected</strong><br>'+esc(p.rejectReason||'Could not be verified.')+'<br>You can submit it again below.</div>';
     }
     html+='<div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500);margin-bottom:8px">Choose how to pay</div>'
-      +'<div style="display:grid;gap:8px"><div style="padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:12px;line-height:1.5;color:var(--gray-300)">🏋️ <strong style="color:var(--white)">Pay at the gym</strong> — visit the front desk and pay in Cash or GCash.</div>'
+      +'<div style="display:grid;gap:8px"><div style="padding:10px 12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:12px;line-height:1.5;color:var(--gray-300)">🏋️ <strong style="color:var(--white)">Pay at the gym</strong> - visit the front desk and pay in Cash or GCash.</div>'
       +(gcashReady()?'<button class="btn-primary" onclick="openGcashPay()">📱 Pay via GCash (QR)</button>':'')+'</div>';
   }
   box.innerHTML=html;box.style.display='block';
@@ -5027,7 +5027,7 @@ function mbGcashCta(mem){
   const p=latestGcashProof(mem.id);
   if(p&&p.status==='open')return '<span class="mb-banner-btn" style="cursor:default">⏳ GCash payment awaiting verification</span>';
   if(!gcashReady())return '';
-  if(p&&p.status==='rejected')return '<button class="mb-banner-btn" onclick="openGcashPay()" title="'+esc(p.rejectReason||'')+'">❌ Rejected — submit again</button>';
+  if(p&&p.status==='rejected')return '<button class="mb-banner-btn" onclick="openGcashPay()" title="'+esc(p.rejectReason||'')+'">❌ Rejected - submit again</button>';
   return '<button class="mb-banner-btn" onclick="openGcashPay()">📱 Renew via GCash</button>';
 }
 // ---- Admin/Staff: verify proofs ----
@@ -5039,7 +5039,7 @@ function gcashVerifyHtml(){
   const rows=open.map(p=>{
     const img=_safeImg(p.receipt);
     return `<tr>
-      <td>${img?`<img src="${img}" alt="Receipt" title="Click to enlarge" style="width:48px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(p.id)}')">`:'—'}</td>
+      <td>${img?`<img src="${img}" alt="Receipt" title="Click to enlarge" style="width:48px;height:64px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(p.id)}')">`:'-'}</td>
       <td>${esc(p.type==='walkin_proof'?p.visitorName:p.memberName)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${p.type==='walkin_proof'?'Walk-in visitor':esc(p.memberId)}</div></td>
       <td>${esc(p.type==='walkin_proof'?'Walk-in · '+fmtHours(Number(p.hours)||getWalkinHours()):p.planName)}</td>
       <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
@@ -5064,7 +5064,7 @@ function confirmGcashProof(id){
   if(p.type==='walkin_proof')return confirmWalkinProof(p);
   const m=Members.one(p.memberId);
   if(!m){toast('Member not found.','error');return;}
-  if(bgCheckBlocksActivation(m)){toast('Background check is Flagged — clear it in the member profile first.','error');return;}
+  if(bgCheckBlocksActivation(m)){toast('Background check is Flagged - clear it in the member profile first.','error');return;}
   const _dup=Notifications.all().some(n=>n.type==='gcash_proof'&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
     ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
   if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
@@ -5105,7 +5105,7 @@ function rejectGcashProof(id){
     const note=sanitizeText((document.getElementById('gcRejNote')||{}).value||'').trim();
     const fresh=Notifications.one(id);
     if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
-    Notifications.update(id,{status:'rejected',rejectReason:note?sel+' — '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
+    Notifications.update(id,{status:'rejected',rejectReason:note?sel+' - '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
     try{logActivity('Rejected','GCash Payment',p.type==='walkin_proof'?p.visitorName:p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
     toast('GCash payment rejected. The member can submit again.','success');
     renderBilling();updateQueueBadge();
@@ -5200,7 +5200,7 @@ function openPaymentModal(prefillMemberId=null){
   const refWrap=document.getElementById('pf_refWrap');
   if(refWrap){refWrap.style.display='none';const ref=document.getElementById('pf_reference');if(ref)ref.value='';}
   const plans=Plans.all().filter(p=>p.status==='Active');
-  document.getElementById('pf_plan').innerHTML=`<option value="">Select plan</option>`+plans.map(p=>`<option value="${p.id}">${esc(p.name)} — ₱${p.price}</option>`).join('');
+  document.getElementById('pf_plan').innerHTML=`<option value="">Select plan</option>`+plans.map(p=>`<option value="${p.id}">${esc(p.name)} - ₱${p.price}</option>`).join('');
   if(prefillMemberId){
     const m=Members.one(prefillMemberId);
     if(m){document.getElementById('pf_memberSearch').value=m.name;document.getElementById('pf_memberId').value=m.id;if(m.planId){document.getElementById('pf_plan').value=m.planId;onPayPlanChange();}}
@@ -5249,7 +5249,7 @@ function savePayment(){
   const member=Members.one(memberId);
   const plan=Plans.one(planId);
   if(bgCheckBlocksActivation(member)){
-    err.textContent='Background check is Flagged — clear it in the member profile before activating this member.';
+    err.textContent='Background check is Flagged - clear it in the member profile before activating this member.';
     err.style.display='block';
     return;
   }
@@ -5322,7 +5322,7 @@ function openEditPayment(id){
   document.getElementById('ep_date').value=p.date;
   document.getElementById('ep_notes').value=p.notes||'';
   const plans=Plans.all().filter(pl=>pl.status==='Active');
-  document.getElementById('ep_plan').innerHTML=`<option value="">Select plan</option>`+plans.map(pl=>`<option value="${pl.id}">${esc(pl.name)} — ₱${pl.price}</option>`).join('');
+  document.getElementById('ep_plan').innerHTML=`<option value="">Select plan</option>`+plans.map(pl=>`<option value="${pl.id}">${esc(pl.name)} - ₱${pl.price}</option>`).join('');
   document.getElementById('ep_plan').value=p.planId;
   document.getElementById('ep_method').value=p.method||'';
   const epRef=document.getElementById('ep_reference');
@@ -5369,7 +5369,7 @@ async function saveEditPayment(){
   }
   try{
     if(window.GMSFB&&GMSFB.enabled){
-      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
       const ops=[{col:'payments',id,data:updated,merge:true}];
       if(activation)ops.push({col:'members',id:memberId,data:activation,merge:true});
       Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open')
@@ -5400,7 +5400,7 @@ function viewReceipt(id){
   const liveMember=Members.one(p.memberId);
   const displayMemberName=liveMember?liveMember.name:p.memberName;
   const users=Users.all();
-  let staffDisplay=p.recordedBy||'—';
+  let staffDisplay=p.recordedBy||'-';
   const match=users.find(u=>
     u.username===p.recordedByUsername||
     u.username===p.recordedBy||
@@ -5547,7 +5547,7 @@ function renderTrainerProfile(){
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;min-width:140px">
       <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:4px">Account Info</div>
-      <div style="font-size:12px;color:var(--gray-300)">&#128222; ${esc(u.contact||'&mdash;')}</div>
+      <div style="font-size:12px;color:var(--gray-300)">&#128222; ${esc(u.contact||'-')}</div>
       <div style="font-size:12px;color:var(--gray-500);font-family:monospace">@${esc(u.username)}</div>
       <div style="margin-top:8px"><span class="badge badge-trainer">&#9679; Active</span></div>
     </div>
@@ -5600,7 +5600,7 @@ async function _saveTrainerProfileImpl(){
     ecT=await applyEmailChange('tep');
     if(!ecT.ok){errEl.textContent=ecT.error;errEl.style.display='block';return;}
     if(window.GMSFB&&GMSFB.enabled){
-      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired — please log in again.');
+      if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log in again.');
       const res=await GMSFB.commitDocs([{col:'users',id:currentUser.id,data:patch,merge:true}]);
       if(!res||!res.ok)throw new Error('Could not save profile to Firebase ('+((res&&(res.error||res.reason))||'error')+').');
     }else{
@@ -5738,7 +5738,7 @@ async function _saveStaffProfileImpl(){
     try{
       const res=await GMSFB.pushCollection(KEY.users, Users.all());
       if(res&&res.ok===false){
-        toast('Saved locally but cloud sync failed — photo may not appear on other devices until online.','error');
+        toast('Saved locally but cloud sync failed - photo may not appear on other devices until online.','error');
       } else {
         // tiny delay for snapshot to propagate
         await new Promise(r=>setTimeout(r,350));
@@ -5771,7 +5771,7 @@ function viewSession(id){
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:4px">Session Type</div>
-          <div style="font-size:18px;font-weight:800;color:var(--white)">${esc(s.type||'—')}</div>
+          <div style="font-size:18px;font-weight:800;color:var(--white)">${esc(s.type||'-')}</div>
         </div>
         <div style="background:${statusBg};border:1px solid ${statusColor}44;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:800;color:${statusColor};letter-spacing:.5px;text-transform:uppercase">${statusIcon}</div>
       </div>
@@ -5779,11 +5779,11 @@ function viewSession(id){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div style="background:var(--navy-700);border-radius:8px;padding:14px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:6px">👤 Member</div>
-          <div style="font-size:14px;font-weight:700;color:var(--white)">${esc(s.memberName||'—')}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--white)">${esc(s.memberName||'-')}</div>
         </div>
         <div style="background:var(--navy-700);border-radius:8px;padding:14px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:6px">🏋️ Trainer</div>
-          <div style="font-size:14px;font-weight:700;color:var(--white)">${esc(s.trainerName||'—')}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--white)">${esc(s.trainerName||'-')}</div>
         </div>
         <div style="background:var(--navy-700);border-radius:8px;padding:14px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:6px">📅 Date</div>
@@ -5797,7 +5797,7 @@ function viewSession(id){
       ${s.notes?`<div style="background:var(--navy-700);border-radius:8px;padding:14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:6px">📝 Notes</div><div style="font-size:13px;color:var(--gray-100);line-height:1.6">${esc(s.notes)}</div></div>`:''}
       <div style="background:var(--navy-700);border-radius:8px;padding:14px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:8px">🕓 History</div>
-        <div style="font-size:12px;color:var(--gray-300)">Created by <strong style="color:var(--gray-100)">${esc(s.createdBy||'—')}</strong>${s.createdAt?' on '+formatDate(s.createdAt):''}</div>
+        <div style="font-size:12px;color:var(--gray-300)">Created by <strong style="color:var(--gray-100)">${esc(s.createdBy||'-')}</strong>${s.createdAt?' on '+formatDate(s.createdAt):''}</div>
         ${s.editedBy?`<div style="font-size:12px;color:var(--gray-300);margin-top:4px">Last edited by <strong style="color:var(--gray-100)">${esc(s.editedBy)}</strong>${s.editedAt?' on '+formatDate(s.editedAt):''}</div>`:''}
         ${(currentUser.role==='admin'||currentUser.role==='staff')&&s.statusLog&&s.statusLog.length?`
         <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px">
@@ -5807,10 +5807,10 @@ function viewSession(id){
             const clr=roleColorMap[log.byRole]||'var(--gray-300)';
             const fromClr=log.from==='Completed'?'#7ffa88':log.from==='Cancelled'?'#ef4444':'#fbbf24';
             const toClr=log.to==='Completed'?'#7ffa88':log.to==='Cancelled'?'#ef4444':'#fbbf24';
-            const timeStr=log.at?new Date(log.at).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+            const timeStr=log.at?new Date(log.at).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'-';
             return`<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;background:rgba(255,255,255,.03);border-radius:6px;padding:8px 10px">
               <div style="flex:1">
-                <div style="font-size:12px;color:var(--gray-100);font-weight:600">${esc(log.by||'—')} <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.07);color:${clr};margin-left:2px;text-transform:uppercase">${esc(log.byRole||'')}</span></div>
+                <div style="font-size:12px;color:var(--gray-100);font-weight:600">${esc(log.by||'-')} <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.07);color:${clr};margin-left:2px;text-transform:uppercase">${esc(log.byRole||'')}</span></div>
                 <div style="font-size:11px;color:var(--gray-500);margin-top:2px">${timeStr}</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700">
@@ -5898,7 +5898,7 @@ function renderMonthView(){
       <div class="cal-dots">${dots}</div>
     </div>`;}).join('');
   const availLegend=selTrainer&&avDays.length
-    ? `<div class="sf-avail-hint" style="margin-top:10px">⏰ <strong>${esc(selTrainer.coachName||selTrainer.name)}</strong> available: ${esc(avDays.join(', '))}${hasAv?' · '+esc(selTrainer.availableFrom)+' – '+esc(selTrainer.availableTo):''} — days marked ✕ cannot be scheduled</div>`
+    ? `<div class="sf-avail-hint" style="margin-top:10px">⏰ <strong>${esc(selTrainer.coachName||selTrainer.name)}</strong> available: ${esc(avDays.join(', '))}${hasAv?' · '+esc(selTrainer.availableFrom)+' – '+esc(selTrainer.availableTo):''} - days marked ✕ cannot be scheduled</div>`
     : (selTrainer?'':'<div class="sf-avail-hint" style="margin-top:10px;opacity:.75">Select a specific trainer above to see their available days</div>');
   document.getElementById('schedContent').innerHTML=`
   <div class="cal-grid-wrap">
@@ -5996,7 +5996,7 @@ function renderListView(){
     const createdByUser=s.createdBy?allUsers.find(u=>u.name===s.createdBy||u.username===s.createdByUsername):null;
     const roleColor=createdByUser?roleColorMap[createdByUser.role]||'var(--gray-300)':'var(--gray-300)';
     const roleTag=createdByUser?`<span style="font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.07);color:${roleColor};margin-left:4px;text-transform:uppercase">${createdByUser.role}</span>`:'';
-    const createdLine=s.createdBy?`<div style="font-size:12px;font-weight:600;color:var(--gray-100)">${esc(s.createdBy)}${roleTag}</div>`:`<span style="font-size:11px;color:var(--gray-500)">—</span>`;
+    const createdLine=s.createdBy?`<div style="font-size:12px;font-weight:600;color:var(--gray-100)">${esc(s.createdBy)}${roleTag}</div>`:`<span style="font-size:11px;color:var(--gray-500)">-</span>`;
     const editedByUser=s.editedBy?allUsers.find(u=>u.name===s.editedBy||u.username===s.editedByUsername):null;
     const editedRoleColor=editedByUser?roleColorMap[editedByUser.role]||'var(--gray-300)':'var(--gray-300)';
     const editedRoleTag=editedByUser?`<span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.07);color:${editedRoleColor};margin-left:4px;text-transform:uppercase">${editedByUser.role}</span>`:'';
@@ -6007,7 +6007,7 @@ function renderListView(){
     const myBadge=isMySession?`<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(127,250,136,.15);color:var(--green);border:1px solid rgba(127,250,136,.25);margin-left:6px">MY SESSION</span>`:'';
     return`<tr style="${rowHighlight}">
       <td>${formatDate(s.date)}</td><td>${esc(s.start)}–${esc(s.end)}</td>
-      <td>${esc(s.trainerName||'—')}${myBadge}</td><td>${esc(s.memberName||'—')}</td>
+      <td>${esc(s.trainerName||'-')}${myBadge}</td><td>${esc(s.memberName||'-')}</td>
       <td>${esc(s.type)}</td>
       <td><span class="badge ${statusCls}">${esc(s.status)}</span></td>
       <td>${createdByDisplay}</td>
@@ -6045,8 +6045,8 @@ function confirmCompleteSession(id){
   if(s.status!=='Scheduled'&&s.status!=='Accepted'){toast('Only a scheduled session can be marked as completed.','error');return;}
   if(sessionNotStartedYet(s)){toast('You can only complete this session on its scheduled day: '+formatDate(s.date)+'.','error');return;}
   const detail=`<div style="margin-top:12px;background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'—')}</strong></div>
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'—')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'-')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'-')}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Date:</span> <strong style="color:var(--white)">${formatDate(s.date)}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Time:</span> <strong style="color:var(--white)">${esc(s.start)} – ${esc(s.end)}</strong></div>
   </div>`;
@@ -6061,8 +6061,8 @@ function confirmCancelSession(id){
   if(!s)return;
   if(currentUser.role==='trainer'&&s.trainerId!==currentUser.id){toast('You can only update your own sessions.','error');return;}
   const detail=`<div style="margin-top:12px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'—')}</strong></div>
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'—')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'-')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'-')}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Date:</span> <strong style="color:var(--white)">${formatDate(s.date)}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Time:</span> <strong style="color:var(--white)">${esc(s.start)} – ${esc(s.end)}</strong></div>
   </div>`;
@@ -6073,7 +6073,7 @@ function confirmCancelSession(id){
       const idx=sessions.findIndex(x=>x.id===id);
       if(idx<0)return;
       const prev=sessions[idx].status;
-      // Immutable replace — never mutate the object in place (sync bug fix)
+      // Immutable replace - never mutate the object in place (sync bug fix)
       sessions[idx]={...sessions[idx],status:'Cancelled',statusLog:[...(sessions[idx].statusLog||[]),{from:prev,to:'Cancelled',by:currentUser.name,byUsername:currentUser.username,byRole:currentUser.role,at:new Date().toISOString()}]};
       Sessions.save(sessions);
       logActivity('Status Changed','Session',(sessions[idx].memberName||'?')+' with '+(sessions[idx].trainerName||'?'),'Date: '+sessions[idx].date+' | '+sessions[idx].start+'–'+sessions[idx].end+' | '+prev+' → Cancelled');
@@ -6089,9 +6089,9 @@ function markSessionDone(id){
   if(idx<0)return;
   if(sessions[idx].trainerId!==currentUser.id){toast('You can only mark your own sessions as done.','error');return;}
   if(sessions[idx].status!=='Scheduled'&&sessions[idx].status!=='Accepted'){toast('Only a scheduled session can be marked as completed.','error');return;}
-  if(sessionNotStartedYet(sessions[idx])){toast('This session is not scheduled for today yet — it can only be completed on '+formatDate(sessions[idx].date)+'.','error');return;}
+  if(sessionNotStartedYet(sessions[idx])){toast('This session is not scheduled for today yet - it can only be completed on '+formatDate(sessions[idx].date)+'.','error');return;}
   const prevStatus=sessions[idx].status;
-  // Immutable replace — never mutate the object in place (sync bug fix)
+  // Immutable replace - never mutate the object in place (sync bug fix)
   sessions[idx]={...sessions[idx],status:'Completed',completedAt:today(),completedBy:currentUser.username,statusLog:[...(sessions[idx].statusLog||[]),{from:prevStatus,to:'Completed',by:currentUser.name,byUsername:currentUser.username,byRole:currentUser.role,at:new Date().toISOString()}]};
   Sessions.save(sessions);
   toast('Session marked as completed. Great work!','success');
@@ -6187,7 +6187,7 @@ function applyTrainerTimeWindow(presetStart,presetEnd){
       const av=trainerAvailabilityInfo(trainer,date);
       const booked=trainerBookedRanges(trainer.id,date);
       let html=`⏰ <strong>${esc(trainer.coachName||trainer.name)}</strong> available: ${esc(av.text)}`;
-      if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} — choose another date.</span>`;
+      if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} - choose another date.</span>`;
       if(booked.length)html+=`<br><span style="color:var(--gold)">Booked: ${esc(booked.join(', '))}</span>`;
       hint.innerHTML=html;
       hint.style.display='block';
@@ -6297,7 +6297,7 @@ function trainersForSessionType(type){
   return Users.all().filter(function(u){return isBookableTrainer(u)&&trainerOffersType(u,type);});
 }
 // One availability rule for the trainer lists AND the save/book validation.
-// Empty date/start/end means "not chosen yet" — only filter by type/day then.
+// Empty date/start/end means "not chosen yet" - only filter by type/day then.
 function isTrainerAvailable(trainer,type,date,start,end,ignoreSessionId){
   if(!isBookableTrainer(trainer))return false;
   if(!type||!trainerOffersType(trainer,type))return false;
@@ -6388,7 +6388,7 @@ function openSessionModal(preDate){
   document.getElementById('sf_trainerList').style.display='none';
   populateSessionTypeOptions('');
   document.getElementById('sf_memberSearch').value='';document.getElementById('sf_memberId').value='';document.getElementById('sf_memberList').style.display='none';
-  // No past dates for new sessions — min=today blocks earlier days in the picker
+  // No past dates for new sessions - min=today blocks earlier days in the picker
   const dateEl=document.getElementById('sf_date');
   dateEl.min=today();
   dateEl.value=(preDate&&preDate>=today())?preDate:today();
@@ -6520,24 +6520,24 @@ function toggleSessionStatus(id){
   const s=sessions[idx];
   const cycle={Scheduled:'Completed',Completed:'Cancelled',Cancelled:'Scheduled'};
   const newStatus=cycle[s.status]||'Scheduled';
-  if(newStatus==='Completed'&&sessionNotStartedYet(s)){toast('This session is not scheduled for today yet — it can only be completed on '+formatDate(s.date)+'.','error');return;}
+  if(newStatus==='Completed'&&sessionNotStartedYet(s)){toast('This session is not scheduled for today yet - it can only be completed on '+formatDate(s.date)+'.','error');return;}
   if(newStatus==='Scheduled'){
     const live=sessions.filter(x=>x.id!==id&&x.date===s.date&&(x.status==='Scheduled'||x.status==='Accepted')&&!(s.end<=x.start||s.start>=x.end));
-    if(live.some(x=>x.trainerId===s.trainerId)){toast('Cannot set to Scheduled — trainer already booked at that time.','error');return;}
-    if(live.some(x=>x.memberId===s.memberId)){toast('Cannot set to Scheduled — member already has a session at that time.','error');return;}
+    if(live.some(x=>x.trainerId===s.trainerId)){toast('Cannot set to Scheduled - trainer already booked at that time.','error');return;}
+    if(live.some(x=>x.memberId===s.memberId)){toast('Cannot set to Scheduled - member already has a session at that time.','error');return;}
   }
-  // Immutable replace — never mutate the object in place (sync bug fix)
+  // Immutable replace - never mutate the object in place (sync bug fix)
   sessions[idx]={...s,status:newStatus,statusLog:[...(s.statusLog||[]),{from:s.status,to:newStatus,by:currentUser.name,byUsername:currentUser.username,byRole:currentUser.role,at:new Date().toISOString()}]};
   Sessions.save(sessions);logActivity('Status Changed','Session',(s.memberName||'Unknown')+' with '+(s.trainerName||'Unknown'),'Date: '+s.date+' | '+s.start+'–'+s.end+' | '+s.status+' → '+newStatus);toast(`Session marked as ${newStatus}.`,'info');renderSchedule();
 }
 function deleteSession(id){
   const s=Sessions.all().find(x=>x.id===id);
   const detail=s?`<div style="margin-top:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.8">
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'—')}</strong></div>
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Trainer:</span> <strong style="color:var(--white)">${esc(s.trainerName||'—')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Member:</span> <strong style="color:var(--white)">${esc(s.memberName||'-')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Trainer:</span> <strong style="color:var(--white)">${esc(s.trainerName||'-')}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Date:</span> <strong style="color:var(--white)">${formatDate(s.date)}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Time:</span> <strong style="color:var(--white)">${esc(s.start)}–${esc(s.end)}</strong></div>
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'—')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Type:</span> <strong style="color:var(--white)">${esc(s.type||'-')}</strong></div>
   </div>`:'';
   openConfirm('Delete Session',`Are you sure you want to delete this session? This cannot be undone.${detail}`,()=>{
     const dS=Sessions.all().find(x=>x.id===id);if(dS)logActivity('Deleted','Session',(dS.memberName||'?')+' with '+(dS.trainerName||'?'),'Date: '+dS.date+' | '+dS.start+'–'+dS.end+' | Type: '+(dS.type||'?'));Sessions.remove(id);toast('Session deleted.');renderSchedule();
@@ -6564,7 +6564,7 @@ function dismissAllRenewals(){
   const pending=allExpiring.filter(m=>!_dismissedIds.has(m.id));
   if(!pending.length){toast('No renewal reminders to dismiss.','error');return;}
   openConfirm('Dismiss All Renewal Reminders',
-    `Dismiss all <strong>${pending.length}</strong> renewal reminder${pending.length!==1?'s':''}?<br><span style="font-size:12px;color:var(--gray-500)">This hides expired, urgent and upcoming reminders for now — they will reappear after the page reloads.</span>`,
+    `Dismiss all <strong>${pending.length}</strong> renewal reminder${pending.length!==1?'s':''}?<br><span style="font-size:12px;color:var(--gray-500)">This hides expired, urgent and upcoming reminders for now - they will reappear after the page reloads.</span>`,
     ()=>{pending.forEach(m=>_dismissedIds.add(m.id));renderNotifications();scanRenewals();},
     'Dismiss All');
 }
@@ -6574,7 +6574,7 @@ function confirmRenew(memberId){
   const pl=m.planId?Plans.one(m.planId):null;
   const price=pl?Number(pl.price):0;
   openConfirm('🔄 Renew Membership',
-    `Renew <strong>${esc(m.name)}</strong>'s <strong>${esc(pl?pl.name:'—')}</strong> plan for <strong>₱${price.toLocaleString()}</strong>?<br><span style="font-size:12px;color:var(--gray-500)">You'll confirm the payment details next.</span>`,
+    `Renew <strong>${esc(m.name)}</strong>'s <strong>${esc(pl?pl.name:'-')}</strong> plan for <strong>₱${price.toLocaleString()}</strong>?<br><span style="font-size:12px;color:var(--gray-500)">You'll confirm the payment details next.</span>`,
     ()=>{openPaymentForMember(memberId);},
     'Continue','btn-primary');
 }
@@ -6608,13 +6608,13 @@ function renderNotifications(){
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="notif-name">${esc(m.name)}</span>
-          <span class="badge ${badgeCls}" style="font-size:8px">${esc(pl?pl.name:'—')}</span>
+          <span class="badge ${badgeCls}" style="font-size:8px">${esc(pl?pl.name:'-')}</span>
         </div>
         <div style="font-size:11px;color:var(--gray-500);margin-top:2px">Expires ${formatDate(m.expiryDate)} <span style="color:${dayColor};font-weight:700">· ${dayLabel}</span></div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <button class="btn-primary btn-sm" onclick="confirmRenew('${m.id}')" style="font-size:11px;padding:7px 14px;width:auto">Renew →</button>
-        <button title="Dismiss this reminder for now — it returns after the page reloads" onclick="dismissRenewal('${m.id}')" style="flex-shrink:0;background:transparent;border:1px solid rgba(255,255,255,.1);color:var(--gray-500);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;transition:.15s;display:inline-flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(239,68,68,.12)';this.style.color='var(--red)';this.style.borderColor='rgba(239,68,68,.35)'" onmouseout="this.style.background='transparent';this.style.color='var(--gray-500)';this.style.borderColor='rgba(255,255,255,.1)'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button title="Dismiss this reminder for now - it returns after the page reloads" onclick="dismissRenewal('${m.id}')" style="flex-shrink:0;background:transparent;border:1px solid rgba(255,255,255,.1);color:var(--gray-500);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;transition:.15s;display:inline-flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(239,68,68,.12)';this.style.color='var(--red)';this.style.borderColor='rgba(239,68,68,.35)'" onmouseout="this.style.background='transparent';this.style.color='var(--gray-500)';this.style.borderColor='rgba(255,255,255,.1)'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>`;}).join('');
   const tab=(label,key,cnt)=>`<button class="filter-chip${_notifFilter===key?' active':''}" onclick="_notifFilter='${key}';renderNotifications()">${label} <span style="opacity:.7">(${cnt})</span></button>`;
@@ -6683,7 +6683,7 @@ function renderRenewed(){
   const filtered=_renewedFilter==='All'?rows:rows.filter(r=>r.bucket===_renewedFilter);
   const tab=(label,key,cnt)=>`<button class="filter-chip${_renewedFilter===key?' active':''}" onclick="_renewedFilter='${key}';renderRenewed()">${label} <span style="opacity:.7">(${cnt})</span></button>`;
   const statusCell=r=>{
-    if(!r.m||!r.m.expiryDate)return '<span style="color:var(--gray-500)">—</span>';
+    if(!r.m||!r.m.expiryDate)return '<span style="color:var(--gray-500)">-</span>';
     const d=daysUntil(r.m.expiryDate);
     const meta={expired:['badge-expired','Expired'],urgent:['badge-urgent','Urgent'],upcoming:['badge-expiring','Upcoming'],active:['badge-active','Active']}[r.bucket];
     const note=d<=0?'':` <span style="font-size:11px;color:var(--gray-500);margin-left:6px">${d} day${d!==1?'s':''} left</span>`;
@@ -6712,7 +6712,7 @@ function renderRenewed(){
   <div class="table-card">
     <div class="table-header"><h3>Renewal Records <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${filtered.length} shown</span></h3></div>
     ${filtered.length?`<div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Plan</th><th>Amount</th><th>Type</th><th>Paid on</th><th>Expires</th><th>Status now</th></tr></thead><tbody>
-    ${filtered.map(r=>`<tr><td>${esc(r.p.memberName)}</td><td>${esc(r.p.planName)}</td><td>₱${Number(r.p.amount).toLocaleString()}</td><td><span class="badge ${r.p.source==='renewal'?'badge-expiring':'badge-active'}">${r.p.source==='renewal'?'Renewal':'New'}</span></td><td>${formatDate(r.p.date)}</td><td>${r.m&&r.m.expiryDate?formatDate(r.m.expiryDate):'—'}</td><td>${statusCell(r)}</td></tr>`).join('')}
+    ${filtered.map(r=>`<tr><td>${esc(r.p.memberName)}</td><td>${esc(r.p.planName)}</td><td>₱${Number(r.p.amount).toLocaleString()}</td><td><span class="badge ${r.p.source==='renewal'?'badge-expiring':'badge-active'}">${r.p.source==='renewal'?'Renewal':'New'}</span></td><td>${formatDate(r.p.date)}</td><td>${r.m&&r.m.expiryDate?formatDate(r.m.expiryDate):'-'}</td><td>${statusCell(r)}</td></tr>`).join('')}
     </tbody></table></div>`:`<div class="empty-state"><div class="empty-icon">${iconSvg('refresh',22)}</div><p>No renewal records in this category.</p></div>`}
   </div>`;
 }
@@ -6739,7 +6739,7 @@ function openMemberMessageModal(){
 function openMsgThread(memberId){
   _msgThreadId=memberId;_msgStaffMode=true;
   const mem=Members.one(memberId);
-  document.getElementById('messageModalTitle').textContent=mem?'Message — '+mem.name:'Message';
+  document.getElementById('messageModalTitle').textContent=mem?'Message - '+mem.name:'Message';
   document.getElementById('msgInput').placeholder='Reply to '+(mem?mem.name:'member')+'…';
   const all=Messages.all();
   let changed=false;
@@ -6754,7 +6754,7 @@ function renderMsgThread(){
   if(!body)return;
   body.innerHTML=msgs.length?msgs.map(m=>{
     // Messenger layout: the viewer's OWN messages sit on the RIGHT (green),
-    // the other party's on the LEFT (dark) — in both the member view and the
+    // the other party's on the LEFT (dark) - in both the member view and the
     // front-desk view.
     const own=_msgStaffMode?m.direction==='out':m.direction==='in';
     const who=m.direction==='in'?(m.memberName||'Member'):'Front Desk';
@@ -6771,10 +6771,10 @@ function sendMessage(){
   const input=document.getElementById('msgInput');
   const text=(input.value||'').trim();
   if(!text)return;
-  if(text.length>1000){toast('Message is too long — max 1000 characters.','error');return;}
+  if(text.length>1000){toast('Message is too long - max 1000 characters.','error');return;}
   const rlId=currentUser?(currentUser.memberId||currentUser.id||currentUser.username||'user'):'anon';
   if(!rateLimitOk('gms_rl_msg_gap_'+rlId,1,2000)||!rateLimitOk('gms_rl_msg_'+rlId,20,10*60*1000)){
-    toast('Too many messages — please wait a moment and try again.','error');return;
+    toast('Too many messages - please wait a moment and try again.','error');return;
   }
   const mem=Members.one(_msgThreadId);
   Messages.add({id:'MSG'+uid(),memberId:_msgThreadId,memberName:mem?mem.name:'Member',text,time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),date:today(),ts:Date.now(),direction:_msgStaffMode?'out':'in',read:_msgStaffMode});
@@ -6842,7 +6842,7 @@ function renderMyMessages(){
       <div class="mychat-avatar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></div>
       <div class="mychat-id">
         <div class="mychat-name">Front Desk <span class="online-dot" title="Online"></span></div>
-        <div class="mychat-sub">FitCore Gym${mem?' · '+esc(mem.name):''} — replies appear here instantly</div>
+        <div class="mychat-sub">FitCore Gym${mem?' · '+esc(mem.name):''} - replies appear here instantly</div>
       </div>
     </div>
     <div class="mychat-thread" id="myChatThread">
@@ -7018,7 +7018,7 @@ function renderMyWorkoutPlan(){
 function openMemberPlanForm(){_mpFormOpen=true;_mpEditId=null;_mpSelected=new Set();_mpSearch='';_mpMuscle='All';_mpSets='3';_mpReps='10';_mpName='';renderMyWorkoutPlan();}
 function cancelMemberPlanForm(){_mpFormOpen=false;_mpEditId=null;_mpSelected=new Set();_mpSets='3';_mpReps='10';_mpName='';renderMyWorkoutPlan();}
 function mpRefreshPicker(){
-  // Targeted refresh: list + chips + sidebar only — keeps search input focus/caret.
+  // Targeted refresh: list + chips + sidebar only - keeps search input focus/caret.
   const list=document.getElementById('mp_exList');
   if(!list){renderMyWorkoutPlan();return;}
   const lib=_mpFilterLib();
@@ -7141,7 +7141,7 @@ function renderMyWorkouts(){
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Add Workout Entry</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group"><label>Exercise *</label><select id="wk_exercise">${ExerciseLibrary.all().map(e=>`<option value="${esc(e.name)}">${esc(e.name)} — ${esc(e.muscle)}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Exercise *</label><select id="wk_exercise">${ExerciseLibrary.all().map(e=>`<option value="${esc(e.name)}">${esc(e.name)} - ${esc(e.muscle)}</option>`).join('')}</select></div>
         <div class="form-group"><label>Date *</label><input type="date" id="wk_date" value="${today()}" max="${today()}"></div>
       </div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
@@ -7197,7 +7197,7 @@ function renderMyProgress(){
     </div>
   </div>
   <div class="charts-grid">
-    <div class="chart-card"><div class="chart-title">Weight Trend ${latest?`— Latest: ${latest.weight} kg on ${formatDate(latest.date)}`:''}</div>
+    <div class="chart-card"><div class="chart-title">Weight Trend ${latest?`- Latest: ${latest.weight} kg on ${formatDate(latest.date)}`:''}</div>
       ${list.length?`<div style="display:flex;align-items:flex-end;gap:8px;height:120px;padding:10px 0">${list.slice(-8).map(m=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;background:linear-gradient(180deg,var(--green),var(--orange-dark));border-radius:6px 6px 0 0;height:${Math.max(8, (Number(m.weight)||0)/Math.max(...list.map(x=>Number(x.weight)||1))*80)}px"></div><span style="font-size:9px;color:var(--gray-500)">${m.date.slice(5)}</span></div>`).join('')}</div>`:`<div class="empty-state" style="padding:20px"><p>No measurements yet</p></div>`}
     </div>
     <div class="table-card"><div class="table-header"><h3>History <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${list.length} records</span></h3></div>
@@ -7235,7 +7235,7 @@ function renderMyGoals(){
     </div>
   </div>
   <div class="table-card"><div class="table-header"><h3>My Goals <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${list.length} goal(s)</span></h3></div>
-    ${list.length?`<div style="display:grid;gap:12px;padding:16px 20px">${list.map(g=>`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="font-weight:700;color:var(--white);font-size:13px">${esc(g.title)}</div><button class="btn-icon" onclick="deleteGoal('${g.id}')">${iconSvg('trash',12)}</button></div><div style="font-size:11px;color:var(--gray-500);margin-top:4px">${g.current||0} / ${g.target} • deadline ${g.deadline?formatDate(g.deadline):'—'}</div><div style="margin-top:8px;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Goal.wrap(g).progressPct}%;background:linear-gradient(90deg,var(--green),var(--orange));border-radius:4px;transition:.3s"></div></div><div style="font-size:10px;color:var(--gray-500);margin-top:4px">${Goal.wrap(g).progressPct}% • <a onclick="updateGoalProgress('${g.id}')" style="color:var(--green);cursor:pointer;text-decoration:underline">Update progress</a></div></div>`).join('')}</div>`:`<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">⭐</div><p>No goals yet</p></div>`}
+    ${list.length?`<div style="display:grid;gap:12px;padding:16px 20px">${list.map(g=>`<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="font-weight:700;color:var(--white);font-size:13px">${esc(g.title)}</div><button class="btn-icon" onclick="deleteGoal('${g.id}')">${iconSvg('trash',12)}</button></div><div style="font-size:11px;color:var(--gray-500);margin-top:4px">${g.current||0} / ${g.target} • deadline ${g.deadline?formatDate(g.deadline):'-'}</div><div style="margin-top:8px;height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Goal.wrap(g).progressPct}%;background:linear-gradient(90deg,var(--green),var(--orange));border-radius:4px;transition:.3s"></div></div><div style="font-size:10px;color:var(--gray-500);margin-top:4px">${Goal.wrap(g).progressPct}% • <a onclick="updateGoalProgress('${g.id}')" style="color:var(--green);cursor:pointer;text-decoration:underline">Update progress</a></div></div>`).join('')}</div>`:`<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">⭐</div><p>No goals yet</p></div>`}
   </div>`;
 }
 function addGoal(){
@@ -7504,7 +7504,7 @@ function renderMemberLogs(){
   const memberIds=[...new Set(myPlans.map(p=>p.memberId))];
   const members=memberIds.map(id=>Members.one(id)).filter(Boolean);
   el.innerHTML=`
-  <div class="table-card"><div class="table-header"><h3>Assigned Members — Logs</h3></div>
+  <div class="table-card"><div class="table-header"><h3>Assigned Members - Logs</h3></div>
     ${members.length?`<div style="padding:16px 20px;display:grid;gap:16px">${members.map(m=>{
       const wos=Workouts.all().filter(w=>w.memberId===m.id).slice(-5).reverse();
       const ms=Measurements.all().filter(x=>x.memberId===m.id).slice(-1)[0];
@@ -7514,7 +7514,7 @@ function renderMemberLogs(){
         ${ms?`<div style="font-size:11px;color:var(--gray-500);margin-top:4px">Latest measurement: ${ms.weight} kg on ${formatDate(ms.date)}</div>`:''}
         ${wos.length?`<div style="margin-top:10px;display:grid;gap:6px">${wos.map(w=>`<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,.2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--gray-300)"><span><strong style="color:var(--white)">${esc(w.exercise)}</strong> ${w.sets}×${w.reps} ${w.weight?w.weight+'kg':''} • ${formatDate(w.date)}</span><span style="font-size:10px;color:var(--gray-500)">${esc(w.duration||'')} ${w.duration?'min':''}</span></div>`).join('')}</div>`:`<div style="font-size:12px;color:var(--gray-500);margin-top:8px">No workouts logged yet</div>`}
       </div>`;
-    }).join('')}</div>`:`<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">👥</div><p>No assigned members yet — assign a plan in Workout Builder</p></div>`}
+    }).join('')}</div>`:`<div class="empty-state" style="padding:40px 20px"><div class="empty-icon">👥</div><p>No assigned members yet - assign a plan in Workout Builder</p></div>`}
   </div>`;
 }
 function renderMySessions(){
@@ -7538,20 +7538,20 @@ function renderMySessions(){
         <div class="form-group"><label>Start *</label><input type="time" id="bs_start" onchange="bsTrainerSlotChanged()"></div>
         <div class="form-group"><label>End *</label><input type="time" id="bs_end" onchange="bsTrainerSlotChanged()"></div>
       </div>
-      <div style="font-size:11px;color:var(--gray-500);margin-top:-4px">Available trainers are filtered by session type, date and time — overlapping schedules are excluded.</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:-4px">Available trainers are filtered by session type, date and time - overlapping schedules are excluded.</div>
       <div id="bsAvailHint" class="sf-avail-hint" style="display:none"></div>
       <button class="btn-primary btn-inline" onclick="bookSession()">Request Session</button>
       <div id="bsError" class="error-msg" style="display:none"></div>
-      <div style="font-size:11px;color:var(--gray-500);line-height:1.5">Your request goes to the trainer as <strong>Pending</strong> — they will Accept or Decline. You can reschedule after decline.</div>
+      <div style="font-size:11px;color:var(--gray-500);line-height:1.5">Your request goes to the trainer as <strong>Pending</strong> - they will Accept or Decline. You can reschedule after decline.</div>
     </div>
   </div>
   <div class="table-card"><div class="table-header"><h3>My Sessions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${mySessions.length} session(s)</span></h3></div>
     ${mySessions.length?`<div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Time</th><th>Trainer</th><th>Type</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${mySessions.map(s=>{
       const tr=Users.one(s.trainerId);
       const statusColor={Pending:'var(--gold)',Accepted:'var(--cyan)',Scheduled:'var(--cyan)',Completed:'var(--green)',Declined:'var(--red)',Cancelled:'var(--red)'}[s.status]||'var(--gray-500)';
-      const actionBtn=s.status==='Declined'?`<button class="btn-secondary btn-sm" onclick="rescheduleSession('${s.id}')" style="padding:4px 10px;font-size:11px">Reschedule</button>`:`<span style="font-size:11px;color:var(--gray-500)">—</span>`;
+      const actionBtn=s.status==='Declined'?`<button class="btn-secondary btn-sm" onclick="rescheduleSession('${s.id}')" style="padding:4px 10px;font-size:11px">Reschedule</button>`:`<span style="font-size:11px;color:var(--gray-500)">-</span>`;
       return `<tr><td>${formatDate(s.date)}</td><td>${esc(s.start||'')}–${esc(s.end||'')}</td><td>${esc(tr? (tr.coachName||tr.name): s.trainerName||s.trainerId)}</td><td>${esc(s.type||'-')}</td><td><span class="badge" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:${statusColor}">${esc(s.status)}</span></td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.progressNotes||s.notes||'-')}</td><td>${actionBtn}</td></tr>`;
-    }).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:30px"><div class="empty-icon">📅</div><p>No sessions yet — book one above</p></div>`}
+    }).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:30px"><div class="empty-icon">📅</div><p>No sessions yet - book one above</p></div>`}
   </div>`;
   const typeSel=document.getElementById('bs_type');
   if(typeSel&&defaultType)typeSel.value=defaultType;
@@ -7625,7 +7625,7 @@ function updateBsAvailability(){
   const specs=trainerSpecList(trainer);
   let html=`⏰ <strong>${esc(trainer.coachName||trainer.name)}</strong> available: ${esc(av.text)}`;
   if(specs.length)html+=`<br>🏋️ ${specs.map(esc).join(', ')}`;
-  if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} — choose another date.</span>`;
+  if(!av.dayOk)html+=`<br><span style="color:var(--red)">Not available on ${esc(av.dayAbbr)} - choose another date.</span>`;
   if(booked.length)html+=`<br><span style="color:var(--gold)">Booked: ${esc(booked.join(', '))}</span>`;
   if(date&&start&&end){
     if(isTrainerAvailable(trainer,type,date,start,end))html+=`<br><span style="color:var(--green)">✓ ${esc(start)}–${esc(end)} is free.</span>`;
@@ -7681,8 +7681,8 @@ function bookSession(){
   if(overlap){ if(err){err.textContent='You already have a session at that time.';err.style.display='block';} return; }
   const trainerDay=Sessions.all().filter(s=>s.trainerId===trainerId&&s.date===date&&s.status!=='Cancelled'&&s.status!=='Declined');
   const trainerOverlap=trainerDay.some(s=> !(end<=s.start || start>=s.end) );
-  if(trainerOverlap){ if(err){err.textContent='Trainer is already booked at that time — please choose another slot.';err.style.display='block';} return; }
-  if(trainerDay.length>=8){ if(err){err.textContent='Trainer is fully booked on that date — please choose another day.';err.style.display='block';} return; }
+  if(trainerOverlap){ if(err){err.textContent='Trainer is already booked at that time - please choose another slot.';err.style.display='block';} return; }
+  if(trainerDay.length>=8){ if(err){err.textContent='Trainer is fully booked on that date - please choose another day.';err.style.display='block';} return; }
   if(sameDay.length>=3){ if(err){err.textContent='You can have at most 3 sessions per day.';err.style.display='block';} return; }
   if(!isTrainerAvailable(trainer,type,date,start,end)){ if(err){err.textContent='That trainer is no longer available for the selected slot. Please choose another available trainer or time.';err.style.display='block';} return; }
   const trainerLabel=trainer.coachName||trainer.name;
@@ -7697,10 +7697,10 @@ function bookSession(){
     function(){
     const rlMid=String(mid);
     if(!rateLimitOk('gms_rl_book_gap_'+rlMid,1,10000)||!rateLimitOk('gms_rl_book_'+rlMid,5,10*60*1000)){
-      if(err){err.textContent='Too many booking requests — please wait a few minutes.';err.style.display='block';} return;
+      if(err){err.textContent='Too many booking requests - please wait a few minutes.';err.style.display='block';} return;
     }
     Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
-    toast('Session request sent — awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
+    toast('Session request sent - awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
     },
     'Yes, Request Session','btn-primary');
 }
@@ -7717,14 +7717,14 @@ function rescheduleSession(id){
   updateBsTrainerOptions(s.trainerId);
   window.scrollTo({top:0,behavior:'smooth'});
   const el=document.getElementById('bs_trainerSearch'); if(el) el.focus();
-  toast('Prefilled previous session — adjust time and request again.');
+  toast('Prefilled previous session - adjust time and request again.');
 }
 function acceptSession(id){
   const all=Sessions.all(); const i=all.findIndex(s=>s.id===id); if(i<0)return;
   const s=all[i];
   const live=all.filter(x=>x.id!==id&&x.date===s.date&&x.status!=='Cancelled'&&x.status!=='Declined'&&x.status!=='Pending');
-  if(live.some(x=>x.trainerId===s.trainerId&&!(s.end<=x.start||s.start>=x.end))){toast('Cannot accept — this trainer already has a session at that time.','error');return;}
-  if(live.some(x=>x.memberId===s.memberId&&!(s.end<=x.start||s.start>=x.end))){toast('Cannot accept — this member already has a session at that time.','error');return;}
+  if(live.some(x=>x.trainerId===s.trainerId&&!(s.end<=x.start||s.start>=x.end))){toast('Cannot accept - this trainer already has a session at that time.','error');return;}
+  if(live.some(x=>x.memberId===s.memberId&&!(s.end<=x.start||s.start>=x.end))){toast('Cannot accept - this member already has a session at that time.','error');return;}
   all[i]={...s,status:'Scheduled'};
   Sessions.save(all);
   if(window.GMSFB&&GMSFB.enabled) GMSFB.pushCollection(KEY.sessions, all);
@@ -7747,11 +7747,11 @@ function renderMessages(){
     if(!t){t={memberId:m.memberId,memberName:m.memberName||'Member',unread:0,last:m};threads.push(t);}
     t.last=m;if(m.direction==='in'&&!m.read)t.unread++;
   });
-  // Fix: new members with no messages yet were invisible — add them so admin/staff can start a conversation and no empty-state bug
+  // Fix: new members with no messages yet were invisible - add them so admin/staff can start a conversation and no empty-state bug
   const members=Members.all().filter(m=>m.status!=='Archived');
   members.forEach(mem=>{
     if(!threads.find(x=>x.memberId===mem.id)){
-      threads.push({memberId:mem.id, memberName:mem.name, unread:0, last:{text:'No messages yet — tap to start conversation', date:mem.createdAt||today(), time:'', ts:0}});
+      threads.push({memberId:mem.id, memberName:mem.name, unread:0, last:{text:'No messages yet - tap to start conversation', date:mem.createdAt||today(), time:'', ts:0}});
     }
   });
   threads.sort((a,b)=>(b.unread - a.unread) || ((b.last.ts||0)-(a.last.ts||0)) );
@@ -7844,7 +7844,7 @@ function renderAnnouncements(){
   el.innerHTML=`
   <div class="page-actions">
     <div class="table-controls">
-      <span style="font-size:11px;color:var(--gray-500)">Post gym closures, events and anniversaries — members see these on their dashboard</span>
+      <span style="font-size:11px;color:var(--gray-500)">Post gym closures, events and anniversaries - members see these on their dashboard</span>
     </div>
     <button class="btn-primary btn-inline" style="display:inline-flex;align-items:center;gap:8px" onclick="openAnnounceModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg> Post Announcement</button>
   </div>
@@ -7865,7 +7865,7 @@ function renderAnnouncements(){
         </div>
         <button class="btn-icon" style="flex-shrink:0" title="Delete announcement" onclick="deleteAnnouncement('${a.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div>`;
-    }).join(''):`<div class="empty-state"><div class="empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg></div><p>No announcements yet</p><p class="empty-sub">Post a gym closure, event or anniversary — members will see it on their dashboard.</p></div>`}
+    }).join(''):`<div class="empty-state"><div class="empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l3 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M14 8a5 5 0 0 1 0 8"/><path d="M17.5 5.5a9 9 0 0 1 0 13"/></svg></div><p>No announcements yet</p><p class="empty-sub">Post a gym closure, event or anniversary - members will see it on their dashboard.</p></div>`}
   </div>`;
 }
 function openAnnounceModal(){
@@ -7882,8 +7882,8 @@ function saveAnnouncement(){
   const title=document.getElementById('an_title').value.trim();
   const text=document.getElementById('an_text').value.trim();
   if(!title||!text){err.textContent='Please fill in the title and message.';err.style.display='block';return;}
-  if(title.length>120){err.textContent='Title is too long — max 120 characters.';err.style.display='block';return;}
-  if(text.length>2000){err.textContent='Message is too long — max 2000 characters.';err.style.display='block';return;}
+  if(title.length>120){err.textContent='Title is too long - max 120 characters.';err.style.display='block';return;}
+  if(text.length>2000){err.textContent='Message is too long - max 2000 characters.';err.style.display='block';return;}
   Announcements.add({id:nextId(KEY.announcements,'ANN'),type:document.getElementById('an_type').value,date:document.getElementById('an_date').value,title:sanitizeText(title),text:sanitizeText(text),createdBy:currentUser.name||'Admin',createdAt:today(),time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})});
   logActivity('Posted','Announcement','"'+title+'"');
   closeModal('announceModal');
@@ -7955,11 +7955,11 @@ function renderQueue(){
           <div class="queue-name">${esc(m.name)}${bgCheckFlagged(m)?'<span class="badge badge-flagged" style="margin-left:6px">BG Flagged</span>':''}${urgent?'<span class="badge badge-expired" style="margin-left:6px">auto-archive soon</span>':''}${m.createdBy==='Self'?'<span class="badge badge-pending" style="margin-left:6px">Self-Registered</span>':''}</div>
           <div class="queue-meta"><span class="queue-meta-id">${esc(m.id)}</span></div>
           <div class="queue-meta"><span class="queue-ico">${iconSvg('mail',12)}</span><span>${esc(m.email||'no email')}</span></div>
-          <div class="queue-meta"><span class="queue-ico">${iconSvg('phone',12)}</span><span>${esc(m.contact||'—')}</span></div>
+          <div class="queue-meta"><span class="queue-ico">${iconSvg('phone',12)}</span><span>${esc(m.contact||'-')}</span></div>
         </div>
       </div>
       <div class="queue-detail">
-        <div class="queue-plan-row"><span class="queue-plan-name">${esc(plan?plan.name:'—')}</span><span class="badge badge-pending">Pending</span></div>
+        <div class="queue-plan-row"><span class="queue-plan-name">${esc(plan?plan.name:'-')}</span><span class="badge badge-pending">Pending</span></div>
         <div class="queue-price">₱${plan?Number(plan.price).toLocaleString():'0'}</div>
         <div class="queue-date" style="color:${ageColor}">Registered ${formatDate(m.createdAt)} (${ageDays}d ago)</div>
       </div>
@@ -7995,7 +7995,7 @@ function deleteQueueItem(memberId){
   const plan=m.planId?Plans.one(m.planId):null;
   openConfirm(
     'Delete Pending Registration?',
-    `<div style="display:flex;gap:12px;align-items:flex-start;text-align:left"><div class="user-avatar" style="width:42px;height:42px;background:rgba(239,68,68,.14);color:#ef4444;flex-shrink:0">${esc(initials(m.name))}</div><div><div style="font-weight:800;color:var(--white)">${esc(m.name)}</div><div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(m.id)} · ${esc(plan?plan.name:'—')}</div><div style="font-size:12px;color:var(--gray-300);margin-top:8px;line-height:1.6">This will <strong style="color:#ef4444">archive</strong> the pending registration for <strong>${esc(m.name)}</strong>. The entry will be removed from Payment Queue and moved to archived records. This cannot be undone — the member will need to register again if needed.</div></div></div>`,
+    `<div style="display:flex;gap:12px;align-items:flex-start;text-align:left"><div class="user-avatar" style="width:42px;height:42px;background:rgba(239,68,68,.14);color:#ef4444;flex-shrink:0">${esc(initials(m.name))}</div><div><div style="font-weight:800;color:var(--white)">${esc(m.name)}</div><div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(m.id)} · ${esc(plan?plan.name:'-')}</div><div style="font-size:12px;color:var(--gray-300);margin-top:8px;line-height:1.6">This will <strong style="color:#ef4444">archive</strong> the pending registration for <strong>${esc(m.name)}</strong>. The entry will be removed from Payment Queue and moved to archived records. This cannot be undone - the member will need to register again if needed.</div></div></div>`,
     async ()=>{
       // soft-archive: keeps audit, removes from queue, resolves notification
       const all=Members.all();
@@ -8009,7 +8009,7 @@ function deleteQueueItem(memberId){
       _queueSelected.delete(memberId);
       // log
       try{
-        const act={id:'ACT'+Date.now(),action:'Archive',category:'Member',detail:all[idx].name,extra:'Deleted from Payment Queue | ID: '+memberId+' | Plan: '+(plan?plan.name:'—'),by:currentUser?currentUser.name:'',byUsername:currentUser?currentUser.username:'',byRole:currentUser?currentUser.role:'',at:new Date().toISOString()};
+        const act={id:'ACT'+Date.now(),action:'Archive',category:'Member',detail:all[idx].name,extra:'Deleted from Payment Queue | ID: '+memberId+' | Plan: '+(plan?plan.name:'-'),by:currentUser?currentUser.name:'',byUsername:currentUser?currentUser.username:'',byRole:currentUser?currentUser.role:'',at:new Date().toISOString()};
         const acts=ActivityLog.all(); acts.push(act); ActivityLog.save(acts);
       }catch(e){}
       // cloud sync
@@ -8184,7 +8184,7 @@ function openConfirmPayment(memberId){
   document.getElementById('confirmPaymentError').style.display='none';
   if(bgCheckBlocksActivation(m)){
     const err=document.getElementById('confirmPaymentError');
-    err.textContent='Background check is Flagged — clear it in the member profile before activating.';
+    err.textContent='Background check is Flagged - clear it in the member profile before activating.';
     err.style.display='block';
   }
   document.getElementById('cpm_summary').innerHTML=`
@@ -8196,10 +8196,10 @@ function openConfirmPayment(memberId){
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
-      <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Plan</div><div style="font-weight:700;color:var(--white);margin-top:2px">${esc(plan?plan.name:'—')}</div></div>
+      <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Plan</div><div style="font-weight:700;color:var(--white);margin-top:2px">${esc(plan?plan.name:'-')}</div></div>
       <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Plan Price</div><div style="font-weight:700;color:var(--green);margin-top:2px">₱${plan?Number(plan.price).toLocaleString():'0'}</div></div>
       <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Duration</div><div style="font-weight:700;color:var(--white);margin-top:2px">${plan?plan.duration+' month(s)':'-'}</div></div>
-      <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">New Expiry</div><div style="font-weight:700;color:var(--white);margin-top:2px">${plan?formatDate(renewalExpiry(m,today(),plan.duration)):'—'}</div></div>
+      <div style="background:var(--navy-700);border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">New Expiry</div><div style="font-weight:700;color:var(--white);margin-top:2px">${plan?formatDate(renewalExpiry(m,today(),plan.duration)):'-'}</div></div>
     </div>`;
   document.getElementById('cpm_amount').value=plan?plan.price:'';
   document.getElementById('cpm_method').value='';
@@ -8247,7 +8247,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
   }
   if(window.GMSFB&&GMSFB.enabled){
     if(!GMSFB.auth||!GMSFB.auth.currentUser){
-      throw new Error('Firebase session expired — please log out and log in again before confirming payments.');
+      throw new Error('Firebase session expired - please log out and log in again before confirming payments.');
     }
     // Overlay first so a cached snapshot cannot flash the pending card back
     // while the batch is in flight; cleared again if the commit fails.
@@ -8282,7 +8282,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
     GMSFB.applyLocalPatch(KEY.members,memberId,activation);
   }
   _queueSelected.delete(memberId);
-  logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'—')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
+  logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'-')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
   return {member:Members.one(memberId)||{...member,...activation},payment};
 }
 async function confirmPayment(){
@@ -8297,7 +8297,7 @@ async function confirmPayment(){
   if(amount<=0){err.textContent='Invalid payment amount.';err.style.display='block';return;}
   if(method==='GCash'&&!reference){err.textContent='Please enter the GCash reference number.';err.style.display='block';return;}
   if(bgCheckBlocksActivation(Members.one(memberId))){
-    err.textContent='Background check is Flagged — clear it in the member profile before activating.';
+    err.textContent='Background check is Flagged - clear it in the member profile before activating.';
     err.style.display='block';
     return;
   }
@@ -8307,12 +8307,12 @@ async function confirmPayment(){
     const member=result&&result.member;
     if(!member){err.textContent='Member not found.';err.style.display='block';return;}
     closeModal('confirmPaymentModal');
-    toast(`Payment confirmed — ${member.name} is now active. Member can now log in on any device.`);
+    toast(`Payment confirmed - ${member.name} is now active. Member can now log in on any device.`);
     updateQueueBadge();
     renderQueue();
     scanRenewals();
   }catch(e){
-    err.textContent=(e&&e.message)?e.message:'Sync failed — please check internet and try again.';
+    err.textContent=(e&&e.message)?e.message:'Sync failed - please check internet and try again.';
     err.style.display='block';
     updateQueueBadge();
     renderQueue();
@@ -8448,11 +8448,11 @@ function processQrToken(token){
   const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const todayAttend=Attendance.all().find(a=>a.memberId===member.id&&a.date===today());
   if(todayAttend){
-    // Already checked in today — 2nd scan = check-out (if not yet out), else block re-entry / re-out
+    // Already checked in today - 2nd scan = check-out (if not yet out), else block re-entry / re-out
     if(todayAttend.checkOut){
-      showScanResult('blocked','Already Checked Out',member.name+' already checked out at '+todayAttend.checkOut+' (duration: '+(todayAttend.duration||'—')+').');
+      showScanResult('blocked','Already Checked Out',member.name+' already checked out at '+todayAttend.checkOut+' (duration: '+(todayAttend.duration||'-')+').');
       playScanSound('duplicate');
-      toast('Already checked out — '+member.name,'error');
+      toast('Already checked out - '+member.name,'error');
       if(navigator.vibrate) try{navigator.vibrate([120,80,120]);}catch(e){}
       return;
     }
@@ -8471,23 +8471,23 @@ function processQrToken(token){
       attendance[idx].recordedBy=currentUser.name;
       Attendance.save(attendance);
     }
-    showScanResult('checkout','Check-Out Recorded',member.name+' ('+member.id+') — out at '+time+' · Duration: '+duration);
+    showScanResult('checkout','Check-Out Recorded',member.name+' ('+member.id+') - out at '+time+' · Duration: '+duration);
     playScanSound('success');
-    toast('Check-out recorded — '+member.name+' · '+duration,'success');
+    toast('Check-out recorded - '+member.name+' · '+duration,'success');
     if(navigator.vibrate) try{navigator.vibrate(120);}catch(e){}
     _scanLocked=true;
     setTimeout(()=>{_scanLocked=false;},4000);
     return;
   }
-  // Entry-block checks (only when checking IN — pending/archived/expired/flagged block entry)
-  if(member.status==='pending_payment'){showScanResult('blocked','Payment Pending',member.name+' has not paid yet — send to the counter.');return;}
+  // Entry-block checks (only when checking IN - pending/archived/expired/flagged block entry)
+  if(member.status==='pending_payment'){showScanResult('blocked','Payment Pending',member.name+' has not paid yet - send to the counter.');return;}
   if(member.status==='Archived'){showScanResult('blocked','Account Archived','Member account is archived.');return;}
-  if(bgCheckFlagged(member)){showScanResult('blocked','Background Check Flagged',member.name+' is flagged — entry blocked. Clear it in the member profile.');return;}
-  if(daysUntil(member.expiryDate)<=0){showScanResult('blocked','Plan Expired',member.name+'\'s plan expired on '+formatDate(member.expiryDate)+'. Renew at the counter — entry blocked.');return;}
+  if(bgCheckFlagged(member)){showScanResult('blocked','Background Check Flagged',member.name+' is flagged - entry blocked. Clear it in the member profile.');return;}
+  if(daysUntil(member.expiryDate)<=0){showScanResult('blocked','Plan Expired',member.name+'\'s plan expired on '+formatDate(member.expiryDate)+'. Renew at the counter - entry blocked.');return;}
   Attendance.add({id:uid(),memberId:member.id,date:today(),time,checkIn:time,checkInTs:now.getTime(),checkOut:null,checkOutTs:null,duration:null,recordedBy:currentUser.name,scannedBy:currentUser.name,source:'qr'});
-  showScanResult('granted','Entry Granted',member.name+' ('+member.id+') — logged at '+time);
+  showScanResult('granted','Entry Granted',member.name+' ('+member.id+') - logged at '+time);
   playScanSound('success');
-  toast('Entry granted — '+member.name+' ('+member.id+')','success');
+  toast('Entry granted - '+member.name+' ('+member.id+')','success');
   if(navigator.vibrate) try{navigator.vibrate(120);}catch(e){}
   _scanLocked=true;
   setTimeout(()=>{_scanLocked=false;},4000);
@@ -8531,7 +8531,7 @@ function refreshScanToday(){
   const rows=Attendance.all().filter(a=>a.date===today()).sort((a,b)=>(b.checkInTs||0)-(a.checkInTs||0));
   const inGym=rows.filter(a=>!a.checkOut).length;
   card.innerHTML=`<div class="table-header"><h3>Today's Attendance <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${rows.length} check-in${rows.length!==1?'s':''} · ${inGym} in gym</span></h3></div>
-  <div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Check-In</th><th>Check-Out</th><th>Duration</th><th>Source</th></tr></thead><tbody>${rows.length?rows.map(a=>{const m=Members.one(a.memberId);const nm=a.memberName||(m&&m.name)||a.memberId;return `<tr><td>${esc(nm)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(a.memberId)}</div></td><td>${esc(a.checkIn||a.time||'—')}</td><td>${a.checkOut?esc(a.checkOut):'<span class="badge badge-active">In Gym</span>'}</td><td>${esc(a.duration||'—')}</td><td>${a.source==='qr'?'QR Scan':'Manual'}</td></tr>`;}).join(''):`<tr><td colspan="5"><div class="empty-state"><p>No check-ins yet today</p></div></td></tr>`}</tbody></table></div>`;
+  <div style="overflow-x:auto"><table><thead><tr><th>Member</th><th>Check-In</th><th>Check-Out</th><th>Duration</th><th>Source</th></tr></thead><tbody>${rows.length?rows.map(a=>{const m=Members.one(a.memberId);const nm=a.memberName||(m&&m.name)||a.memberId;return `<tr><td>${esc(nm)}<div style="font-size:11px;font-family:monospace;color:var(--gray-500)">${esc(a.memberId)}</div></td><td>${esc(a.checkIn||a.time||'-')}</td><td>${a.checkOut?esc(a.checkOut):'<span class="badge badge-active">In Gym</span>'}</td><td>${esc(a.duration||'-')}</td><td>${a.source==='qr'?'QR Scan':'Manual'}</td></tr>`;}).join(''):`<tr><td colspan="5"><div class="empty-state"><p>No check-ins yet today</p></div></td></tr>`}</tbody></table></div>`;
 }
 function showScanResult(type,title,sub){
   setTimeout(refreshScanToday,50);
@@ -8591,7 +8591,7 @@ function renderWalkin(){
   refreshWalkinTable();
 }
 function walkinUntilCell(w){
-  if(!w.until)return'<span style="color:var(--gray-500)">—</span>';
+  if(!w.until)return'<span style="color:var(--gray-500)">-</span>';
   const live=w.date===today()&&w.until>_hhmm(new Date());
   const hrs=Number(w.hours);
   const limit=hrs>0?` <span style="color:var(--gray-500);font-size:11px">(${fmtHours(hrs)})</span>`:'';
@@ -8620,7 +8620,7 @@ function refreshWalkinTable(){
     <td>${esc(w.time)}</td>
     <td>${walkinUntilCell(w)}</td>
     <td style="color:var(--green);font-weight:600">₱${Number(w.fee).toLocaleString()}</td>
-    <td>${esc(w.recordedBy||'—')}</td>
+    <td>${esc(w.recordedBy||'-')}</td>
     <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewWalkinReceipt('${w.id}')">🧾</button></div></td>
   </tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🚶</div><p>No walk-in records found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="walkinPage=${walkinPage-1};refreshWalkinTable()" ${walkinPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===walkinPage?'active':''}" onclick="walkinPage=${i+1};refreshWalkinTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="walkinPage=${walkinPage+1};refreshWalkinTable()" ${walkinPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
@@ -8698,8 +8698,8 @@ function viewWalkinReceipt(id){
   const w=Walkins.all().find(x=>x.id===id);if(!w)return;
   const users=Users.all();
   const match=users.find(u=>u.username===w.recordedBy||u.name===w.recordedBy);
-  const staffDisplay=match?match.name:(w.recordedBy||'—');
-  const recordedTime=w.time||'—';
+  const staffDisplay=match?match.name:(w.recordedBy||'-');
+  const recordedTime=w.time||'-';
   document.getElementById('receiptBody').innerHTML=`
   <div class="receipt">
     <div class="receipt-header">
@@ -8743,7 +8743,7 @@ function viewWalkinReceipt(id){
   openModal('receiptModal');
 }
 function _hhmm(d){return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
-function _fmtTime12(hhmm){const m=/^(\d{2}):(\d{2})$/.exec(hhmm||'');if(!m)return'—';let h=+m[1];const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+m[2]+' '+ap;}
+function _fmtTime12(hhmm){const m=/^(\d{2}):(\d{2})$/.exec(hhmm||'');if(!m)return'-';let h=+m[1];const ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+m[2]+' '+ap;}
 function walkinComputeUntil(hours){
   const h=Number(hours)>0?Number(hours):getWalkinHours();
   const now=new Date();
@@ -8866,8 +8866,8 @@ function renderPlans(){
   // Get admin info
   const admin=Users.all().find(u=>u.role==='admin');
   const adminName=admin?admin.name:'Administrator';
-  const adminContact=admin&&admin.contact?admin.contact:'—';
-  const adminUsername=admin?admin.username:'—';
+  const adminContact=admin&&admin.contact?admin.contact:'-';
+  const adminUsername=admin?admin.username:'-';
   const cards=plans.map(p=>{
     const count=members.filter(m=>m.planId===p.id).length;
     const benefits=(p.benefits||'').split(/\n|,/).map(b=>b.trim()).filter(Boolean);
@@ -8888,7 +8888,7 @@ function renderPlans(){
   <div class="page-actions">
     ${isStaff?`<div style="background:rgba(179,188,181,.08);border:1px solid rgba(179,188,181,.25);border-radius:10px;padding:16px 20px;font-size:13px;color:#b3bcb5;width:100%">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:700;font-size:14px;color:#93c5fd">
-        <span style="font-size:18px">👁</span> View Only — Contact the Administrator to modify membership plans.
+        <span style="font-size:18px">👁</span> View Only - Contact the Administrator to modify membership plans.
       </div>
       <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px">
         <span style="font-size:22px">📞</span>
@@ -9222,7 +9222,7 @@ function generateReport(){
     const gridLines=[20,50,80,110,140].map(y=>`<line x1="10" y1="${y}" x2="${svgW-10}" y2="${y}" stroke="rgba(179,188,181,.12)" stroke-width="1"/>`).join('');
     const revUsers=Users.all();
     function revRecorderLabel(name){
-      if(!name||name==='—')return'—';
+      if(!name||name==='-')return'-';
       const u=revUsers.find(x=>x.name===name||x.username===name);
       if(!u)return name;
       const roleMap={admin:'Admin',staff:'Staff',trainer:'Trainer'};
@@ -9258,7 +9258,7 @@ function generateReport(){
     const completed=data.filter(a=>a.checkOut).length;
     const users=Users.all();
     function recorderLabel(name){
-      if(!name||name==='—')return'—';
+      if(!name||name==='-')return'-';
       const u=users.find(x=>x.name===name||x.username===name);
       if(!u)return esc(name);
       const roleMap={admin:'Admin',staff:'Staff',trainer:'Trainer'};
@@ -9266,7 +9266,7 @@ function generateReport(){
       const col=u.role==='admin'?'var(--orange)':u.role==='trainer'?'var(--green)':'#d7ddd8';
       return`${esc(u.name)} <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.07);color:${col};margin-left:4px">${esc(tag)}</span>`;
     }
-    const rows=data.slice().reverse().map(a=>{const m=Members.all().find(x=>x.id===a.memberId);return`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||a.time||'—')}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'—')}</td><td>${esc(m?m.name:'Unknown')}</td><td>${recorderLabel(a.recordedBy)}</td></tr>`;}).join('');
+    const rows=data.slice().reverse().map(a=>{const m=Members.all().find(x=>x.id===a.memberId);return`<tr><td>${formatDate(a.date)}</td><td>${esc(a.checkIn||a.time||'-')}</td><td>${a.checkOut?esc(a.checkOut):'<span style="color:var(--gold)">In Gym</span>'}</td><td>${esc(a.duration||'-')}</td><td>${esc(m?m.name:'Unknown')}</td><td>${recorderLabel(a.recordedBy)}</td></tr>`;}).join('');
     output.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card orange"><div class="stat-label">Total Check-Ins</div><div class="stat-value">${data.length}</div></div>
@@ -9295,10 +9295,10 @@ function generateReport(){
     const rows=sessions.slice().sort((a,b)=>a.date<b.date?1:-1).map(s=>{
       const trainer=allUsers.find(u=>u.id===s.trainerId);
       const member=allMembers.find(m=>m.id===s.memberId);
-      const trainerName=trainer?trainer.name:'—';
-      const memberName=member?member.name:(s.memberName||'—');
+      const trainerName=trainer?trainer.name:'-';
+      const memberName=member?member.name:(s.memberName||'-');
       const statusCls={Scheduled:'badge-pending',Completed:'badge-active',Cancelled:'badge-locked'}[s.status]||'';
-      const timeDisplay=s.time||(s.startTime?s.startTime+(s.endTime?' – '+s.endTime:''):'—');
+      const timeDisplay=s.time||(s.startTime?s.startTime+(s.endTime?' – '+s.endTime:''):'-');
       const createdByUser=s.createdBy?allUsers.find(u=>u.name===s.createdBy||u.username===s.createdByUsername):null;
       const roleColorMap={admin:'var(--orange)',staff:'#d7ddd8',trainer:'var(--green)'};
       const roleColor=createdByUser?roleColorMap[createdByUser.role]||'var(--gray-300)':'var(--gray-300)';
@@ -9306,16 +9306,16 @@ function generateReport(){
       const editedByUser=s.editedBy?allUsers.find(u=>u.name===s.editedBy||u.username===s.editedByUsername):null;
       const editedRoleColor=editedByUser?roleColorMap[editedByUser.role]||'var(--gray-300)':'var(--gray-300)';
       const editedRoleTag=editedByUser?`<span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.07);color:${editedRoleColor};margin-left:4px;text-transform:uppercase">${editedByUser.role}</span>`:'';
-      const createdByDisplay=s.createdBy?`<div style="font-size:12px;font-weight:600">${esc(s.createdBy)}${roleTag}</div>${s.editedBy?`<div style="font-size:11px;color:var(--gray-500);margin-top:2px">✎ ${esc(s.editedBy)}${editedRoleTag}</div>`:''}`:'<span style="color:var(--gray-500)">—</span>';
+      const createdByDisplay=s.createdBy?`<div style="font-size:12px;font-weight:600">${esc(s.createdBy)}${roleTag}</div>${s.editedBy?`<div style="font-size:11px;color:var(--gray-500);margin-top:2px">✎ ${esc(s.editedBy)}${editedRoleTag}</div>`:''}`:'<span style="color:var(--gray-500)">-</span>';
       return`<tr>
         <td>${formatDate(s.date)}</td>
         <td><strong>${esc(trainerName)}</strong></td>
         <td>${esc(timeDisplay)}</td>
-        <td>${esc(s.type||s.sessionType||'—')}</td>
+        <td>${esc(s.type||s.sessionType||'-')}</td>
         <td>${esc(memberName)}</td>
         <td><span class="badge ${statusCls}">${esc(s.status)}</span></td>
         <td>${createdByDisplay}</td>
-        <td>${esc(s.notes||'—')}</td>
+        <td>${esc(s.notes||'-')}</td>
       </tr>`;
     }).join('');
     const trainerFil2=document.getElementById('rpt_trainer_filter')?.value||'all';
@@ -9362,9 +9362,9 @@ function generateReport(){
       return`<tr>
         <td><span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:4px;background:${bg};color:${clr};letter-spacing:.5px;text-transform:uppercase;white-space:nowrap">${esc(e.action)}</span></td>
         <td><span style="font-size:12px;font-weight:700;color:var(--white)">${catIcon[e.category]||'•'} ${esc(e.category)}</span></td>
-        <td style="font-size:12px;color:var(--white);font-weight:700;max-width:200px">${esc(e.detail||'—')}</td>
-        <td style="font-size:12px;color:var(--white);font-weight:700;max-width:200px">${esc(e.extra||'—')}</td>
-        <td><div style="font-size:12px;font-weight:700;color:var(--white)">${esc(e.by||'—')} <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.09);color:${roleClr};margin-left:3px;text-transform:uppercase">${esc(e.byRole||'')}</span></div></td>
+        <td style="font-size:12px;color:var(--white);font-weight:700;max-width:200px">${esc(e.detail||'-')}</td>
+        <td style="font-size:12px;color:var(--white);font-weight:700;max-width:200px">${esc(e.extra||'-')}</td>
+        <td><div style="font-size:12px;font-weight:700;color:var(--white)">${esc(e.by||'-')} <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.09);color:${roleClr};margin-left:3px;text-transform:uppercase">${esc(e.byRole||'')}</span></div></td>
         <td style="white-space:nowrap"><div style="font-size:12px;color:var(--white);font-weight:700">${dateStr}</div><div style="font-size:11px;color:var(--gray-300);margin-top:2px">🕐 ${timeStr}</div></td>
       </tr>`;}).join('');
     output.innerHTML=`
@@ -9410,24 +9410,24 @@ function generateReport(){
       const createdByUser=m.createdBy?allUsers.find(u=>u.name===m.createdBy||u.username===m.createdByUsername):null;
       const cRoleColor=createdByUser?roleColorMap[createdByUser.role]||'var(--gray-300)':'var(--gray-300)';
       const cRoleTag=createdByUser?`<span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.07);color:${cRoleColor};margin-left:4px;text-transform:uppercase">${createdByUser.role}</span>`:'';
-      const createdLine=m.createdBy?`<div style="font-size:12px;font-weight:600">${esc(m.createdBy)}${cRoleTag}</div>`:`<span style="color:var(--gray-500)">—</span>`;
+      const createdLine=m.createdBy?`<div style="font-size:12px;font-weight:600">${esc(m.createdBy)}${cRoleTag}</div>`:`<span style="color:var(--gray-500)">-</span>`;
       // Edited By
       const editedByUser=m.editedBy?allUsers.find(u=>u.name===m.editedBy||u.username===m.editedByUsername):null;
       const eRoleColor=editedByUser?roleColorMap[editedByUser.role]||'var(--gray-300)':'var(--gray-300)';
       const eRoleTag=editedByUser?`<span style="font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.07);color:${eRoleColor};margin-left:4px;text-transform:uppercase">${editedByUser.role}</span>`:'';
       const editedLine=m.editedBy?`<div style="font-size:11px;color:var(--gray-500);margin-top:2px">✎ ${esc(m.editedBy)}${eRoleTag}</div>`:'';
       const isArchived=m.status==='Archived';const rowStyle=isArchived?'opacity:0.6;background:rgba(239,68,68,.03);':'';
-      return`<tr style="${rowStyle}"><td style="${isArchived?'text-decoration:line-through;color:var(--gray-500)':''}">${esc(m.id)}</td><td><div style="display:flex;align-items:center;gap:6px">${isArchived?'🗑️':''}<span style="${isArchived?'text-decoration:line-through;color:var(--gray-500)':''}">${esc(m.name)}</span></div></td><td>${esc(pl?pl.name:'—')}</td><td>${formatDate(m.startDate)}</td><td>${formatDate(m.expiryDate)}</td><td><span class="badge ${badgeCls}">${esc(isArchived?'Deleted':m.status)}</span></td><td style="text-align:center"><span style="background:rgba(179,188,181,.12);color:var(--orange);font-size:13px;font-weight:800;padding:3px 10px;border-radius:6px;border:1px solid rgba(179,188,181,.25)">${payCount}x</span></td><td><div>${createdLine}${editedLine}</div></td></tr>`;
+      return`<tr style="${rowStyle}"><td style="${isArchived?'text-decoration:line-through;color:var(--gray-500)':''}">${esc(m.id)}</td><td><div style="display:flex;align-items:center;gap:6px">${isArchived?'🗑️':''}<span style="${isArchived?'text-decoration:line-through;color:var(--gray-500)':''}">${esc(m.name)}</span></div></td><td>${esc(pl?pl.name:'-')}</td><td>${formatDate(m.startDate)}</td><td>${formatDate(m.expiryDate)}</td><td><span class="badge ${badgeCls}">${esc(isArchived?'Deleted':m.status)}</span></td><td style="text-align:center"><span style="background:rgba(179,188,181,.12);color:var(--orange);font-size:13px;font-weight:800;padding:3px 10px;border-radius:6px;border:1px solid rgba(179,188,181,.25)">${payCount}x</span></td><td><div>${createdLine}${editedLine}</div></td></tr>`;
     }).join('');
     // If single member, show their payment history too
     let payHistorySection='';
     if(singleMemberMode&&singleMember){
       const memberPayments=allPayments.filter(p=>p.memberId===singleMember.id).slice().reverse();
       const totalPaid=memberPayments.reduce((a,p)=>a+Number(p.amount),0);
-      const payRows=memberPayments.length?memberPayments.map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(p.planName)}</td><td style="color:var(--green);font-weight:700">₱${Number(p.amount).toLocaleString()}</td><td>${formatDate(p.date)}</td><td>${formatDate(p.newExpiry)}</td><td>${esc(p.method||'—')}</td><td>${esc(p.recordedBy||'—')}</td></tr>`).join(''):`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
+      const payRows=memberPayments.length?memberPayments.map(p=>`<tr><td>${esc(p.id)}</td><td>${esc(p.planName)}</td><td style="color:var(--green);font-weight:700">₱${Number(p.amount).toLocaleString()}</td><td>${formatDate(p.date)}</td><td>${formatDate(p.newExpiry)}</td><td>${esc(p.method||'-')}</td><td>${esc(p.recordedBy||'-')}</td></tr>`).join(''):`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
       payHistorySection=`
       <div class="table-card" style="margin-top:16px">
-        <div class="table-header"><h3>💳 Payment History — ${esc(singleMember.name)}</h3><span style="font-size:12px;color:var(--gray-500);font-weight:400">${memberPayments.length} payment${memberPayments.length!==1?'s':''} · Total: <span style="color:var(--green);font-weight:700">₱${totalPaid.toLocaleString()}</span></span></div>
+        <div class="table-header"><h3>💳 Payment History - ${esc(singleMember.name)}</h3><span style="font-size:12px;color:var(--gray-500);font-weight:400">${memberPayments.length} payment${memberPayments.length!==1?'s':''} · Total: <span style="color:var(--green);font-weight:700">₱${totalPaid.toLocaleString()}</span></span></div>
         <div style="overflow-x:auto"><table><thead><tr><th>Pay ID</th><th>Plan</th><th>Amount</th><th>Date</th><th>New Expiry</th><th>Method</th><th>Recorded By</th></tr></thead><tbody>${payRows}</tbody></table></div>
       </div>`;
     }
@@ -9505,7 +9505,7 @@ document.addEventListener('click',function(e){
 function printReport(){
   const output=document.getElementById('reportOutput');
   if(!output||!output.innerHTML.trim()){toast('Generate a report first.','error');return;}
-  // Hidden iframe (same reliable approach as receipt printing) — pop-up
+  // Hidden iframe (same reliable approach as receipt printing) - pop-up
   // blockers and mobile browsers often block or blank window.open().
   const old=document.getElementById('reportPrintFrame');
   if(old&&old.parentNode)old.parentNode.removeChild(old);
@@ -9516,7 +9516,7 @@ function printReport(){
   document.body.appendChild(frame);
   const doc=frame.contentWindow.document;
   doc.open();
-  doc.write(`<!DOCTYPE html><html><head><title>FitCore GMS — Report</title>
+  doc.write(`<!DOCTYPE html><html><head><title>FitCore GMS - Report</title>
   <style>
   :root{--orange:#7ffa88;--orange-dark:#4ade80;--gold:#fbbf24;--green:#4ade80;--gray-300:#b3bcb5;--gray-500:#5e625f;--navy-900:#0a0a0a;--cyan:#b3bcb5}
   *{box-sizing:border-box}
@@ -9572,7 +9572,7 @@ function printReport(){
   </div>
   ${output.innerHTML}
   <div class="print-foot">
-    <div><strong>FitCore GMS</strong> &mdash; Gym Management System</div>
+    <div><strong>FitCore GMS</strong> - Gym Management System</div>
     <div>Printed ${new Date().toLocaleString()}</div>
   </div>
   </div></body></html>`);
@@ -9665,9 +9665,9 @@ function refreshUserTable(){
     const trainerExtra=u.role==='trainer'&&_uSpecs.length?`<div style="font-size:10px;color:var(--orange);margin-top:2px">🏋️ ${_uSpecs.slice(0,2).map(esc).join(', ')+(_uSpecs.length>2?' +more':'')}</div>`:'';
     const trainerHours=u.role==='trainer'&&u.availableFrom?`<div style="font-size:10px;color:var(--gray-500);margin-top:1px">⏰ ${esc(u.availableFrom)}–${esc(u.availableTo||'')}</div>`:'';
     return`<tr>
-      <td><div style="display:flex;align-items:center;gap:8px"><div class="user-avatar avatar-${u.role}" style="width:28px;height:28px;font-size:10px;${u.avatar?'padding:0;overflow:hidden':''}">${u.avatar?`<img src="${u.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(u.name))}</div><div><div>${esc(u.name)}${u.coachName&&u.coachName!==u.name?` <span style="font-size:10px;color:var(--gray-500)">(${esc(u.coachName)})</span>`:''}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace;margin-top:2px">${esc(u.contact||'—')}</div>${trainerExtra}${trainerHours}</div></div></td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="user-avatar avatar-${u.role}" style="width:28px;height:28px;font-size:10px;${u.avatar?'padding:0;overflow:hidden':''}">${u.avatar?`<img src="${u.avatar}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`:esc(initials(u.name))}</div><div><div>${esc(u.name)}${u.coachName&&u.coachName!==u.name?` <span style="font-size:10px;color:var(--gray-500)">(${esc(u.coachName)})</span>`:''}</div><div style="font-size:11px;color:var(--gray-500);font-family:monospace;margin-top:2px">${esc(u.contact||'-')}</div>${trainerExtra}${trainerHours}</div></div></td>
       <td>${esc(u.username)}</td>
-      <td style="font-size:11px">${esc(u.authEmail||u.email||'—')}</td>
+      <td style="font-size:11px">${esc(u.authEmail||u.email||'-')}</td>
       <td><span class="badge ${roleCls}">${esc(u.role)}</span></td>
       <td>${formatDate(u.createdAt||today())}</td>
       <td><span class="badge ${statusCls}">${statusLabel}</span></td>
@@ -9677,7 +9677,7 @@ function refreshUserTable(){
         ${u.status==='pending'?`<button class="btn-icon" title="Approve" style="color:var(--green)" onclick="approveUser('${u.id}')">✔</button>`:`<button class="btn-icon" title="${u.status==='locked'?'Unlock':'Lock'}" onclick="toggleUserLock('${u.id}')">${u.status==='locked'?'○':'●'}</button>`}
         ${u.id===currentUser.id?`<button class="btn-icon" title="Cannot delete your own account" style="opacity:.3;cursor:not-allowed;color:var(--gray-500);border-color:rgba(255,255,255,.08)" disabled>✕</button>`:`<button class="btn-icon" title="Delete User" style="color:var(--red);border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08)" onmouseover="this.style.background='var(--red)';this.style.color='#fff'" onmouseout="this.style.background='rgba(239,68,68,.08)';this.style.color='var(--red)'" onclick="deleteUser('${u.id}')">✕</button>`}
       </div></td>
-    </tr>`;}).join(''):`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">—</div><p>No ${singular} found</p></div></td></tr>`;
+    </tr>`;}).join(''):`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">-</div><p>No ${singular} found</p></div></td></tr>`;
   document.getElementById('userTableCard').innerHTML=`
     <div class="table-header"><h3>${label}</h3></div>
     <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Username</th><th>Email / Gmail</th><th>Role</th><th>Created</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -9757,9 +9757,9 @@ function checkUfEmail(val){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errEl.textContent='Please enter a valid email address.';errEl.style.display='block';return false;}
   if(email.endsWith('@fitcoregym.local')){errEl.textContent='Please use a real email address (e.g. name@gmail.com).';errEl.style.display='block';return false;}
   const dupUser=Users.all().find(u=>u.id!==editingUserId&&(String(u.authEmail||'').toLowerCase()===email||String(u.email||'').toLowerCase()===email));
-  if(dupUser){errEl.textContent='Email already exists — used by '+dupUser.name+'.';errEl.style.display='block';return false;}
+  if(dupUser){errEl.textContent='Email already exists - used by '+dupUser.name+'.';errEl.style.display='block';return false;}
   const dupMember=Members.all().find(m=>String(m.email||'').toLowerCase()===email||String(m.authEmail||'').toLowerCase()===email);
-  if(dupMember){errEl.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';errEl.style.display='block';return false;}
+  if(dupMember){errEl.textContent='Email already exists - used by member '+dupMember.name+' ('+dupMember.id+').';errEl.style.display='block';return false;}
   errEl.style.display='none';
   return true;
 }
@@ -9791,7 +9791,7 @@ function openUserModal(id=null){
     document.getElementById('uf_pass').value='';document.getElementById('uf_pass2').value='';
     document.getElementById('uf_pass').placeholder='Leave blank to keep current password';
     document.getElementById('uf_role').value=u.role;
-    // Hide role field for admin users — role cannot be changed
+    // Hide role field for admin users - role cannot be changed
     const roleRow=document.getElementById('uf_role_row');
     if(roleRow)roleRow.style.display=u.role==='admin'?'none':'block';
     // Trainer fields
@@ -9910,9 +9910,9 @@ async function _saveUserImpl(){
   // One Auth identity per Gmail across users and members.
   if(email){
     const dupUser=users.find(u=>u.id!==editingUserId&&(String(u.authEmail||'').toLowerCase()===email||String(u.email||'').toLowerCase()===email));
-    if(dupUser){err.textContent='Email already exists — used by '+dupUser.name+'.';err.style.display='block';return;}
+    if(dupUser){err.textContent='Email already exists - used by '+dupUser.name+'.';err.style.display='block';return;}
     const dupMember=Members.all().find(m=>String(m.email||'').toLowerCase()===email||String(m.authEmail||'').toLowerCase()===email);
-    if(dupMember){err.textContent='Email already exists — used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
+    if(dupMember){err.textContent='Email already exists - used by member '+dupMember.name+' ('+dupMember.id+').';err.style.display='block';return;}
   }
   const oldAuthEmail=String((existingUser&&existingUser.authEmail)||'').toLowerCase();
   let authEmail=oldAuthEmail;
@@ -9976,7 +9976,7 @@ async function _saveUserImpl(){
   }
   if(authEmail)authEmail=authEmail.toLowerCase();
   const doc={name,contact,username,role,status:'active',createdAt:today(),authEmail,email:email||authEmail};
-  // Profile photo (avatar) — optional for trainers
+  // Profile photo (avatar) - optional for trainers
   let avatar='';
   if(role==='trainer'){
     avatar=document.getElementById('uf_avatar').value||'';
@@ -10007,7 +10007,7 @@ async function _saveUserImpl(){
     if(window.GMSFB&&GMSFB.enabled&&typeof GMSFB.pushCollection==='function'){
       try{ await GMSFB.pushCollection(KEY.users,Users.all()); }catch(e){ console.warn('[saveUser] sync',e); }
     }
-    toast(role==='trainer'?'Trainer account created — login with the Gmail above.':'User created.','success');
+    toast(role==='trainer'?'Trainer account created - login with the Gmail above.':'User created.','success');
   }
   userRoleTab=role;
   closeModal('userModal');renderUsers();updatePendingBadge();
@@ -10060,29 +10060,29 @@ function viewUser(id){
   document.getElementById('up_name').textContent=u.name;
   document.getElementById('up_username').textContent='@'+u.username;
   document.getElementById('up_role_badge').innerHTML=`<span class="badge" style="background:rgba(255,255,255,.07);color:${col};font-size:10px">${tag}</span>`;
-  document.getElementById('up_contact').textContent=u.contact||'—';
+  document.getElementById('up_contact').textContent=u.contact||'-';
   document.getElementById('up_user2').textContent=u.username;
   document.getElementById('up_status').innerHTML=`<span class="badge ${u.status==='locked'?'badge-locked':'badge-active'}">${u.status==='locked'?'Locked':'Active'}</span>`;
   document.getElementById('up_created').textContent=formatDate(u.createdAt||today());
   document.getElementById('up_edit_btn').onclick=function(){closeModal('userProfileModal');openUserModal(id);};
-  // Trainer extra info — uses HTML placeholder in modal-body (not modal-foot)
+  // Trainer extra info - uses HTML placeholder in modal-body (not modal-foot)
   let trainerSection=document.getElementById('up_trainer_section');
   if(u.role==='trainer'&&(u.coachName||u.specializations||u.availableDays||u.bio)){
     const specs=trainerSpecList(u);
     const days=Array.isArray(u.availableDays)?u.availableDays:[];
-    const hours=(u.availableFrom&&u.availableTo)?`${u.availableFrom} – ${u.availableTo}`:'—';
+    const hours=(u.availableFrom&&u.availableTo)?`${u.availableFrom} – ${u.availableTo}`:'-';
     trainerSection.style.display='block';
     trainerSection.innerHTML=`
       <div style="padding:0 24px 16px">
         <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px">
           <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--orange);margin-bottom:12px">Trainer Profile</div>
           <div style="font-size:12px;line-height:2;color:var(--gray-300)">
-            <div><span style="color:var(--gray-500);width:110px;display:inline-block">Coach Name:</span><strong style="color:var(--white)">${esc(u.coachName||u.name||'—')}</strong></div>
+            <div><span style="color:var(--gray-500);width:110px;display:inline-block">Coach Name:</span><strong style="color:var(--white)">${esc(u.coachName||u.name||'-')}</strong></div>
             <div style="margin-top:6px"><span style="color:var(--gray-500);display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:1px">Best For:</span>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">${specs.length?specs.map(s=>`<span class="uf-chip">${esc(s)}</span>`).join(''):'<span style="color:var(--gray-500)">—</span>'}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">${specs.length?specs.map(s=>`<span class="uf-chip">${esc(s)}</span>`).join(''):'<span style="color:var(--gray-500)">-</span>'}</div>
             </div>
             <div style="margin-top:8px"><span style="color:var(--gray-500);display:block;margin-bottom:4px;font-size:10px;text-transform:uppercase;letter-spacing:1px">Available Days:</span>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">${days.length?days.map(d=>`<span class="uf-day-chip">${esc(d)}</span>`).join(''):'<span style="color:var(--gray-500)">—</span>'}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">${days.length?days.map(d=>`<span class="uf-day-chip">${esc(d)}</span>`).join(''):'<span style="color:var(--gray-500)">-</span>'}</div>
             </div>
             <div style="margin-top:8px"><span style="color:var(--gray-500);width:110px;display:inline-block">Hours:</span><strong style="color:var(--orange)">${esc(hours)}</strong></div>
             ${u.bio?`<div style="margin-top:10px;background:rgba(255,255,255,.04);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--gray-300);line-height:1.6;border:1px solid rgba(255,255,255,.06)">${esc(u.bio)}</div>`:''}
@@ -10105,7 +10105,7 @@ function deleteUser(id){
       <div><div style="font-weight:700;color:var(--white);font-size:13px">${esc(u.name)}</div><div style="color:var(--gray-500);font-size:11px;font-family:monospace">@${esc(u.username)}</div></div>
       <span style="margin-left:auto;font-size:9px;font-weight:800;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:${roleColor};text-transform:uppercase">${esc(u.role)}</span>
     </div>
-    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Contact:</span> <strong style="color:var(--white)">${esc(u.contact||'—')}</strong></div>
+    <div><span style="color:var(--gray-500);width:80px;display:inline-block">Contact:</span> <strong style="color:var(--white)">${esc(u.contact||'-')}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Status:</span> <strong style="color:${u.status==='locked'?'var(--red)':'var(--green)'}">${u.status==='locked'?'Locked':'Active'}</strong></div>
     <div><span style="color:var(--gray-500);width:80px;display:inline-block">Created:</span> <strong style="color:var(--white)">${formatDate(u.createdAt||today())}</strong></div>
   </div><div style="margin-top:10px;font-size:11px;color:var(--red);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:6px;padding:8px 12px">⚠ This will permanently remove the user and cannot be undone.</div>`:'';
@@ -10159,11 +10159,11 @@ function doCheckin(){
   err.style.display='none';
   if(!memberId){err.textContent='Please search and select a member first.';err.style.display='block';return;}
   const member=Members.one(memberId);
-  if(bgCheckFlagged(member)){err.textContent='Background check is Flagged — entry blocked. Clear it in the member profile first.';err.style.display='block';return;}
+  if(bgCheckFlagged(member)){err.textContent='Background check is Flagged - entry blocked. Clear it in the member profile first.';err.style.display='block';return;}
   const today_=today();
   const attendance=Attendance.all();
   const existing=attendance.find(a=>a.memberId===memberId&&a.date===today_);
-  if(existing){err.textContent='Member already checked in today — only one entry per day is allowed.';err.style.display='block'; toast('Duplicate — already checked in today','error'); return;}
+  if(existing){err.textContent='Member already checked in today - only one entry per day is allowed.';err.style.display='block'; toast('Duplicate - already checked in today','error'); return;}
   const now=new Date();
   const time=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const ts=now.getTime();
@@ -10468,7 +10468,7 @@ selectCountry=function(flag,name,code){
 loadPhProvinces().catch(function(){
   ['ms','reg'].forEach(function(prefix){
     const sel=document.getElementById(prefix+'Province');
-    if(sel)phAddrError(sel,'Unable to load provinces — tap to retry');
+    if(sel)phAddrError(sel,'Unable to load provinces - tap to retry');
   });
 });
 

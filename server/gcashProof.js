@@ -1,6 +1,6 @@
 'use strict';
 // ============================================================
-// FitCore GMS — GCash payment proof (server-side)
+// FitCore GMS - GCash payment proof (server-side)
 // Expired members have no signed-in Firebase session, and their
 // password may live only in the app's legacy hash (admin reset /
 // temp password), so the browser cannot write the proof itself.
@@ -81,7 +81,7 @@ async function submitGcashProof(body) {
   const plan = planSnap && planSnap.exists ? planSnap.data() : null;
   if (!plan) return bad('No plan on file. Please visit the front desk to renew.', 409);
 
-  // One open proof per member — same rule the member UI shows.
+  // One open proof per member - same rule the member UI shows.
   const mine = await ctx.db.collection('notifications').where('memberId', '==', memberId).limit(50).get();
   let open = false;
   mine.forEach((doc) => {

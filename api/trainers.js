@@ -11,7 +11,7 @@ function send(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-// Only fields that are meant to be public — never email, contact or username.
+// Only fields that are meant to be public - never email, contact or username.
 function publicTrainer(id, d) {
   const arr = (v) => (Array.isArray(v) ? v.map(String) : (typeof v === 'string' ? v.split(',').map((s) => s.trim()).filter(Boolean) : []));
   return {
