@@ -4526,6 +4526,11 @@ async function confirmCloudPush(storageKey){
   }
 }
 let historySearch='';let memberHistoryTab='All';
+function _pagBar(varName,page,pages,total,refresh){
+  if(pages<=1)return '';
+  return `<div class="pagination"><button class="page-btn" onclick="${varName}=${page-1};${refresh}" ${page===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===page?'active':''}" onclick="${varName}=${i+1};${refresh}">${i+1}</button>`).join('')}<button class="page-btn" onclick="${varName}=${page+1};${refresh}" ${page===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;
+}
+let historyPage=1,activityPage=1,msgPage=1;
 function renderHistory(){
   const el=document.getElementById('panelHistory');
   const counts={All:0,Active:0,'Expiring Soon':0,Expired:0,pending_payment:0,Archived:0};
@@ -4533,7 +4538,7 @@ function renderHistory(){
   const payments=Payments.all();
   const eligible=all.filter(m=>m.status!=='pending_payment'||payments.some(p=>p.memberId===m.id));
   eligible.forEach(m=>{counts.All++;if(counts[m.status]!==undefined)counts[m.status]++;});
-  const tab=(st,label)=>`<button class="rtab ${memberHistoryTab===st?'active':''}" onclick="memberHistoryTab='${st}';renderHistory()">${label} <span class="user-tab-count">(${counts[st]})</span></button>`;
+  const tab=(st,label)=>`<button class="rtab ${memberHistoryTab===st?'active':''}" onclick="memberHistoryTab='${st}';historyPage=1;renderHistory()">${label} <span class="user-tab-count">(${counts[st]})</span></button>`;
   el.innerHTML=`
   <div class="report-tabs">
     ${tab('All','All Members')}
@@ -4545,7 +4550,7 @@ function renderHistory(){
   </div>
   <div class="page-actions">
     <div class="table-controls">
-      <input class="search-input" placeholder="Search by name or ID…" value="${esc(historySearch)}" oninput="historySearch=this.value;refreshHistoryTable()">
+      <input class="search-input" placeholder="Search by name or ID…" value="${esc(historySearch)}" oninput="historySearch=this.value;historyPage=1;refreshHistoryTable()">
     </div>
     <span style="font-size:11px;color:var(--gray-500)">Permanent record of every member who availed a membership</span>
   </div>
@@ -4570,11 +4575,14 @@ function refreshHistoryTable(){
   if(historySearch){const s=historySearch.toLowerCase();rows=rows.filter(r=>r.name.toLowerCase().includes(s)||r.id.toLowerCase().includes(s));}
   rows=rows.sort((a,b)=>String(b.last).localeCompare(String(a.last)));
   const totalAll=rows.reduce((s,r)=>s+r.totalPaid,0);
+  const _hTotal=rows.length,_hPages=Math.ceil(_hTotal/10)||1;
+  if(historyPage>_hPages)historyPage=_hPages;
+  rows=rows.slice((historyPage-1)*10,historyPage*10);
   const badgeCls={Active:'badge-active',Expired:'badge-expired',Suspended:'badge-suspended','Expiring Soon':'badge-expiring','pending_payment':'badge-pending',Archived:'badge-suspended'};
   const table=document.getElementById('historyTableCard');
   if(!table)return;
   table.innerHTML=`
-  <div class="table-header"><h3>${memberHistoryTab==='All'?'Member History':memberHistoryTab==='pending_payment'?'Pending Payment':memberHistoryTab}</h3><span style="font-size:11px;color:var(--gray-500)">${rows.length} member(s) · Total Paid ₱${Number(totalAll).toLocaleString()}</span></div>
+  <div class="table-header"><h3>${memberHistoryTab==='All'?'Member History':memberHistoryTab==='pending_payment'?'Pending Payment':memberHistoryTab}</h3><span style="font-size:11px;color:var(--gray-500)">${_hTotal} member(s) · Total Paid ₱${Number(totalAll).toLocaleString()}</span></div>
   <div style="overflow-x:auto"><table style="min-width:900px"><thead><tr><th>ID</th><th>Name</th><th>Plan</th><th>Total Paid</th><th>Payments</th><th>Attendance</th><th>Sessions</th><th>First Avail</th><th>Last Avail</th><th>Status</th></tr></thead>
   <tbody>${rows.length?rows.map(r=>`<tr style="cursor:pointer" onclick="viewMember('${r.id}')">
     <td>${esc(r.id)}</td>
@@ -4585,7 +4593,7 @@ function refreshHistoryTable(){
     <td>${formatDate(r.first)}</td><td>${formatDate(r.last)}</td>
     <td><span class="badge ${badgeCls[r.status]||'badge-suspended'}">${esc(r.status)}</span></td>
   </tr>`).join(''):`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><p>No member history found</p></div></td></tr>`}
-  </tbody></table></div>`;
+  </tbody></table></div>${_pagBar('historyPage',historyPage,_hPages,_hTotal,'refreshHistoryTable()')}`;
 }
 
 // ======================================================================
@@ -7708,10 +7716,13 @@ function renderMessages(){
   threads.sort((a,b)=>(b.unread - a.unread) || ((b.last.ts||0)-(a.last.ts||0)) );
   const _query=(window._msgSearchQuery||'').toLowerCase();
   const filtered=_query?threads.filter(t=> `${t.memberName} ${t.last.text} ${t.memberId}`.toLowerCase().includes(_query)):threads;
+  const _mPages=Math.ceil(filtered.length/10)||1;
+  if(msgPage>_mPages)msgPage=_mPages;
+  const pageThreads=filtered.slice((msgPage-1)*10,msgPage*10);
   el.innerHTML=`
   <div class="table-card">
     <div class="table-header" style="flex-wrap:wrap;gap:10px"><h3>Member Messages <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${filtered.length} conversation(s)</span></h3><div style="display:flex;gap:8px;align-items:center;flex:1;justify-content:flex-end;min-width:200px"><input type="text" id="msgSearch" placeholder="Search members..." value="${esc(window._msgSearchQuery||'')}" oninput="filterMessageThreads(this.value)" class="search-input" style="min-width:180px;flex:1;max-width:280px;padding:8px 12px;font-size:13px"></div></div>
-    ${filtered.length?filtered.map(t=>`<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''" onclick="openMsgThread('${t.memberId}')">
+    ${filtered.length?pageThreads.map(t=>`<div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;transition:.15s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''" onclick="openMsgThread('${t.memberId}')">
       <div class="user-avatar" style="width:38px;height:38px;font-size:12px;background:linear-gradient(135deg,var(--orange),var(--orange-dark));flex-shrink:0">${esc(initials(t.memberName))}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
@@ -7723,9 +7734,10 @@ function renderMessages(){
       <span style="font-size:11px;color:var(--gray-500);flex-shrink:0">${formatDate(t.last.date)} ${esc(t.last.time||'')}</span>
       <button type="button" class="btn-icon" style="flex-shrink:0;width:32px;height:32px;border-radius:8px;border:1px solid rgba(239,68,68,.2);background:rgba(239,68,68,.08);color:var(--red);display:flex;align-items:center;justify-content:center" onclick="event.stopPropagation(); deleteConversation('${t.memberId}')" title="Delete conversation" aria-label="Delete conversation">${iconSvg('trash',14)}</button>
     </div>`).join(''):`<div class="empty-state"><div class="empty-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><p>${_query?'No conversations match your search.':'No messages yet'}</p>${_query?'':`<p class="empty-sub">Member questions from the "Need Help?" section will appear here.</p>`}</div>`}
+    ${_pagBar('msgPage',msgPage,_mPages,filtered.length,'renderMessages()')}
   </div>`;
 }
-function filterMessageThreads(q){ window._msgSearchQuery=q||''; renderMessages(); const el=document.getElementById('msgSearch'); if(el){ const v=el.value; el.focus(); el.setSelectionRange(v.length,v.length); } }
+function filterMessageThreads(q){ window._msgSearchQuery=q||''; msgPage=1; renderMessages(); const el=document.getElementById('msgSearch'); if(el){ const v=el.value; el.focus(); el.setSelectionRange(v.length,v.length); } }
 function deleteConversation(memberId){
   const mem=Members.one(memberId); const name=mem?mem.name:memberId;
   openConfirm('Delete Conversation','Are you sure you want to delete the conversation with <strong>'+esc(name)+'</strong>? This will permanently remove all messages for this member.', async ()=>{
@@ -9061,7 +9073,9 @@ function renderActivityLog(){
   const actionColor={'Added':'#7ffa88','Edited':'#fbbf24','Deleted':'#ef4444','Status Changed':'#b3bcb5'};
   const actionBg={'Added':'rgba(127,250,136,.12)','Edited':'rgba(251,191,36,.12)','Deleted':'rgba(239,68,68,.12)','Status Changed':'rgba(96,165,250,.12)'};
   const roleColorMap={admin:'var(--orange)',staff:'#d7ddd8',trainer:'var(--green)'};
-  const rows=log.map(e=>{
+  const _aPages=Math.ceil(log.length/10)||1;
+  if(activityPage>_aPages)activityPage=_aPages;
+  const rows=log.slice((activityPage-1)*10,activityPage*10).map(e=>{
     const clr=actionColor[e.action]||'var(--gray-300)';
     const bg=actionBg[e.action]||'rgba(255,255,255,.05)';
     const roleClr=roleColorMap[e.byRole]||'var(--gray-300)';
@@ -9077,7 +9091,7 @@ function renderActivityLog(){
       <td><div style="font-size:12px;font-weight:700">${dateStr}</div><div style="font-size:11px;color:var(--gray-300)">${timeStr}</div></td>
     </tr>`;
   }).join('');
-  output.innerHTML=`<div class="table-card"><div class="table-header"><h3>Activity Log <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${log.length} record${log.length!==1?'s':''}</span></h3><div style="display:flex;gap:8px"><button class="btn-secondary btn-sm" onclick="printActivityLog()">Print</button><button class="btn-secondary btn-sm" onclick="exportActivityLogCSV()">Export CSV</button></div></div><div style="overflow-x:auto"><table><thead><tr><th>Action</th><th>Category</th><th>Name / Detail</th><th>Info</th><th>Done By</th><th>Date & Time</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  output.innerHTML=`<div class="table-card"><div class="table-header"><h3>Activity Log <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${log.length} record${log.length!==1?'s':''}</span></h3><div style="display:flex;gap:8px"><button class="btn-secondary btn-sm" onclick="printActivityLog()">Print</button><button class="btn-secondary btn-sm" onclick="exportActivityLogCSV()">Export CSV</button></div></div><div style="overflow-x:auto"><table><thead><tr><th>Action</th><th>Category</th><th>Name / Detail</th><th>Info</th><th>Done By</th><th>Date & Time</th></tr></thead><tbody>${rows}</tbody></table></div>${_pagBar('activityPage',activityPage,_aPages,log.length,'renderActivityLog()')}</div>`;
 }
 function printActivityLog(){
   const out=document.getElementById('activityLogOutput');
