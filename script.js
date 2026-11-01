@@ -2654,6 +2654,7 @@ function buildSidebar(){
     {id:'dashboard',group:'Overview',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,label:'Dashboard',roles:['admin','staff','trainer','member']},
     {id:'myqr',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><path d="M21 21h-3v-3h3z"/></svg>`,label:'My QR Code',roles:['member']},
     {id:'myattendance',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,label:'My Attendance',roles:['member']},
+    {id:'myRenew',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,label:'Renew Membership',roles:['member']},
     {id:'myMessages',group:'Support',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,label:'Messages',roles:['member'],badge:'myMsgBadge'},
     {id:'myWorkoutPlan',group:'Workout',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11"/><path d="M21 21l-1-1"/><path d="M3 3l1 1"/><path d="M18 22l4-4"/><path d="M2 6l4-4"/><path d="M3 10l7-7"/><path d="M14 21l7-7"/></svg>`,label:'My Workout Plan',roles:['member']},
     {id:'myWorkouts',group:'Workout',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,label:'My Workouts',roles:['member']},
@@ -2726,7 +2727,7 @@ function startClock(){
   _clockInterval=setInterval(tick,1000);
 }
 let _lastPanel=null;
-const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],gcash:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
+const PANEL_ROLES={myqr:['member'],myattendance:['member'],myRenew:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],gcash:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
 function navigate(panel){
   // ── ACTIVATION GATE: block pending/archived members on every navigation ──
   // This is the route guard that prevents bypassing the pendingGate via
@@ -2745,7 +2746,7 @@ function navigate(panel){
   const ni=document.getElementById('nav-'+panel);
   if(ni)ni.classList.add('active');
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  const titles={dashboard:'Dashboard',members:'Member Management',history:'Member History',billing:'Billing & Payments',gcash:'GCash Payments',walkin:'Walk-In Management',schedule:'Trainer Schedule',notifications:'Member Renewals',messages:'Member Messages',plans:'Membership Plans',reports:'Reports',activityLog:'Activity Log',users:'User Management',queue:'Payment Queue',scanner:'QR Scanner',myqr:'My QR Code',myattendance:'My Attendance',myassigned:'My Assigned Members',myMessages:'Message the Gym',myWorkoutPlan:'My Workout Plan',myWorkouts:'My Workouts',myProgress:'Progress Tracker',myGoals:'My Goals',exerciseLibrary:'Exercise Library',workoutBuilder:'Workout Builder',memberLogs:'Member Logs',mySessions:'My Sessions'};
+  const titles={dashboard:'Dashboard',members:'Member Management',history:'Member History',billing:'Billing & Payments',gcash:'GCash Payments',myRenew:'Renew Membership',walkin:'Walk-In Management',schedule:'Trainer Schedule',notifications:'Member Renewals',messages:'Member Messages',plans:'Membership Plans',reports:'Reports',activityLog:'Activity Log',users:'User Management',queue:'Payment Queue',scanner:'QR Scanner',myqr:'My QR Code',myattendance:'My Attendance',myassigned:'My Assigned Members',myMessages:'Message the Gym',myWorkoutPlan:'My Workout Plan',myWorkouts:'My Workouts',myProgress:'Progress Tracker',myGoals:'My Goals',exerciseLibrary:'Exercise Library',workoutBuilder:'Workout Builder',memberLogs:'Member Logs',mySessions:'My Sessions'};
   document.getElementById('pageTitle').textContent=titles[panel]||'';
   const panelEl=document.getElementById('panel'+capitalize(panel));
   if(panelEl)panelEl.classList.add('active');
@@ -3009,7 +3010,7 @@ function updateSyncWarning(){
 
 // ============================= PANEL ROUTER =============================
 function renderPanel(p){
-  const map={dashboard:renderDashboard,members:renderMembers,history:renderHistory,billing:renderBilling,gcash:renderGcashPanel,walkin:renderWalkin,schedule:renderSchedule,notifications:renderNotifications,renewed:renderRenewed,messages:renderMessages,announcements:renderAnnouncements,plans:renderPlans,reports:renderReports,activityLog:renderActivityLog,users:renderUsers,queue:renderQueue,scanner:renderScanner,myqr:renderMyQr,myattendance:renderMyAttendance,myassigned:renderMyAssigned,myMessages:renderMyMessages,myWorkoutPlan:renderMyWorkoutPlan,myWorkouts:renderMyWorkouts,myProgress:renderMyProgress,myGoals:renderMyGoals,exerciseLibrary:renderExerciseLibrary,workoutBuilder:renderWorkoutBuilder,memberLogs:renderMemberLogs,mySessions:renderMySessions};
+  const map={dashboard:renderDashboard,members:renderMembers,history:renderHistory,billing:renderBilling,gcash:renderGcashPanel,myRenew:renderMyRenew,walkin:renderWalkin,schedule:renderSchedule,notifications:renderNotifications,renewed:renderRenewed,messages:renderMessages,announcements:renderAnnouncements,plans:renderPlans,reports:renderReports,activityLog:renderActivityLog,users:renderUsers,queue:renderQueue,scanner:renderScanner,myqr:renderMyQr,myattendance:renderMyAttendance,myassigned:renderMyAssigned,myMessages:renderMyMessages,myWorkoutPlan:renderMyWorkoutPlan,myWorkouts:renderMyWorkouts,myProgress:renderMyProgress,myGoals:renderMyGoals,exerciseLibrary:renderExerciseLibrary,workoutBuilder:renderWorkoutBuilder,memberLogs:renderMemberLogs,mySessions:renderMySessions};
   if(map[p])map[p]();
   iconize(document.getElementById('panel'+p.charAt(0).toUpperCase()+p.slice(1)));
 }
@@ -3364,9 +3365,8 @@ function buildMemberDashboard(){
       <div class="mb-banner-ico">🚫</div>
       <div>
         <div class="mb-banner-title">Plan Expired</div>
-        <div class="mb-banner-sub">Entry is blocked. Please visit the front desk to renew your membership${gcashReady()?', or renew via GCash':''}.</div>
+        <div class="mb-banner-sub">Entry is blocked. Open Renew Membership in the menu to pay online, or visit the front desk.</div>
       </div>
-      ${mbGcashCta(mem)}
     </div>`;
   } else {
     const totalDays=(mem.planStart&&mem.expiryDate)?Math.round((new Date(mem.expiryDate)-new Date(mem.planStart))/86400000):0;
@@ -3377,7 +3377,7 @@ function buildMemberDashboard(){
         const fk='gms_renew_notice_'+mem.id+'_'+mem.expiryDate;
         if(!sessionStorage.getItem(fk)){
           sessionStorage.setItem(fk,'1');
-          setTimeout(function(){toast('Your membership ends in '+d+' day'+(d!==1?'s':'')+'. Renew now so you do not lose access.','info');},700);
+          setTimeout(function(){toast('Your membership ends in '+d+' day'+(d!==1?'s':'')+'. Open Renew Membership in the menu so you do not lose access.','info');},700);
         }
       }catch(e){}
     }
@@ -3389,7 +3389,6 @@ function buildMemberDashboard(){
         ${pctLeft!==null?`<div class="mb-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctLeft}" aria-label="Membership time left"><span style="width:${pctLeft}%"></span></div>`:''}
       </div>
       <div class="mb-days"><strong>${d}</strong><span>day${d!==1?'s':''} left</span></div>
-      ${soon?mbGcashCta(mem):''}
     </div>`;
   }
   const paySteps=locked?`
@@ -3442,17 +3441,7 @@ function buildMemberDashboard(){
       <div><span>Sessions Left</span><strong>${sessLeft}</strong></div>
     </div>
   </div>`;
-  // Renewal block in the member account. Shown for the whole running plan
-  // (including the final week, where the banner above also carries a CTA).
-  const renewCard=(mem.status!=='Archived'&&mem.status!=='pending_payment'&&!(d<=0))?`
-  <div class="table-card" style="padding:18px 20px">
-    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Renew Membership</div>
-    <div style="font-size:12px;color:var(--gray-300);margin-top:6px;line-height:1.6">Send your payment via GCash and upload the receipt - admin/staff will confirm it. Remaining days are added to your new expiry.</div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
-      ${mbGcashCta(mem)}
-      <span style="font-size:12px;color:var(--gray-500)">Or pay in <strong style="color:var(--gray-300)">Cash / GCash</strong> at the front desk.</span>
-    </div>
-  </div>`:'';
+  const renewCard='';
   const qrBlock=`<div class="mb-qr-box${locked?' locked':''}">
     ${locked?'<div class="mb-qr-pending">⏳ Pending payment - this QR activates once the front desk confirms it</div>':''}
     <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:10px;text-align:center">Entrance QR - Daily</div>
@@ -5080,6 +5069,42 @@ function updatePgGcash(mem){
       +(gcashReady()?'<button class="btn-primary" onclick="openGcashPay()">📱 Pay via GCash (QR)</button>':'')+'</div>';
   }
   box.innerHTML=html;box.style.display='block';
+}
+function renderMyRenew(){
+  const el=document.getElementById('panelMyRenew');if(!el)return;
+  const mem=currentUser?Members.one(currentUser.memberId||currentUser.id):null;
+  if(!mem){el.innerHTML='<div class="table-card"><div class="empty-state"><p>Member account not found.</p></div></div>';return;}
+  const plan=mem.planId?Plans.one(mem.planId):null;
+  const d=mem.expiryDate?daysUntil(mem.expiryDate):null;
+  const proofs=gcashProofsOf(mem.id).slice(0,10);
+  const latest=proofs[0]||null;
+  const stat=d===null?'-':(d<=0?'<span style="color:var(--red);font-weight:700">Expired '+Math.abs(d)+' day'+(Math.abs(d)!==1?'s':'')+' ago</span>':'<strong>'+d+'</strong> day'+(d!==1?'s':'')+' left');
+  let action='';
+  if(!plan)action='<div style="font-size:12px;color:var(--gray-500)">No plan on file. Please contact the front desk.</div>';
+  else if(latest&&latest.status==='open')action='<div style="padding:12px 14px;border:1px solid rgba(251,191,36,.3);background:rgba(251,191,36,.08);border-radius:10px;font-size:13px;color:var(--gray-300)">⏳ <strong style="color:var(--gold)">GCash payment awaiting verification.</strong><br>The front desk will confirm it soon.</div>';
+  else{
+    action=(latest&&latest.status==='rejected'?'<div style="padding:12px 14px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);border-radius:10px;font-size:13px;margin-bottom:12px;color:var(--gray-300)">❌ <strong style="color:var(--red)">Your last GCash payment was rejected.</strong>'+(latest.rejectReason?'<br>Reason: '+esc(latest.rejectReason):'')+'</div>':'')
+      +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:12px 24px" onclick="openGcashPay()">📱 Renew via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">Online GCash is not set up yet. Please pay at the front desk.</div>');
+  }
+  const rows=proofs.map(p=>{
+    const st=p.status==='confirmed'?'<span class="badge badge-paid">Confirmed</span>':p.status==='rejected'?'<span class="badge badge-expired">Rejected</span>':'<span class="badge badge-pending">Waiting</span>';
+    return '<tr><td>'+formatDateTime(p.createdAt)+'</td><td style="font-family:monospace">'+esc(p.reference)+'</td><td style="color:var(--green);font-weight:600">₱'+Number(p.amount).toLocaleString()+'</td><td>'+st+(p.status==='rejected'&&p.rejectReason?'<div style="font-size:11px;color:var(--gray-500)">'+esc(p.rejectReason)+'</div>':'')+'</td></tr>';
+  }).join('');
+  el.innerHTML=`<div class="table-card" style="padding:20px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Your Plan</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin:10px 0 16px;font-size:14px">
+      <div><span style="color:var(--gray-500);font-size:12px">Plan</span><br><strong>${esc(plan?plan.name:'-')}</strong></div>
+      <div><span style="color:var(--gray-500);font-size:12px">Price</span><br><strong style="color:var(--green)">${plan?'₱'+Number(plan.price).toLocaleString():'-'}</strong></div>
+      <div><span style="color:var(--gray-500);font-size:12px">Expiry</span><br><strong>${mem.expiryDate?formatDate(mem.expiryDate):'-'}</strong></div>
+      <div><span style="color:var(--gray-500);font-size:12px">Status</span><br>${stat}</div>
+    </div>
+    <div style="font-size:12px;color:var(--gray-300);line-height:1.7;margin-bottom:14px">Pay with your GCash wallet (no need to visit the gym): send the payment, then upload your receipt and reference number. The front desk confirms it and your remaining days are added to your new expiry. Or pay in <strong>Cash / GCash</strong> at the front desk.</div>
+    ${action}
+  </div>
+  <div class="table-card" style="margin-top:16px">
+    <div class="table-header"><h3>My GCash Submissions</h3></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Submitted</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>${rows||'<tr><td colspan="4"><div class="empty-state"><p>No submissions yet</p></div></td></tr>'}</tbody></table></div>
+  </div>`;
 }
 function mbGcashCta(mem){
   const p=latestGcashProof(mem.id);
