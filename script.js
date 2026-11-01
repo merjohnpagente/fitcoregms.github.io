@@ -3036,9 +3036,9 @@ let _dashPlay=false;
 // background refreshes.
 function animateDashboard(el){
   if(!el||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches))return;
-  const items=el.querySelectorAll('.dash-hero,.stat-card,.chart-card,.table-card,.mb-tile,.announce-strip,.dash-section,.panel-card');
+  const items=el.querySelectorAll('.dash-hero,.stat-card,.chart-card,.table-card,.mb-tile,.announce-strip,.dash-section,.panel-card,.mb-plan-card,.mb-banner,.mb-help-strip,.mb-quick');
   items.forEach(function(n,i){n.classList.remove('dash-in');void n.offsetWidth;n.style.setProperty('--di',Math.min(i,14)*70+'ms');n.classList.add('dash-in');});
-  el.querySelectorAll('.stat-value').forEach(function(n){
+  el.querySelectorAll('.stat-value,.mb-days').forEach(function(n){
     const t=n.textContent.trim();const m=t.match(/^(\D*)([\d,]+(?:\.\d+)?)(\D*)$/);
     if(!m)return;
     const end=parseFloat(m[2].replace(/,/g,''));if(!isFinite(end)||end<=0)return;
