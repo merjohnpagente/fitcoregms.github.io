@@ -5053,7 +5053,7 @@ function mbGcashCta(mem){
   const p=latestGcashProof(mem.id);
   if(p&&p.status==='open')return '<span class="mb-banner-btn" style="cursor:default">⏳ GCash payment awaiting verification</span>';
   if(!gcashReady())return '';
-  if(p&&p.status==='rejected')return '<button class="mb-banner-btn" onclick="openGcashPay()" title="'+esc(p.rejectReason||'')+'">❌ Rejected - submit again</button>';
+  if(p&&p.status==='rejected')return '<button class="mb-banner-btn" onclick="openGcashPay()" title="'+esc(p.rejectReason||'')+'">❌ Rejected - submit again</button>'+(p.rejectReason?'<div style="font-size:12px;margin-top:6px;color:var(--red);line-height:1.5">Reason: '+esc(p.rejectReason)+'</div>':'');
   return '<button class="mb-banner-btn" onclick="openGcashPay()">📱 Renew via GCash</button>';
 }
 // ---- Admin/Staff: verify proofs ----
