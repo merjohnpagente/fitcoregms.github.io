@@ -3077,7 +3077,7 @@ function updateQueueBadge(){
   const gb=document.getElementById('gcashBadge');
   const gn=openGcashProofs().length;
   if(gb){gb.textContent=gn;gb.style.display=gn>0?'flex':'none';}
-  if(_gcashSeen!==null&&gn>_gcashSeen)toast('📱 '+gn+' GCash payment'+(gn!==1?'s':'')+' waiting for verification','info');
+  if(_gcashSeen!==null&&gn>_gcashSeen)toast(gn+' GCash payment'+(gn!==1?'s':'')+' waiting for verification','info');
   _gcashSeen=gn;
 }
 function buildAdminDashboard(){
@@ -3376,7 +3376,7 @@ function buildMemberDashboard(){
         const fk='gms_renew_notice_'+mem.id+'_'+mem.expiryDate;
         if(!sessionStorage.getItem(fk)){
           sessionStorage.setItem(fk,'1');
-          setTimeout(function(){toast('⚠️ Your membership ends in '+d+' day'+(d!==1?'s':'')+'. Renew now so you do not lose access.','info');},700);
+          setTimeout(function(){toast('Your membership ends in '+d+' day'+(d!==1?'s':'')+'. Renew now so you do not lose access.','info');},700);
         }
       }catch(e){}
     }
@@ -4586,6 +4586,7 @@ function setGcashSearch(v,focusId){
   if(!box)return;
   box.innerHTML=gcashVerifyHtml()+(box.id==='gcashSection'?gcashHistoryHtml():'');
   const d=box.querySelector('details.gcash-hist');if(d&&gcashSearch)d.open=true;
+  iconize(box);
   const el=document.getElementById(focusId);if(el){el.focus();el.setSelectionRange(v.length,v.length);}
 }
 function renderHistory(){
@@ -4982,7 +4983,7 @@ async function submitExpiredRenewal(){
   _expRenew=null;
   const lr=document.getElementById('loginRenew');if(lr){lr.style.display='none';lr.innerHTML='';}
   const le=document.getElementById('loginError');
-  if(le){le.textContent='✅ Renewal payment submitted. The front desk will verify it and renew your membership. You can log in once it is confirmed.';le.style.display='block';}
+  if(le){le.textContent='Renewal payment submitted. The front desk will verify it and renew your membership. You can log in once it is confirmed.';le.style.display='block';}
   toast('Payment submitted. Please wait for the front desk to confirm.','success');
 }
 function openGcashPay(){
@@ -5093,7 +5094,7 @@ function gcashHistoryHtml(){
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
       <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
-  return `<details class="table-card gcash-hist" style="margin-bottom:16px"${_gcashHistOpen?' open':''} ontoggle="_gcashHistOpen=this.open"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span style="font-size:11px;color:var(--gray-500)">▾</span></span></summary>
+  return `<details class="table-card gcash-hist" style="margin-bottom:16px"${_gcashHistOpen?' open':''} ontoggle="_gcashHistOpen=this.open"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span style="color:var(--gray-500);display:inline-flex"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></span></summary>
     <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'renderBilling()')}</details>`;
 }
 function gcashVerifyHtml(){
