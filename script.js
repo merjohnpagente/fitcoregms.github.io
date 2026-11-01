@@ -4571,7 +4571,24 @@ function _pagBar(varName,page,pages,total,refresh){
   if(pages<=1)return '';
   return `<div class="pagination"><button class="page-btn" onclick="${varName}=${page-1};${refresh}" ${page===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===page?'active':''}" onclick="${varName}=${i+1};${refresh}">${i+1}</button>`).join('')}<button class="page-btn" onclick="${varName}=${page+1};${refresh}" ${page===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;
 }
-let historyPage=1,activityPage=1,msgPage=1,gcashQPage=1,gcashHPage=1;
+let historyPage=1,activityPage=1,msgPage=1,gcashQPage=1,gcashHPage=1,gcashSearch='';
+function _gcashMatch(n){
+  if(!gcashSearch)return true;
+  const q=gcashSearch.toLowerCase();
+  return (String(n.type==='walkin_proof'?n.visitorName:n.memberName||'')+' '+String(n.reference||'')+' '+String(n.memberId||'')).toLowerCase().includes(q);
+}
+function _gcashSearchBox(id){
+  return `<input id="${id}" class="search-input" placeholder="Search name or reference…" value="${esc(gcashSearch)}" oninput="setGcashSearch(this.value,'${id}')" style="min-width:170px;max-width:240px;padding:7px 11px;font-size:13px" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" onkeyup="event.stopPropagation()">`;
+}
+function setGcashSearch(v,focusId){
+  gcashSearch=v;gcashQPage=1;gcashHPage=1;
+  const box=document.getElementById('gcashSection')||document.getElementById('walkinGcashQueue');
+  if(!box)return;
+  const wasOpen=!!(box.querySelector('details.gcash-hist')&&box.querySelector('details.gcash-hist').open);
+  box.innerHTML=gcashVerifyHtml()+(box.id==='gcashSection'?gcashHistoryHtml():'');
+  const d=box.querySelector('details.gcash-hist');if(d&&(wasOpen||gcashSearch))d.open=true;
+  const el=document.getElementById(focusId);if(el){el.focus();el.setSelectionRange(v.length,v.length);}
+}
 function renderHistory(){
   const el=document.getElementById('panelHistory');
   const counts={All:0,Active:0,'Expiring Soon':0,Expired:0,pending_payment:0,Archived:0};
@@ -4645,7 +4662,7 @@ function renderBilling(){
   const el=document.getElementById('panelBilling');
   const plans=Plans.all();
   const planOpts=plans.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  el.innerHTML=gcashVerifyHtml()+gcashHistoryHtml()+`
+  el.innerHTML='<div id="gcashSection">'+gcashVerifyHtml()+gcashHistoryHtml()+'</div>'+`
   <div class="page-actions">
     <div class="table-controls">
       <input class="search-input" placeholder="Search member…" value="${esc(billingSearch)}" oninput="billingSearch=this.value;billingPage=1;refreshBillingTable()">
@@ -5058,9 +5075,10 @@ function mbGcashCta(mem){
 }
 // ---- Admin/Staff: verify proofs ----
 function gcashHistoryHtml(){
-  const done=Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='open')
+  const allDone=Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='open');
+  const done=allDone.filter(_gcashMatch)
     .sort((a,b)=>String(b.reviewedAt||b.createdAt).localeCompare(String(a.reviewedAt||a.createdAt)));
-  if(!done.length)return '';
+  if(!allDone.length)return '';
   const hPages=Math.ceil(done.length/10)||1;
   if(gcashHPage>hPages)gcashHPage=hPages;
   const pageRows=done.slice((gcashHPage-1)*10,gcashHPage*10);
@@ -5076,14 +5094,15 @@ function gcashHistoryHtml(){
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
       <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
-  return `<details class="table-card gcash-hist" style="margin-bottom:16px"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="font-size:11px;color:var(--gray-500)">▾</span></summary>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'renderBilling()')}</details>`;
+  return `<details class="table-card gcash-hist" style="margin-bottom:16px"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span style="font-size:11px;color:var(--gray-500)">▾</span></span></summary>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'renderBilling()')}</details>`;
 }
 function gcashVerifyHtml(){
-  const open=openGcashProofs();
+  const allOpen=openGcashProofs();
+  const open=allOpen.filter(_gcashMatch);
   const notSet=(currentUser&&currentUser.role==='admin'&&!gcashReady())
     ?'<div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--gray-300);margin-bottom:14px">📱 Online GCash payment is off. Click <strong>GCash Settings</strong> to add your QR and number so members can pay online.</div>':'';
-  if(!open.length)return notSet;
+  if(!allOpen.length)return notSet;
   const qPages=Math.ceil(open.length/10)||1;
   if(gcashQPage>qPages)gcashQPage=qPages;
   const rows=open.slice((gcashQPage-1)*10,gcashQPage*10).map(p=>{
@@ -5098,8 +5117,8 @@ function gcashVerifyHtml(){
       <td><div class="td-actions"><button class="btn-primary btn-sm" onclick="confirmGcashProof('${esc(p.id)}')">✔ Confirm</button><button class="btn-danger btn-sm" onclick="rejectGcashProof('${esc(p.id)}')">✖ Reject</button><button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button></div></td>
     </tr>`;}).join('');
   return notSet+`<div class="table-card" style="margin-bottom:16px;border:1px solid rgba(251,191,36,.35)">
-    <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${open.length}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${_pagBar('gcashQPage',gcashQPage,qPages,open.length,'renderBilling()')}
+    <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${allOpen.length}</span></h3>${_gcashSearchBox('gcashSearchQ')}</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashQPage',gcashQPage,qPages,open.length,'renderBilling()')}
   </div>`;
 }
 function deleteGcashProof(id){
