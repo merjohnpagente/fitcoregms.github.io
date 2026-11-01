@@ -1063,11 +1063,24 @@ function showLandingSection(section, linkEl) {
   iconize(document);
   initReveals();
 }
+let _loginBusy=false;
+function _setLoginBusy(on){
+  _loginBusy=on;
+  const f=document.getElementById('loginForm');
+  if(f)f.classList.toggle('login-busy',on);
+  ['loginUser','loginPass'].forEach(function(id){const el=document.getElementById(id);if(el)el.disabled=on;});
+  const btn=document.querySelector('#loginForm .btn-primary');
+  if(btn){
+    btn.disabled=on;
+    if(on)btn.innerHTML='<span class="lf-spinner" aria-hidden="true"></span><span class="sr-only">Logging in…</span>';
+    else btn.textContent='Log In';
+  }
+}
 async function doLogin(){
+  if(_loginBusy)return;
   const u=document.getElementById('loginUser').value.trim();
   const p=document.getElementById('loginPass').value;
-  const btn=document.querySelector('#loginForm .btn-primary');
-  if(btn){btn.disabled=true;btn.textContent='Logging in…';}
+  _setLoginBusy(true);
   try{
     const lr=document.getElementById('loginRenew');if(lr){lr.style.display='none';lr.innerHTML='';}
     _expRenew=null;
@@ -1098,7 +1111,7 @@ async function doLogin(){
     console.error('[login]',e);
     showLoginError('Login failed. Please refresh the page (Ctrl+F5) and try again.');
   }finally{
-    if(btn){btn.disabled=false;btn.textContent='Log In';}
+    _setLoginBusy(false);
   }
 }
 
