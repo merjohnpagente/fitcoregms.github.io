@@ -3095,11 +3095,11 @@
 
 
 <!-- Avatar Zoom / Lightbox -->
-<div class="modal-overlay" id="avatarZoomModal" style="z-index:1200;background:rgba(0,0,0,.82);backdrop-filter:blur(6px)" onclick="if(event.target===this)closeModal('avatarZoomModal')">
-  <div class="modal" style="max-width:560px;background:transparent;box-shadow:none;border:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:16px">
+<div class="modal-overlay" id="avatarZoomModal" style="z-index:1400;overflow-y:auto;background:rgba(0,0,0,.82);backdrop-filter:blur(6px)" onclick="if(event.target===this)closeModal('avatarZoomModal')">
+  <div class="modal" style="max-width:92vw;width:auto;overflow:visible;margin:auto;background:transparent;box-shadow:none;border:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:16px">
     <div style="position:relative">
-      <img id="zoomAvatarImg" src="" alt="Profile photo" style="width:92vw;max-width:480px;max-height:70vh;object-fit:contain;border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.7);border:2px solid rgba(255,255,255,.1);background:#0a0a0a">
-      <button onclick="closeModal('avatarZoomModal')" style="position:absolute;top:-10px;right:-10px;width:32px;height:32px;border-radius:50%;background:#fff;color:#0a0a0a;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900">X</button>
+      <img id="zoomAvatarImg" src="" alt="Profile photo" style="display:block;width:auto;height:auto;max-width:92vw;max-height:calc(100vh - 170px);object-fit:contain;border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.7);border:2px solid rgba(255,255,255,.1);background:#0a0a0a">
+      <button onclick="closeModal('avatarZoomModal')" aria-label="Close" style="position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;background:#fff;color:#0a0a0a;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;box-shadow:0 2px 10px rgba(0,0,0,.5)">X</button>
     </div>
     <div style="text-align:center">
       <div id="zoomAvatarName" style="font-weight:800;color:#fff;font-size:16px"></div>
