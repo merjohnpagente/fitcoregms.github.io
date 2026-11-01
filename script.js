@@ -5072,8 +5072,8 @@ function gcashHistoryHtml(){
       <td><span class="badge ${ok?'badge-paid':'badge-expired'}">${ok?'Confirmed':'Rejected'}</span>${!ok&&p.rejectReason?`<div style="font-size:11px;color:var(--gray-500);margin-top:3px">${esc(p.rejectReason)}</div>`:''}</td>
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
     </tr>`;}).join('');
-  return `<div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">last ${done.length}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  return `<details class="table-card gcash-hist" style="margin-bottom:16px"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">last ${done.length} · tap to show</span></h3><span style="font-size:11px;color:var(--gray-500)">▾</span></summary>
+    <div style="overflow:auto;max-height:340px"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 function gcashVerifyHtml(){
   const open=openGcashProofs();
@@ -5093,7 +5093,7 @@ function gcashVerifyHtml(){
     </tr>`;}).join('');
   return notSet+`<div class="table-card" style="margin-bottom:16px;border:1px solid rgba(251,191,36,.35)">
     <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${open.length}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="overflow:auto;max-height:380px"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
 function viewGcashReceipt(id){
