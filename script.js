@@ -368,9 +368,11 @@ class AuthService{
       // validated against the CLOUD user list, not a possibly-empty local
       // cache (prevents a device from silently falling back to local accounts).
       // Increased to 5000ms for slow/mobile networks (cross-device login fix).
-      if(GMSFB._lastCloud&&GMSFB._lastCloud.users===undefined&&typeof GMSFB.waitForSnap==='function'){
-        await GMSFB.waitForSnap('users',5000);
-        await GMSFB.waitForSnap('gms_users',5000);
+      // Guests (not signed in yet) cannot read the users collection at all, so
+      // that snapshot never arrives and waiting only adds ~10s of dead time.
+      // Wait only when a session already exists, and only briefly.
+      if(GMSFB._lastCloud&&GMSFB._lastCloud.users===undefined&&typeof GMSFB.waitForSnap==='function'&&GMSFB.auth&&GMSFB.auth.currentUser){
+        await GMSFB.waitForSnap('users',1500);
       }
       if(found){
         const r=await GMSFB.signIn(GMSFB.authEmailFor(found),password);
