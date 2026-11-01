@@ -8644,6 +8644,18 @@ function walkinUntilCell(w){
   const limit=hrs>0?` <span style="color:var(--gray-500);font-size:11px">(${fmtHours(hrs)})</span>`:'';
   return esc(_fmtTime12(w.until))+limit+' '+(live?'<span class="badge badge-active" style="margin-left:4px">Ongoing</span>':'<span class="badge badge-expired" style="margin-left:4px">Ended</span>');
 }
+function walkinProof(w){return w&&w.proofId?Notifications.one(w.proofId):null;}
+function walkinPayCell(w){
+  const n=walkinProof(w);
+  const gc=(w.method==='GCash')||!!n;
+  if(!gc)return '<span style="font-size:11px;color:var(--gray-300)">Cash</span><div style="font-size:10px;color:var(--gray-500)">Front desk</div>';
+  const img=n?_safeImg(n.receipt):'';
+  const ref=w.reference||(n&&n.reference)||'';
+  return '<div style="display:flex;align-items:center;gap:8px">'
+    +(img?`<img src="${img}" alt="Receipt" title="View GCash receipt" style="width:34px;height:46px;object-fit:cover;border-radius:5px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(n.id)}')">`:'')
+    +'<div><span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;background:rgba(127,250,136,.12);color:var(--green);border:1px solid rgba(127,250,136,.3)">ONLINE GCASH</span>'
+    +(ref?`<div style="font-family:monospace;font-size:12px;margin-top:3px">${esc(ref)}</div>`:'')+'</div></div>';
+}
 function refreshWalkinTable(){
   let data=Walkins.all();
   if(walkinSearch){const s=walkinSearch.toLowerCase();data=data.filter(w=>w.visitorName.toLowerCase().includes(s));}
@@ -8667,13 +8679,14 @@ function refreshWalkinTable(){
     <td>${esc(w.time)}</td>
     <td>${walkinUntilCell(w)}</td>
     <td style="color:var(--green);font-weight:600">₱${Number(w.fee).toLocaleString()}</td>
+    <td>${walkinPayCell(w)}</td>
     <td>${esc(w.recordedBy||'-')}</td>
     <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewWalkinReceipt('${w.id}')">🧾</button></div></td>
-  </tr>`).join(''):`<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🚶</div><p>No walk-in records found</p></div></td></tr>`;
+  </tr>`).join(''):`<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🚶</div><p>No walk-in records found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="walkinPage=${walkinPage-1};refreshWalkinTable()" ${walkinPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===walkinPage?'active':''}" onclick="walkinPage=${i+1};refreshWalkinTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="walkinPage=${walkinPage+1};refreshWalkinTable()" ${walkinPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
   document.getElementById('walkinTableCard').innerHTML=`
     <div class="table-header"><h3>Walk-In Records <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${total} record${total!==1?'s':''}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Visitor Name</th><th>Date</th><th>Time In</th><th>Until</th><th>Fee</th><th>Recorded By</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
+    <div style="overflow-x:auto"><table><thead><tr><th>ID</th><th>Visitor Name</th><th>Date</th><th>Time In</th><th>Until</th><th>Fee</th><th>Payment</th><th>Recorded By</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
 }
 // ======================================================================
 // RECEIPT PRINT (receipt-only clean sheet via hidden iframe)
@@ -8747,6 +8760,7 @@ function viewWalkinReceipt(id){
   const match=users.find(u=>u.username===w.recordedBy||u.name===w.recordedBy);
   const staffDisplay=match?match.name:(w.recordedBy||'-');
   const recordedTime=w.time||'-';
+  const _wp=walkinProof(w);
   document.getElementById('receiptBody').innerHTML=`
   <div class="receipt">
     <div class="receipt-header">
@@ -8775,7 +8789,9 @@ function viewWalkinReceipt(id){
       <div class="receipt-row"><span>Time In</span><strong>${esc(recordedTime)}</strong></div>
       ${Number(w.hours)>0?`<div class="receipt-row"><span>Time Limit</span><strong>${fmtHours(Number(w.hours))}</strong></div>`:''}
       ${w.until?`<div class="receipt-row"><span>Valid Until</span><strong>${esc(_fmtTime12(w.until))}</strong></div>`:''}
-      <div class="receipt-row"><span>Payment Method</span><strong>Cash</strong></div>
+      <div class="receipt-row"><span>Payment Method</span><strong>${esc(w.method||'Cash')}</strong></div>
+      ${(w.reference||_wp)?`<div class="receipt-row"><span>Reference No.</span><strong style="font-family:monospace">${esc(w.reference||(_wp&&_wp.reference)||'')}</strong></div>`:''}
+      ${(_wp&&_safeImg(_wp.receipt))?`<div class="receipt-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span>GCash Receipt</span><img src="${_safeImg(_wp.receipt)}" alt="GCash receipt" style="max-width:100%;max-height:260px;border-radius:8px;cursor:zoom-in" onclick="openAvatarZoom(this.src,'GCash receipt')"></div>`:''}
     </div>
     <div class="receipt-total">
       <span>Amount Paid</span>
