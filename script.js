@@ -4571,7 +4571,7 @@ function _pagBar(varName,page,pages,total,refresh){
   if(pages<=1)return '';
   return `<div class="pagination"><button class="page-btn" onclick="${varName}=${page-1};${refresh}" ${page===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===page?'active':''}" onclick="${varName}=${i+1};${refresh}">${i+1}</button>`).join('')}<button class="page-btn" onclick="${varName}=${page+1};${refresh}" ${page===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;
 }
-let historyPage=1,activityPage=1,msgPage=1,gcashQPage=1,gcashHPage=1,gcashSearch='';
+let historyPage=1,activityPage=1,msgPage=1,gcashQPage=1,gcashHPage=1,gcashSearch='',_gcashHistOpen=false;
 function _gcashMatch(n){
   if(!gcashSearch)return true;
   const q=gcashSearch.toLowerCase();
@@ -4584,9 +4584,8 @@ function setGcashSearch(v,focusId){
   gcashSearch=v;gcashQPage=1;gcashHPage=1;
   const box=document.getElementById('gcashSection')||document.getElementById('walkinGcashQueue');
   if(!box)return;
-  const wasOpen=!!(box.querySelector('details.gcash-hist')&&box.querySelector('details.gcash-hist').open);
   box.innerHTML=gcashVerifyHtml()+(box.id==='gcashSection'?gcashHistoryHtml():'');
-  const d=box.querySelector('details.gcash-hist');if(d&&(wasOpen||gcashSearch))d.open=true;
+  const d=box.querySelector('details.gcash-hist');if(d&&gcashSearch)d.open=true;
   const el=document.getElementById(focusId);if(el){el.focus();el.setSelectionRange(v.length,v.length);}
 }
 function renderHistory(){
@@ -5094,7 +5093,7 @@ function gcashHistoryHtml(){
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
       <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
-  return `<details class="table-card gcash-hist" style="margin-bottom:16px"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span style="font-size:11px;color:var(--gray-500)">▾</span></span></summary>
+  return `<details class="table-card gcash-hist" style="margin-bottom:16px"${_gcashHistOpen?' open':''} ontoggle="_gcashHistOpen=this.open"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span style="font-size:11px;color:var(--gray-500)">▾</span></span></summary>
     <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'renderBilling()')}</details>`;
 }
 function gcashVerifyHtml(){
