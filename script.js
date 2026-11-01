@@ -2666,7 +2666,8 @@ function buildSidebar(){
     {id:'members',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,label:'Members',roles:['admin','staff']},
     {id:'history',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 14"/></svg>`,label:'Member History',roles:['admin','staff']},
     {id:'queue',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,label:'Payment Queue',roles:['admin','staff'],badge:'queueBadge'},
-    {id:'billing',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,label:'Billing & Payments',badge:'gcashBadge',roles:['admin','staff']},
+    {id:'billing',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,label:'Billing & Payments',roles:['admin','staff']},
+    {id:'gcash',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,label:'GCash Payments',badge:'gcashBadge',roles:['admin','staff']},
     {id:'walkin',group:'Management',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M14 8H10l-2 6h2l1 5h2l1-5h2l-2-6z"/><path d="M9 14l-2 4"/><path d="M15 14l2 4"/></svg>`,label:'Walk-In',roles:['admin','staff']},
     {id:'schedule',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,label:'Trainer Schedule',roles:['admin','staff','trainer'],badge:'schedPendingBadge'},
     {id:'myassigned',group:'Operations',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,label:'My Assigned Members',roles:['trainer']},
@@ -2725,7 +2726,7 @@ function startClock(){
   _clockInterval=setInterval(tick,1000);
 }
 let _lastPanel=null;
-const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
+const PANEL_ROLES={myqr:['member'],myattendance:['member'],myMessages:['member'],myWorkoutPlan:['member'],myWorkouts:['member'],myProgress:['member'],myGoals:['member'],exerciseLibrary:['member','trainer'],mySessions:['member'],members:['admin','staff'],history:['admin','staff'],queue:['admin','staff'],billing:['admin','staff'],gcash:['admin','staff'],walkin:['admin','staff'],schedule:['admin','staff','trainer'],scanner:['admin','staff'],notifications:['admin','staff'],messages:['admin','staff'],announcements:['admin'],plans:['admin','staff'],reports:['admin'],activityLog:['admin','staff'],users:['admin'],myassigned:['trainer'],workoutBuilder:['trainer'],memberLogs:['trainer']};
 function navigate(panel){
   // ── ACTIVATION GATE: block pending/archived members on every navigation ──
   // This is the route guard that prevents bypassing the pendingGate via
@@ -2744,7 +2745,7 @@ function navigate(panel){
   const ni=document.getElementById('nav-'+panel);
   if(ni)ni.classList.add('active');
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  const titles={dashboard:'Dashboard',members:'Member Management',history:'Member History',billing:'Billing & Payments',walkin:'Walk-In Management',schedule:'Trainer Schedule',notifications:'Member Renewals',messages:'Member Messages',plans:'Membership Plans',reports:'Reports',activityLog:'Activity Log',users:'User Management',queue:'Payment Queue',scanner:'QR Scanner',myqr:'My QR Code',myattendance:'My Attendance',myassigned:'My Assigned Members',myMessages:'Message the Gym',myWorkoutPlan:'My Workout Plan',myWorkouts:'My Workouts',myProgress:'Progress Tracker',myGoals:'My Goals',exerciseLibrary:'Exercise Library',workoutBuilder:'Workout Builder',memberLogs:'Member Logs',mySessions:'My Sessions'};
+  const titles={dashboard:'Dashboard',members:'Member Management',history:'Member History',billing:'Billing & Payments',gcash:'GCash Payments',walkin:'Walk-In Management',schedule:'Trainer Schedule',notifications:'Member Renewals',messages:'Member Messages',plans:'Membership Plans',reports:'Reports',activityLog:'Activity Log',users:'User Management',queue:'Payment Queue',scanner:'QR Scanner',myqr:'My QR Code',myattendance:'My Attendance',myassigned:'My Assigned Members',myMessages:'Message the Gym',myWorkoutPlan:'My Workout Plan',myWorkouts:'My Workouts',myProgress:'Progress Tracker',myGoals:'My Goals',exerciseLibrary:'Exercise Library',workoutBuilder:'Workout Builder',memberLogs:'Member Logs',mySessions:'My Sessions'};
   document.getElementById('pageTitle').textContent=titles[panel]||'';
   const panelEl=document.getElementById('panel'+capitalize(panel));
   if(panelEl)panelEl.classList.add('active');
@@ -3008,7 +3009,7 @@ function updateSyncWarning(){
 
 // ============================= PANEL ROUTER =============================
 function renderPanel(p){
-  const map={dashboard:renderDashboard,members:renderMembers,history:renderHistory,billing:renderBilling,walkin:renderWalkin,schedule:renderSchedule,notifications:renderNotifications,renewed:renderRenewed,messages:renderMessages,announcements:renderAnnouncements,plans:renderPlans,reports:renderReports,activityLog:renderActivityLog,users:renderUsers,queue:renderQueue,scanner:renderScanner,myqr:renderMyQr,myattendance:renderMyAttendance,myassigned:renderMyAssigned,myMessages:renderMyMessages,myWorkoutPlan:renderMyWorkoutPlan,myWorkouts:renderMyWorkouts,myProgress:renderMyProgress,myGoals:renderMyGoals,exerciseLibrary:renderExerciseLibrary,workoutBuilder:renderWorkoutBuilder,memberLogs:renderMemberLogs,mySessions:renderMySessions};
+  const map={dashboard:renderDashboard,members:renderMembers,history:renderHistory,billing:renderBilling,gcash:renderGcashPanel,walkin:renderWalkin,schedule:renderSchedule,notifications:renderNotifications,renewed:renderRenewed,messages:renderMessages,announcements:renderAnnouncements,plans:renderPlans,reports:renderReports,activityLog:renderActivityLog,users:renderUsers,queue:renderQueue,scanner:renderScanner,myqr:renderMyQr,myattendance:renderMyAttendance,myassigned:renderMyAssigned,myMessages:renderMyMessages,myWorkoutPlan:renderMyWorkoutPlan,myWorkouts:renderMyWorkouts,myProgress:renderMyProgress,myGoals:renderMyGoals,exerciseLibrary:renderExerciseLibrary,workoutBuilder:renderWorkoutBuilder,memberLogs:renderMemberLogs,mySessions:renderMySessions};
   if(map[p])map[p]();
   iconize(document.getElementById('panel'+p.charAt(0).toUpperCase()+p.slice(1)));
 }
@@ -4658,11 +4659,26 @@ function refreshHistoryTable(){
 // PANEL: BILLING
 // ======================================================================
 let billingSearch='';let billingFromDate='';let billingToDate='';let billingPlanFilter='All';let billingPage=1;
+function renderGcashPanel(){
+  const el=document.getElementById('panelGcash');if(!el)return;
+  const any=Notifications.all().some(n=>n.type==='gcash_proof'||n.type==='walkin_proof');
+  el.innerHTML=`<div class="page-actions"><div class="table-controls"><span style="font-size:12px;color:var(--gray-500)">Online GCash payments from members and walk-in visitors. Confirm to activate, or reject with a reason.</span></div>${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary" onclick="openGcashSettings()">⚙ GCash Settings</button>':''}</div>
+  <div id="gcashSection">${gcashVerifyHtml()}${gcashHistoryHtml()}</div>
+  ${any?'':'<div class="table-card"><div class="empty-state"><div class="empty-icon">📱</div><p>No GCash submissions yet</p></div></div>'}`;
+  iconize(el);
+}
+function refreshGcashViews(){
+  const act=document.querySelector('.panel.active');
+  const id=act?act.id:'';
+  if(id==='panelGcash')renderGcashPanel();
+  else if(id==='panelBilling')renderBilling();
+  else if(id==='panelWalkin')renderWalkin();
+}
 function renderBilling(){
   const el=document.getElementById('panelBilling');
   const plans=Plans.all();
   const planOpts=plans.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  el.innerHTML='<div id="gcashSection">'+gcashVerifyHtml()+gcashHistoryHtml()+'</div>'+`
+  el.innerHTML=`
   <div class="page-actions">
     <div class="table-controls">
       <input class="search-input" placeholder="Search member…" value="${esc(billingSearch)}" oninput="billingSearch=this.value;billingPage=1;refreshBillingTable()">
@@ -4671,7 +4687,6 @@ function renderBilling(){
       <select class="filter-sel" onchange="billingPlanFilter=this.value;billingPage=1;refreshBillingTable()">
         <option value="All">All Plans</option>${planOpts}
       </select>
-      ${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary" onclick="openGcashSettings()">⚙ GCash Settings</button>':''}
     </div>
   </div>
   <div class="table-card" id="billingTableCard"></div>`;
@@ -4842,7 +4857,7 @@ function saveGcashSettings(){
   closeModal('gcashSettingsModal');
   toast(qr?'GCash details saved with QR image.':'GCash details saved. No QR image yet.','success');
   try{logActivity('Updated','Settings','GCash payment details');}catch(e){}
-  if(typeof _lastPanel!=='undefined'&&_lastPanel==='billing')renderBilling();
+  if(typeof _lastPanel!=='undefined'&&_lastPanel==='gcash')renderGcashPanel();
 }
 // ---- Proof helpers ----
 function gcashProofsOf(memberId){
@@ -5095,7 +5110,7 @@ function gcashHistoryHtml(){
       <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
   return `<details class="table-card gcash-hist" style="margin-bottom:16px"${_gcashHistOpen?' open':''} ontoggle="_gcashHistOpen=this.open"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span class="gcash-chev" style="color:var(--green);display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(127,250,136,.12);border:1px solid rgba(127,250,136,.35);flex-shrink:0"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></span></summary>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'renderBilling()')}</details>`;
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'refreshGcashViews()')}</details>`;
 }
 function gcashVerifyHtml(){
   const allOpen=openGcashProofs();
@@ -5118,7 +5133,7 @@ function gcashVerifyHtml(){
     </tr>`;}).join('');
   return notSet+`<div class="table-card" style="margin-bottom:16px;border:1px solid rgba(251,191,36,.35)">
     <div class="table-header"><h3>📱 GCash to Verify <span class="badge badge-pending" style="margin-left:6px">${allOpen.length}</span></h3>${_gcashSearchBox('gcashSearchQ')}</div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashQPage',gcashQPage,qPages,open.length,'renderBilling()')}
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Plan</th><th>Amount</th><th>Reference</th><th>Submitted</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashQPage',gcashQPage,qPages,open.length,'refreshGcashViews()')}
   </div>`;
 }
 function deleteGcashProof(id){
@@ -5131,8 +5146,7 @@ function deleteGcashProof(id){
     Notifications.remove(id);
     try{logActivity('Deleted','GCash Submission',who,'Ref: '+p.reference);}catch(e){}
     toast('Submission deleted.','success');
-    renderBilling();
-    const wp=document.getElementById('panelWalkin');if(wp&&wp.classList.contains('active'))renderWalkin();
+    refreshGcashViews();
     updateQueueBadge();
   },'Delete','btn-danger');
 }
@@ -5144,7 +5158,7 @@ function viewGcashReceipt(id){
 function confirmGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
   const p=Notifications.one(id);
-  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');refreshGcashViews();return;}
   if(p.type==='walkin_proof')return confirmWalkinProof(p);
   const m=Members.one(p.memberId);
   if(!m){toast('Member not found.','error');return;}
@@ -5168,7 +5182,7 @@ function confirmGcashProof(id){
       Notifications.update(id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:result.payment.id});
       _dismissedIds.add(m.id);
       toast('GCash payment confirmed. Membership is active.','success');
-      renderBilling();updateQueueBadge();scanRenewals();
+      refreshGcashViews();updateQueueBadge();scanRenewals();
     }catch(e){
       toast((e&&e.message)?e.message:'Could not confirm the payment.','error');
       console.error(e);
@@ -5178,7 +5192,7 @@ function confirmGcashProof(id){
 function rejectGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
   const p=Notifications.one(id);
-  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');renderBilling();return;}
+  if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');refreshGcashViews();return;}
   const msg='Reject this GCash payment from <strong>'+esc(p.type==='walkin_proof'?p.visitorName:p.memberName)+'</strong> (Ref '+esc(p.reference)+')?'
     +'<div style="margin-top:12px"><label style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Reason</label>'
     +'<select id="gcRejReason" style="width:100%;margin-top:6px;padding:9px 10px;background:var(--navy-700);border:1.5px solid var(--navy-600);border-radius:8px;color:var(--white)">'
@@ -5192,7 +5206,7 @@ function rejectGcashProof(id){
     Notifications.update(id,{status:'rejected',rejectReason:note?sel+' - '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
     try{logActivity('Rejected','GCash Payment',p.type==='walkin_proof'?p.visitorName:p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
     toast('GCash payment rejected. The member can submit again.','success');
-    renderBilling();updateQueueBadge();
+    refreshGcashViews();updateQueueBadge();
   },'Reject','btn-danger');
 }
 
@@ -5262,8 +5276,7 @@ function confirmWalkinProof(p){
     Notifications.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),walkinId:newId});
     toast('Walk-in recorded for '+p.visitorName+' · until '+_fmtTime12(until),'success');
     try{logActivity('Confirmed','GCash Walk-In',p.visitorName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
-    if(typeof renderWalkin==='function'&&document.getElementById('panelWalkin')&&document.getElementById('panelWalkin').innerHTML)renderWalkin();
-    renderBilling&&document.getElementById('panelBilling')&&document.getElementById('panelBilling').innerHTML&&renderBilling();
+    refreshGcashViews();
     updateQueueBadge();
   },'Confirm','btn-primary');
 }
