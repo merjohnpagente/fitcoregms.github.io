@@ -4645,7 +4645,7 @@ function renderBilling(){
   const el=document.getElementById('panelBilling');
   const plans=Plans.all();
   const planOpts=plans.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  el.innerHTML=gcashVerifyHtml()+`
+  el.innerHTML=gcashVerifyHtml()+gcashHistoryHtml()+`
   <div class="page-actions">
     <div class="table-controls">
       <input class="search-input" placeholder="Search member…" value="${esc(billingSearch)}" oninput="billingSearch=this.value;billingPage=1;refreshBillingTable()">
@@ -5057,6 +5057,24 @@ function mbGcashCta(mem){
   return '<button class="mb-banner-btn" onclick="openGcashPay()">📱 Renew via GCash</button>';
 }
 // ---- Admin/Staff: verify proofs ----
+function gcashHistoryHtml(){
+  const done=Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='open')
+    .sort((a,b)=>String(b.reviewedAt||b.createdAt).localeCompare(String(a.reviewedAt||a.createdAt))).slice(0,10);
+  if(!done.length)return '';
+  const rows=done.map(p=>{
+    const ok=p.status==='confirmed';
+    const img=_safeImg(p.receipt);
+    return `<tr>
+      <td>${img?`<img src="${img}" alt="Receipt" style="width:34px;height:46px;object-fit:cover;border-radius:5px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(p.id)}')">`:'-'}</td>
+      <td>${esc(p.type==='walkin_proof'?p.visitorName:p.memberName)}<div style="font-size:11px;color:var(--gray-500)">${p.type==='walkin_proof'?'Walk-in':esc(p.planName||'')}</div></td>
+      <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
+      <td style="font-family:monospace">${esc(p.reference)}</td>
+      <td><span class="badge ${ok?'badge-paid':'badge-expired'}">${ok?'Confirmed':'Rejected'}</span>${!ok&&p.rejectReason?`<div style="font-size:11px;color:var(--gray-500);margin-top:3px">${esc(p.rejectReason)}</div>`:''}</td>
+      <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
+    </tr>`;}).join('');
+  return `<div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">last ${done.length}</span></h3></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
 function gcashVerifyHtml(){
   const open=openGcashProofs();
   const notSet=(currentUser&&currentUser.role==='admin'&&!gcashReady())
