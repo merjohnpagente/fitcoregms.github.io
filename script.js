@@ -2554,7 +2554,6 @@ function authSessionEmailOk(sessionUser, liveDoc){
   return list.some(x=>x===got);
 }
 function loadApp(){
-  document.documentElement.classList.remove('restoring');
   if(!currentUser)return;
   // Reject a tampered/swapped session before any panel or Firestore write.
   if(window.GMSFB&&GMSFB.enabled&&GMSFB.auth&&GMSFB.auth.currentUser){
@@ -10674,9 +10673,9 @@ function restoreSession(sess){
   const unsub=fb.auth.onAuthStateChanged(function(user){
     if(done)return;done=true;
     try{unsub();}catch(e){}
-    if(!user){clearSession();currentUser=null;document.documentElement.classList.remove('restoring');return;} // no cloud login left: show the login page
+    if(!user){clearSession();currentUser=null;return;} // no cloud login left: show the login page
     const key=sess.role==='member'?'gms_members':'gms_users';
-    fb.waitForSnap(key,2500).then(function(){if(currentUser)loadApp();else document.documentElement.classList.remove('restoring');});
+    fb.waitForSnap(key,10000).then(function(){if(currentUser)loadApp();});
   });
 }
 
