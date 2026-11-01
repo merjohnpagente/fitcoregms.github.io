@@ -1072,7 +1072,7 @@ function _setLoginBusy(on){
   const btn=document.querySelector('#loginForm .btn-primary');
   if(btn){
     btn.disabled=on;
-    if(on)btn.innerHTML='<span class="lf-spinner" aria-hidden="true"></span><span class="sr-only">Logging in…</span>';
+    if(on)btn.innerHTML='<svg class="lf-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" opacity=".25"/><path d="M21 12a9 9 0 0 0-9-9"/></svg><span class="sr-only">Logging in…</span>';
     else btn.textContent='Log In';
   }
 }
