@@ -1071,7 +1071,7 @@ function _setLoginBusy(on){
   const f=document.getElementById('loginForm');
   if(f)f.classList.toggle('login-busy',on);
   ['loginUser','loginPass'].forEach(function(id){const el=document.getElementById(id);if(el)el.disabled=on;});
-  const btn=document.querySelector('#loginForm .btn-primary');
+  const btn=document.querySelector('#loginForm .lf-submit');
   if(btn){
     btn.disabled=on;
     if(on)btn.innerHTML='<span class="lf-spinner" aria-hidden="true"></span><span class="sr-only">Logging in…</span>';
