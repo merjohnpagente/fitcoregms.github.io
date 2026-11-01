@@ -2059,3 +2059,6 @@ tbody tr:hover{box-shadow:inset 3px 0 0 rgba(127,250,136,.45)}
 .login-busy .btn-primary:disabled{opacity:1;display:flex;align-items:center;justify-content:center}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .login-busy .pw-toggle{pointer-events:none;cursor:not-allowed}
+
+/* Red 'blocked' SVG cursor while logging in (like Meta) */
+.login-busy .lf-input,.login-busy .lf-submit,.login-busy .btn-primary,.login-busy .lf-input:disabled,.login-busy .pw-toggle{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%23e03131' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cline x1='5.6' y1='5.6' x2='18.4' y2='18.4'/%3E%3C/svg%3E") 14 14, not-allowed!important}
