@@ -4667,6 +4667,15 @@ function gcashProofForPayment(p){
   if(!n&&p.notes){const m=String(p.notes).match(/GCP-[A-Za-z0-9]+/);if(m)n=all.find(x=>x.id===m[0]);}
   return n||null;
 }
+function payOriginBadge(p){
+  const n=gcashProofForPayment(p);
+  const base='display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;letter-spacing:.5px;margin-bottom:4px;';
+  if(n){
+    const where=n.source==='online-renewal'?'Expired login':'Member account';
+    return `<div><span style="${base}background:rgba(127,250,136,.12);color:var(--green);border:1px solid rgba(127,250,136,.3)" title="Paid online by the member and confirmed by staff">ONLINE GCASH</span><div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">${where}${n.reviewedBy?' · confirmed by '+esc(n.reviewedBy):''}</div></div>`;
+  }
+  return `<div><span style="${base}background:rgba(255,255,255,.06);color:var(--gray-300);border:1px solid rgba(255,255,255,.12)" title="Recorded by staff at the counter">FRONT DESK</span></div>`;
+}
 function payRefCell(p){
   const n=gcashProofForPayment(p);
   const ref=p.reference||(n&&n.reference)||'';
@@ -4697,7 +4706,7 @@ function refreshBillingTable(){
     <td>${esc(p.recordedBy||'-')}</td><td>${esc(p.method||'-')}</td>
     <td>${payRefCell(p)}</td>
     <td><span class="badge badge-paid">Paid</span></td>
-    <td>${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">-</span>'}</td>
+    <td>${payOriginBadge(p)}${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">-</span>'}</td>
     <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button>${currentUser&&currentUser.role==='admin'?`<button class="btn-icon" title="Delete Payment" onclick="deletePayment('${p.id}')" style="color:#ef4444">🗑</button>`:''}</div></td>
   </tr>`).join(''):`<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="billingPage=${billingPage-1};refreshBillingTable()" ${billingPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===billingPage?'active':''}" onclick="billingPage=${i+1};refreshBillingTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="billingPage=${billingPage+1};refreshBillingTable()" ${billingPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
