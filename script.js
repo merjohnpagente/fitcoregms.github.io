@@ -4660,6 +4660,22 @@ function renderBilling(){
   <div class="table-card" id="billingTableCard"></div>`;
   refreshBillingTable();
 }
+function gcashProofForPayment(p){
+  if(!p)return null;
+  const all=Notifications.all();
+  let n=all.find(x=>x.type==='gcash_proof'&&x.paymentId===p.id);
+  if(!n&&p.notes){const m=String(p.notes).match(/GCP-[A-Za-z0-9]+/);if(m)n=all.find(x=>x.id===m[0]);}
+  return n||null;
+}
+function payRefCell(p){
+  const n=gcashProofForPayment(p);
+  const ref=p.reference||(n&&n.reference)||'';
+  const img=n?_safeImg(n.receipt):'';
+  if(!ref&&!img)return '<span style="color:var(--gray-500)">-</span>';
+  return '<div style="display:flex;align-items:center;gap:8px">'
+    +(img?`<img src="${img}" alt="Receipt" title="Click to view the GCash receipt" style="width:34px;height:46px;object-fit:cover;border-radius:5px;cursor:zoom-in;border:1px solid rgba(255,255,255,.15)" onclick="viewGcashReceipt('${esc(n.id)}')">`:'')
+    +(ref?`<span style="font-family:monospace;font-size:12px">${esc(ref)}</span>`:'')+'</div>';
+}
 function refreshBillingTable(){
   if(window.GMSFB&&GMSFB.enabled&&(_cloudMap(KEY.payments)===null||_cloudMap(KEY.members)===null)){
     const card=document.getElementById('billingTableCard');
@@ -4679,14 +4695,15 @@ function refreshBillingTable(){
     <td style="color:var(--green);font-weight:600">₱${Number(p.amount).toLocaleString()}</td>
     <td>${formatDate(p.date)}</td><td>${formatDate(p.newExpiry)}</td>
     <td>${esc(p.recordedBy||'-')}</td><td>${esc(p.method||'-')}</td>
+    <td>${payRefCell(p)}</td>
     <td><span class="badge badge-paid">Paid</span></td>
     <td>${p.source==='renewal'?'<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;background:rgba(251,191,36,.15);color:var(--gold);letter-spacing:.5px;border:1px solid rgba(251,191,36,.3)">🔄 RENEWAL</span>':p.syncedAt?'<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(170,181,255,.12);color:#d7ddd8;letter-spacing:.5px;border:1px solid rgba(170,181,255,.25)" title="Auto-synced when member info was edited">🔗 SYNCED</span>':'<span style="font-size:10px;color:var(--gray-500)">-</span>'}</td>
     <td><div class="td-actions"><button class="btn-icon" title="View Receipt" onclick="viewReceipt('${p.id}')">🧾</button>${currentUser&&currentUser.role==='admin'?`<button class="btn-icon" title="Delete Payment" onclick="deletePayment('${p.id}')" style="color:#ef4444">🗑</button>`:''}</div></td>
-  </tr>`).join(''):`<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
+  </tr>`).join(''):`<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
   let pag='';if(pages>1){pag=`<div class="pagination"><button class="page-btn" onclick="billingPage=${billingPage-1};refreshBillingTable()" ${billingPage===1?'disabled':''}>‹</button>${Array.from({length:pages},(_,i)=>`<button class="page-btn ${i+1===billingPage?'active':''}" onclick="billingPage=${i+1};refreshBillingTable()">${i+1}</button>`).join('')}<button class="page-btn" onclick="billingPage=${billingPage+1};refreshBillingTable()" ${billingPage===pages?'disabled':''}>›</button><span class="page-info">${total} records</span></div>`;}
   document.getElementById('billingTableCard').innerHTML=`
     <div class="table-header"><h3>Payments <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${total} record${total!==1?'s':''}</span></h3></div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Pay ID</th><th>Member</th><th>Plan</th><th>Amount</th><th>Date</th><th>New Expiry</th><th>Recorded By</th><th>Method</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
+    <div style="overflow-x:auto"><table><thead><tr><th>Pay ID</th><th>Member</th><th>Plan</th><th>Amount</th><th>Date</th><th>New Expiry</th><th>Recorded By</th><th>Method</th><th>Ref No. / Receipt</th><th>Status</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${pag}`;
   setTimeout(repairMicoDuplicatePayments,0);
 }
 // ============================= GCASH ONLINE PAYMENT =============================
@@ -5408,6 +5425,7 @@ function viewReceipt(id){
   );
   if(match)staffDisplay=match.name;
   const isRenewal=p.source==='renewal';
+  const _gp=gcashProofForPayment(p);
   document.getElementById('receiptBody').innerHTML=`
   <div class="receipt">
     <div class="receipt-header">
@@ -5435,6 +5453,8 @@ function viewReceipt(id){
       <div class="receipt-row"><span>Member ID</span><strong>${esc(p.memberId)}</strong></div>
       <div class="receipt-row"><span>Membership Plan</span><strong>${esc(p.planName)}</strong></div>
       <div class="receipt-row"><span>Payment Method</span><strong>${esc(p.method)}</strong></div>
+      ${(p.reference||(_gp&&_gp.reference))?`<div class="receipt-row"><span>Reference No.</span><strong style="font-family:monospace">${esc(p.reference||_gp.reference)}</strong></div>`:''}
+      ${(_gp&&_safeImg(_gp.receipt))?`<div class="receipt-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span>GCash Receipt</span><img src="${_safeImg(_gp.receipt)}" alt="GCash receipt" style="max-width:100%;max-height:260px;border-radius:8px;cursor:zoom-in" onclick="openAvatarZoom(this.src,'GCash receipt')"></div>`:''}
       <div class="receipt-row"><span>New Expiry Date</span><strong>${formatDate(p.newExpiry)}</strong></div>
     </div>
     <div class="receipt-total">
