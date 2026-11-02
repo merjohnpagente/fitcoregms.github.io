@@ -5135,6 +5135,15 @@ function renderMyRenew(){
     action=(latest&&latest.status==='rejected'?'<div style="padding:12px 14px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);border-radius:10px;font-size:13px;margin-bottom:12px;color:var(--gray-300)">❌ <strong style="color:var(--red)">Your last GCash payment was rejected.</strong>'+(latest.rejectReason?'<br>Reason: '+esc(latest.rejectReason):'')+'</div>':'')
       +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:12px 24px" onclick="openGcashPay()">📱 Renew via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">Online GCash is not set up yet. Please pay at the front desk.</div>');
   }
+  if(plan&&!(latest&&latest.status==='open')){
+    action='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">'
+      +'<div style="border:1px solid rgba(127,250,136,.3);background:rgba(127,250,136,.06);border-radius:12px;padding:16px"><div style="font-weight:800;margin-bottom:6px">Pay via GCash</div><div style="font-size:12px;color:var(--gray-300);line-height:1.6;margin-bottom:12px">Send the payment, then submit your reference number and receipt. The front desk will confirm it.</div>'
+      +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:11px 22px" onclick="openGcashPay()">Renew via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">GCash is not set up yet. Please pay at the front desk.</div>')+'</div>'
+      +'<div style="border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);border-radius:12px;padding:16px"><div style="font-weight:800;margin-bottom:6px">Pay at the front desk</div><div style="font-size:12px;color:var(--gray-300);line-height:1.6">Visit the gym and pay <strong style="color:var(--green)">₱'+Number(plan.price).toLocaleString()+'</strong> in Cash or GCash. Staff will renew your membership right away.</div></div>'
+      +'</div>'
+      +(action&&action.indexOf('rejected')>-1?'':'');
+    if(latest&&latest.status==='rejected')action='<div style="padding:12px 14px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);border-radius:10px;font-size:13px;margin-bottom:12px;color:var(--gray-300)"><strong style="color:var(--red)">Your last GCash payment was rejected.</strong>'+(latest.rejectReason?'<br>Reason: '+esc(latest.rejectReason):'')+'</div>'+action;
+  }
   const rows=proofs.map(p=>{
     const st=p.status==='confirmed'?'<span class="badge badge-paid">Confirmed</span>':p.status==='rejected'?'<span class="badge badge-expired">Rejected</span>':'<span class="badge badge-pending">Waiting</span>';
     return '<tr><td>'+formatDateTime(p.createdAt)+'</td><td style="font-family:monospace">'+esc(p.reference)+'</td><td style="color:var(--green);font-weight:600">₱'+Number(p.amount).toLocaleString()+'</td><td>'+st+(p.status==='rejected'&&p.rejectReason?'<div style="font-size:11px;color:var(--gray-500)">'+esc(p.rejectReason)+'</div>':'')+'</td></tr>';
