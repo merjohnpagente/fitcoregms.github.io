@@ -5367,8 +5367,7 @@ async function applySessionsAddon(memberId,qty,amount,method,reference,notes){
     if(!res||!res.ok)throw new Error('Could not save to Firebase. Please try again.');
     if(typeof GMSFB.applyLocalPatch==='function'){GMSFB.applyLocalPatch(KEY.members,memberId,{bonusSessions:newBonus});GMSFB.applyLocalPatch(KEY.payments,id,payment);}
   }else{
-    const pays=Payments.all();pays.push(payment);Payments.save(pays);
-    Members.update(memberId,{bonusSessions:newBonus});
+    throw new Error('Not connected to Firebase. Please check your internet and try again.');
   }
   try{logActivity('Added','Trainer Sessions',member.name,qty+' session'+(qty!==1?'s':'')+' | ₱'+Number(amount).toLocaleString()+' | '+(method||'Cash'));}catch(e){}
   return {payment,newBonus};
