@@ -2654,7 +2654,7 @@ function buildSidebar(){
     {id:'dashboard',group:'Overview',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,label:'Dashboard',roles:['admin','staff','trainer','member']},
     {id:'myqr',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><path d="M21 21h-3v-3h3z"/></svg>`,label:'My QR Code',roles:['member']},
     {id:'myattendance',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,label:'My Attendance',roles:['member']},
-    {id:'myRenew',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,label:'Renew Membership',roles:['member']},
+    {id:'myRenew',group:'Membership',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,label:'Renew Membership',badge:'renewBadge',roles:['member']},
     {id:'myMessages',group:'Support',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,label:'Messages',roles:['member'],badge:'myMsgBadge'},
     {id:'myWorkoutPlan',group:'Workout',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11"/><path d="M21 21l-1-1"/><path d="M3 3l1 1"/><path d="M18 22l4-4"/><path d="M2 6l4-4"/><path d="M3 10l7-7"/><path d="M14 21l7-7"/></svg>`,label:'My Workout Plan',roles:['member']},
     {id:'myWorkouts',group:'Workout',icon:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,label:'My Workouts',roles:['member']},
@@ -3059,7 +3059,7 @@ function animateDashboard(el){
 function renderDashboard(){
   const el=document.getElementById('panelDashboard');
   const role=currentUser.role;
-  if(role==='member'){el.innerHTML=buildMemberDashboard();refreshMyQr();}
+  if(role==='member'){el.innerHTML=buildMemberDashboard();refreshMyQr();updateRenewBadge();}
   else{
     el.innerHTML=role==='admin'?buildAdminDashboard():role==='staff'?buildStaffDashboard():buildTrainerDashboard();
     const strip=announceStripHtml();
@@ -3293,7 +3293,7 @@ function renderMyAssigned(){
     const completed=mySessions.filter(s=>s.status==='Completed').length;
     const upcoming=mySessions.filter(s=>s.status==='Scheduled'&&s.date>=today()).length;
     const totalAtt=Attendance.all().filter(a=>a.memberId===id).length;
-    const sessLimit=plan&&plan.sessions!=='Unlimited'?Number(plan.sessions):null;
+    const sessLimit=memberSessionLimit(m,plan);
     const left=sessLimit===null?'∞':Math.max(0,sessLimit-memberSessionsUsed(id));
     const statusCls=m&&(m.status==='Active'||m.status==='Expiring Soon')?'badge-active':m&&m.status==='Expired'?'badge-inactive':'badge-pending';
     return`<tr>
@@ -3402,7 +3402,7 @@ function buildMemberDashboard(){
         <a class="btn-secondary btn-sm" href="sms:+639150435696">💬 Message Front Desk</a>
       </div>
     </div>`:'';
-  const sessLeft=locked?'-':(plan?(plan.sessions==='Unlimited'?'∞':Math.max(0,Number(plan.sessions)-memberSessionsUsed(mem.id))):'-');
+  const sessLeft=locked?'-':(plan?(plan.sessions==='Unlimited'?'∞':memberSessionsLeft(mem,plan)):'-');
   const workoutCta=locked?'':`<div class="mb-quick">
     <button class="mb-tile" onclick="navigate('myWorkoutPlan')"><span class="mb-tile-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5l11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7"/></svg></span><span class="mb-tile-txt"><strong>My Workout Plan</strong><small>See your assigned routine</small></span></button>
     <button class="mb-tile" onclick="navigate('myWorkouts')"><span class="mb-tile-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><span class="mb-tile-txt"><strong>Log Workout</strong><small>Record today's workout</small></span></button>
@@ -3441,7 +3441,11 @@ function buildMemberDashboard(){
       <div><span>Sessions Left</span><strong>${sessLeft}</strong></div>
     </div>
   </div>`;
-  const renewCard='';
+  const _sl=(plan&&!locked&&plan.sessions!=='Unlimited')?memberSessionsLeft(mem,plan):null;
+  const renewCard=(_sl!==null&&_sl<=2&&d>0)?`<div class="table-card" style="padding:14px 18px;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.07);display:flex;align-items:flex-start;gap:12px">
+    <span style="color:var(--gold);flex-shrink:0;margin-top:2px">${iconSvg('warn',20)}</span>
+    <div style="font-size:13px;line-height:1.6;color:var(--gray-300)"><strong style="color:var(--white)">${_sl===0?'You have no trainer sessions left':'Only '+_sl+' trainer session'+(_sl!==1?'s':'')+' left'}</strong><br>Open <strong>Renew Membership</strong> in the menu before they run out. Your unused sessions carry over to your new plan.</div>
+  </div>`:'';
   const qrBlock=`<div class="mb-qr-box${locked?' locked':''}">
     ${locked?'<div class="mb-qr-pending">⏳ Pending payment - this QR activates once the front desk confirms it</div>':''}
     <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--gray-500);margin-bottom:10px;text-align:center">Entrance QR - Daily</div>
@@ -4297,6 +4301,19 @@ async function adminSendMemberResetLink(memberId){
 // login email + the Firestore profile, so the change is saved online.
 // Trainer sessions a member has used in the current plan period.
 // A session is only deducted once the trainer marks it Completed (Done).
+// Sessions allowed in the current plan period = plan sessions + sessions carried
+// over from the previous plan (bonusSessions). null = unlimited.
+function memberSessionLimit(mem,plan){
+  if(!plan||plan.sessions==='Unlimited')return null;
+  const base=Number(plan.sessions);
+  if(!Number.isFinite(base)||base<=0)return base>0?base:0;
+  return base+Math.max(0,Number(mem&&mem.bonusSessions)||0);
+}
+function memberSessionsLeft(mem,plan){
+  const lim=memberSessionLimit(mem,plan);
+  if(lim===null)return null;
+  return Math.max(0,lim-memberSessionsUsed(mem.id));
+}
 function memberSessionsUsed(memberId){
   const m=Members.one(memberId);
   const since=(m&&(m.planStart||m.startDate))||'';
@@ -5069,6 +5086,19 @@ function updatePgGcash(mem){
   }
   box.innerHTML=html;box.style.display='block';
 }
+function updateRenewBadge(){
+  const b=document.getElementById('renewBadge');if(!b)return;
+  const mem=currentUser&&currentUser.role==='member'?Members.one(currentUser.memberId||currentUser.id):null;
+  let on=false;
+  if(mem&&mem.status!=='pending_payment'&&mem.status!=='Archived'){
+    const plan=mem.planId?Plans.one(mem.planId):null;
+    const d=mem.expiryDate?daysUntil(mem.expiryDate):null;
+    const sl=plan&&plan.sessions!=='Unlimited'?memberSessionsLeft(mem,plan):null;
+    const lp=latestGcashProof(mem.id);
+    on=(d!==null&&d<=7)||(sl!==null&&sl<=2)||(lp&&lp.status==='rejected');
+  }
+  b.textContent='!';b.style.display=on?'flex':'none';
+}
 function renderMyRenew(){
   const el=document.getElementById('panelMyRenew');if(!el)return;
   const mem=currentUser?Members.one(currentUser.memberId||currentUser.id):null;
@@ -5077,6 +5107,7 @@ function renderMyRenew(){
   const d=mem.expiryDate?daysUntil(mem.expiryDate):null;
   const proofs=gcashProofsOf(mem.id).slice(0,10);
   const latest=proofs[0]||null;
+  const sl=plan&&plan.sessions!=='Unlimited'?memberSessionsLeft(mem,plan):null;
   const stat=d===null?'-':(d<=0?'<span style="color:var(--red);font-weight:700">Expired '+Math.abs(d)+' day'+(Math.abs(d)!==1?'s':'')+' ago</span>':'<strong>'+d+'</strong> day'+(d!==1?'s':'')+' left');
   let action='';
   if(!plan)action='<div style="font-size:12px;color:var(--gray-500)">No plan on file. Please contact the front desk.</div>';
@@ -5096,8 +5127,9 @@ function renderMyRenew(){
       <div><span style="color:var(--gray-500);font-size:12px">Price</span><br><strong style="color:var(--green)">${plan?'₱'+Number(plan.price).toLocaleString():'-'}</strong></div>
       <div><span style="color:var(--gray-500);font-size:12px">Expiry</span><br><strong>${mem.expiryDate?formatDate(mem.expiryDate):'-'}</strong></div>
       <div><span style="color:var(--gray-500);font-size:12px">Status</span><br>${stat}</div>
+      <div><span style="color:var(--gray-500);font-size:12px">Trainer sessions left</span><br><strong>${sl===null?(plan&&plan.sessions==='Unlimited'?'Unlimited':'-'):sl}</strong></div>
     </div>
-    <div style="font-size:12px;color:var(--gray-300);line-height:1.7;margin-bottom:14px">Pay with your GCash wallet (no need to visit the gym): send the payment, then upload your receipt and reference number. The front desk confirms it and your remaining days are added to your new expiry. Or pay in <strong>Cash / GCash</strong> at the front desk.</div>
+    <div style="font-size:12px;color:var(--gray-300);line-height:1.7;margin-bottom:14px">Pay with your GCash wallet (no need to visit the gym): send the payment, then upload your receipt and reference number. The front desk confirms it and your remaining days <strong>and unused trainer sessions</strong> are added to your new plan. Or pay in <strong>Cash / GCash</strong> at the front desk.</div>
     ${action}
   </div>
   <div class="table-card" style="margin-top:16px">
@@ -6608,7 +6640,7 @@ function saveSession(){
   if(memberCheck){
     const sPlan=memberCheck.planId?Plans.one(memberCheck.planId):null;
     if(sPlan&&sPlan.sessions!=='Unlimited'){
-      const limit=Number(sPlan.sessions);
+      const limit=memberSessionLimit(memberCheck,sPlan);
       if(!Number.isFinite(limit)||limit<=0){err.textContent=memberCheck.name+"'s plan ("+sPlan.name+') does not include trainer sessions.';err.style.display='block';return;}
       const since=memberCheck.planStart||memberCheck.startDate||'';
       const inPeriod=x=>!since||!x.date||x.date>=since;
@@ -7789,7 +7821,7 @@ function bookSession(){
   const bkPlan=mem.planId?Plans.one(mem.planId):null;
   if(!bkPlan){ if(err){err.textContent='You do not have an active plan. Please visit the front desk.';err.style.display='block';} return; }
   if(bkPlan.sessions!=='Unlimited'){
-    const limit=Number(bkPlan.sessions);
+    const limit=memberSessionLimit(mem,bkPlan);
     if(!Number.isFinite(limit)||limit<=0){ if(err){err.textContent='Your plan ('+bkPlan.name+') does not include trainer sessions.';err.style.display='block';} return; }
     {
       const used=memberSessionsUsed(mid);
@@ -8357,7 +8389,15 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
   const token='FCG.'+memberId+'.'+start.replace(/-/g,'')+'.'+qrSig(memberId,start,nonce,getQrSecret());
   // Fields that unlock the member. Written in the same atomic batch as the
   // payment so the queue cannot say "confirmed" before Firestore has them.
-  const activation={status:'Active',planId,planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token};
+  // Carry over unused trainer sessions when renewing while the plan is still running
+  // (same idea as carrying over the remaining days).
+  let carry=0;
+  try{
+    const oldPlan=member.planId?Plans.one(member.planId):null;
+    const stillRunning=member.planStart&&member.expiryDate&&member.status!=='pending_payment'&&member.expiryDate>=start;
+    if(stillRunning&&oldPlan&&oldPlan.sessions!=='Unlimited'&&plan&&plan.sessions!=='Unlimited')carry=memberSessionsLeft(member,oldPlan)||0;
+  }catch(e){carry=0;}
+  const activation={status:'Active',planId,planStart:start,startDate:start,expiryDate:newExpiry,qrNonce:nonce,qrToken:token,bonusSessions:carry};
   const openNotifs=Notifications.all().filter(n=>n.memberId===memberId&&n.type==='pending_payment'&&n.status==='open');
   // First activation of a newly registered member = 1 visit right away
   // (no prior payment and no attendance on file). Saved in the same batch.
