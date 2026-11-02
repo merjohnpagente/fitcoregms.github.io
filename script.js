@@ -1103,7 +1103,7 @@ async function doLogin(){
             +'<div style="margin-top:4px">Plan: <strong style="color:var(--white)">'+esc(ep?ep.name:'-')+'</strong></div>'
             +'<div>Expired on: <strong style="color:var(--red)">'+(em.expiryDate?esc(formatDate(em.expiryDate)):'-')+'</strong>'+(ago!==null?' ('+ago+' day'+(ago!==1?'s':'')+' ago)':'')+'</div></div>'
             +'<div style="'+card+'">🏋️ <strong style="color:var(--white)">Pay at the front desk</strong><br>Visit the gym and pay in Cash or GCash. Staff will renew your membership.</div>'
-            +'<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet</strong><br>No need to visit the gym. Send the payment, then upload your receipt screenshot and reference number.<button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="openExpiredRenewal()">📱 Renew via GCash</button></div></div>';
+            +'<div style="'+card+';border-color:rgba(127,250,136,.35);background:rgba(127,250,136,.05)">📱 <strong style="color:var(--white)">Pay with your GCash wallet</strong><br>No need to visit the gym. Send the payment, then upload your receipt screenshot and reference number.<button type="button" class="btn-primary" style="width:100%;margin-top:10px" onclick="openExpiredRenewal()">📱 Pay via GCash</button></div></div>';
           lr.style.display='block';
         }
       }else showLoginError(result.error);
@@ -4987,7 +4987,7 @@ async function openExpiredRenewal(){
     if(r.badPw){toast(r.msg||'Incorrect password. Please check the login form.','error');return;}
   }
   if(!gcashReady()){toast('Online GCash payment is not available yet. Please renew at the front desk.','info');return;}
-  _fillGcashModal(mem,plan,'📱 Renew via GCash');
+  _fillGcashModal(mem,plan,'📱 Pay via GCash');
   document.getElementById('gcashPayModal').dataset.mode='expired';
 }
 async function submitExpiredRenewal(){
@@ -5030,7 +5030,7 @@ function openGcashPay(){
   if(!gcashReady()){toast('GCash payment is not set up yet. Please pay at the front desk.','info');return;}
   const latest=latestGcashProof(mem.id);
   if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
-  _fillGcashModal(mem,plan,mem.status==='pending_payment'?'📱 Pay via GCash':'📱 Renew via GCash');
+  _fillGcashModal(mem,plan,mem.status==='pending_payment'?'📱 Pay via GCash':'📱 Pay via GCash');
 }
 
 function onGcashReceiptPick(input){
@@ -5143,12 +5143,12 @@ function renderMyRenew(){
   else if(latest&&latest.status==='open')action='<div style="padding:12px 14px;border:1px solid rgba(251,191,36,.3);background:rgba(251,191,36,.08);border-radius:10px;font-size:13px;color:var(--gray-300)">⏳ <strong style="color:var(--gold)">GCash payment awaiting verification.</strong><br>The front desk will confirm it soon.</div>';
   else{
     action=(latest&&latest.status==='rejected'?'<div style="padding:12px 14px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);border-radius:10px;font-size:13px;margin-bottom:12px;color:var(--gray-300)">❌ <strong style="color:var(--red)">Your last GCash payment was rejected.</strong>'+(latest.rejectReason?'<br>Reason: '+esc(latest.rejectReason):'')+'</div>':'')
-      +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:12px 24px" onclick="openGcashPay()">📱 Renew via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">Online GCash is not set up yet. Please pay at the front desk.</div>');
+      +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:12px 24px" onclick="openGcashPay()">📱 Pay via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">Online GCash is not set up yet. Please pay at the front desk.</div>');
   }
   if(plan&&!(latest&&latest.status==='open')){
     action='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">'
       +'<div style="border:1px solid rgba(127,250,136,.3);background:rgba(127,250,136,.06);border-radius:12px;padding:16px"><div style="font-weight:800;margin-bottom:6px">Pay via GCash</div><div style="font-size:12px;color:var(--gray-300);line-height:1.6;margin-bottom:12px">Send the payment, then submit your reference number and receipt. The front desk will confirm it.</div>'
-      +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:11px 22px" onclick="openGcashPay()">Renew via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">GCash is not set up yet. Please pay at the front desk.</div>')+'</div>'
+      +(gcashReady()?'<button class="btn-primary" style="width:auto;padding:11px 22px" onclick="openGcashPay()">Pay via GCash</button>':'<div style="font-size:12px;color:var(--gray-500)">GCash is not set up yet. Please pay at the front desk.</div>')+'</div>'
       +'<div style="border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);border-radius:12px;padding:16px"><div style="font-weight:800;margin-bottom:6px">Pay at the front desk</div><div style="font-size:12px;color:var(--gray-300);line-height:1.6">Visit the gym and pay <strong style="color:var(--green)">₱'+Number(plan.price).toLocaleString()+'</strong> in Cash or GCash. Staff will renew your membership right away.</div></div>'
       +'</div>'
       +(action&&action.indexOf('rejected')>-1?'':'');
@@ -5190,7 +5190,7 @@ function mbGcashCta(mem){
   if(p&&p.status==='open')return '<span class="mb-banner-btn" style="cursor:default">⏳ GCash payment awaiting verification</span>';
   if(!gcashReady())return '';
   if(p&&p.status==='rejected')return '<button class="mb-banner-btn" onclick="openGcashPay()" title="'+esc(p.rejectReason||'')+'">❌ Rejected - submit again</button>'+(p.rejectReason?'<div style="font-size:12px;margin-top:6px;color:var(--red);line-height:1.5">Reason: '+esc(p.rejectReason)+'</div>':'');
-  return '<button class="mb-banner-btn" onclick="openGcashPay()">📱 Renew via GCash</button>';
+  return '<button class="mb-banner-btn" onclick="openGcashPay()">📱 Pay via GCash</button>';
 }
 // ---- Admin/Staff: verify proofs ----
 function gcashHistoryHtml(){
