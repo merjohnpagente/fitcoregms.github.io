@@ -2934,6 +2934,7 @@ function openConfirm(title,msg,onOk,btnLabel='Delete',btnClass='btn-danger'){
   document.getElementById('confirmTitle').textContent=title;
   document.getElementById('confirmMsg').innerHTML=msg;
   const btn=document.getElementById('confirmOkBtn');
+  const _cb=document.getElementById('confirmCancelBtn');if(_cb)_cb.textContent='Cancel';
   btn.textContent=btnLabel;
   btn.className='btn-sm '+btnClass;
   btn.onclick=()=>{onOk();closeModal('confirmModal');};
@@ -3379,7 +3380,16 @@ function buildMemberDashboard(){
         const fk='gms_renew_notice_'+mem.id+'_'+mem.expiryDate;
         if(!sessionStorage.getItem(fk)){
           sessionStorage.setItem(fk,'1');
-          setTimeout(function(){openConfirm('Membership Ending Soon','Your membership ends in <strong>'+d+' day'+(d!==1?'s':'')+'</strong> (on '+formatDate(mem.expiryDate)+'). Renew now so you do not lose access to the gym.',function(){navigate('myRenew');},'Renew Now','btn-primary');},700);
+          setTimeout(function(){
+            var pr=plan?Number(plan.price).toLocaleString():'';
+            var ready=gcashReady();
+            var msg='Your membership ends in <strong>'+d+' day'+(d!==1?'s':'')+'</strong> (on '+formatDate(mem.expiryDate)+'). Renew now so you do not lose access.'
+              +'<div style="margin-top:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.8">'
+              +(ready?'<div><strong style="color:var(--white)">Pay via GCash</strong>: submit your reference and receipt, staff will confirm.</div>':'')
+              +'<div><strong style="color:var(--white)">Pay at the front desk</strong>'+(pr?' (<span style="color:var(--green)">₱'+pr+'</span>)':'')+': Cash or GCash, staff renews it right away.</div></div>';
+            openConfirm('Membership Ending Soon',msg,function(){ready?(navigate('myRenew'),setTimeout(openGcashPay,150)):navigate('myRenew');},ready?'Pay via GCash':'View Renew Page','btn-primary');
+            var cb=document.getElementById('confirmCancelBtn');if(cb)cb.textContent='I will pay at the front desk';
+          },700);
         }
       }catch(e){}
     }
