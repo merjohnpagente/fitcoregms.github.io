@@ -4575,7 +4575,6 @@ function setGcashSearch(v,focusId){
   const box=document.getElementById('gcashSection')||document.getElementById('walkinGcashQueue');
   if(!box)return;
   box.innerHTML=gcashVerifyHtml()+(box.id==='gcashSection'?gcashHistoryHtml():'');
-  const d=box.querySelector('details.gcash-hist');if(d&&gcashSearch)d.open=true;
   iconize(box);
   const el=document.getElementById(focusId);if(el){el.focus();el.setSelectionRange(v.length,v.length);}
 }
@@ -5134,8 +5133,8 @@ function gcashHistoryHtml(){
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
       <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
-  return `<details class="table-card gcash-hist" style="margin-bottom:16px"${_gcashHistOpen?' open':''} ontoggle="_gcashHistOpen=this.open"><summary style="cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px"><h3 style="margin:0">GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''} · tap to show</span></h3><span style="display:flex;align-items:center;gap:10px">${_gcashSearchBox('gcashSearchH')}<span class="gcash-chev" style="color:var(--green);display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(127,250,136,.12);border:1px solid rgba(127,250,136,.35);flex-shrink:0"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></span></summary>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'refreshGcashViews()')}</details>`;
+  return `<div class="table-card" style="margin-bottom:16px"><div class="table-header" style="flex-wrap:wrap;gap:10px"><h3>GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''}</span></h3>${_gcashSearchBox('gcashSearchH')}</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'refreshGcashViews()')}</div>`;
 }
 function gcashVerifyHtml(){
   const allOpen=openGcashProofs();
