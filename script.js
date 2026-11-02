@@ -6867,6 +6867,7 @@ function dismissAllRenewals(){
     ()=>{pending.forEach(m=>_dismissedIds.add(m.id));renderNotifications();scanRenewals();},
     'Dismiss All');
 }
+function openEarlyRenewal(){_renewalPaymentSource='early';openPaymentModal();}
 function confirmRenew(memberId){
   const m=Members.one(memberId);
   if(!m)return;
@@ -6924,6 +6925,7 @@ function renderNotifications(){
       <div style="font-size:12px;color:var(--gray-500)">${buckets.expired.length} expired &nbsp;·&nbsp; ${buckets.urgent.length} urgent &nbsp;·&nbsp; ${buckets.upcoming.length} upcoming</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-primary btn-sm" onclick="openEarlyRenewal()" style="width:auto">Early Renewal</button>
       <button class="btn-primary btn-sm" onclick="showRenewedPage()" style="width:auto">🔄 Recently Renewed</button>
       <button class="btn-secondary btn-sm" onclick="dismissAllRenewals()">Dismiss All</button>
     </div>
