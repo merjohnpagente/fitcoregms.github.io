@@ -3379,7 +3379,7 @@ function buildMemberDashboard(){
         const fk='gms_renew_notice_'+mem.id+'_'+mem.expiryDate;
         if(!sessionStorage.getItem(fk)){
           sessionStorage.setItem(fk,'1');
-          setTimeout(function(){toast('Your membership ends in '+d+' day'+(d!==1?'s':'')+'. Open Renew Membership in the menu so you do not lose access.','info');},700);
+          setTimeout(function(){openConfirm('Membership Ending Soon','Your membership ends in <strong>'+d+' day'+(d!==1?'s':'')+'</strong> (on '+formatDate(mem.expiryDate)+'). Renew now so you do not lose access to the gym.',function(){navigate('myRenew');},'Renew Now','btn-primary');},700);
         }
       }catch(e){}
     }
@@ -3388,6 +3388,7 @@ function buildMemberDashboard(){
       <div class="mb-banner-main">
         <div class="mb-banner-title">${soon?'Membership Ending Soon':'Membership Active'}</div>
         <div class="mb-banner-sub">Valid until <strong>${formatDate(mem.expiryDate)}</strong>. Show your QR at the entrance to check in.</div>
+        ${soon?'<button class="btn-primary btn-sm" style="margin-top:10px;width:auto" onclick="navigate(\'myRenew\')">Renew Membership</button>':''}
         ${pctLeft!==null?`<div class="mb-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctLeft}" aria-label="Membership time left"><span style="width:${pctLeft}%"></span></div>`:''}
       </div>
       <div class="mb-days"><strong>${d}</strong><span>day${d!==1?'s':''} left</span></div>
@@ -3722,6 +3723,7 @@ function refreshMemberTable(){
       <td><div>${createdLine}${editedLine}</div></td>
       <td><div class="td-actions">
         <button class="btn-icon" title="View" onclick="viewMember('${m.id}')">👁</button>
+        ${(m.status!=='Archived'&&m.status!=='pending_payment')?`<button class="btn-icon" title="Renew membership" style="color:var(--green);border-color:rgba(127,250,136,.3);background:rgba(127,250,136,.08)" onclick="confirmRenew('${m.id}')">${iconSvg('refresh',14)}</button>`:''}
         ${currentUser.role==='admin'?`<button class="btn-icon" title="Edit" onclick="openMemberModal('${m.id}')">✏️</button>`:`''`}
         <button class="btn-icon" title="Delete" style="color:var(--red);border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08)" onmouseover="this.style.background='var(--red)';this.style.color='#fff'" onmouseout="this.style.background='rgba(239,68,68,.08)';this.style.color='var(--red)'" onclick="deleteMember('${m.id}')">✕</button>
       </div></td>
