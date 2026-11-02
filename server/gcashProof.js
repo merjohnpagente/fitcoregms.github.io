@@ -103,6 +103,18 @@ async function submitGcashProof(body) {
   }
   if (used) return bad('This reference number was already used.');
 
+  // Extra trainer sessions: price comes from settings, never from the browser.
+  let addon = null;
+  if (body.kind === 'sessions_addon') {
+    const qty = Math.floor(Number(body.qty));
+    if (!(qty >= 1 && qty <= 20)) return bad('Choose between 1 and 20 sessions.');
+    if (member.status !== 'Active' && member.status !== 'Expiring Soon') return bad('Your membership must be active to add sessions.', 409);
+    if (!plan || String(plan.sessions) === 'Unlimited' || !(Number(plan.sessions) > 0)) return bad('Your plan does not use trainer sessions.', 409);
+    const ss = await ctx.db.collection('settings').doc('sessions').get();
+    const price = ss.exists && Number((ss.data() || {}).price) > 0 ? Number(ss.data().price) : 150;
+    addon = { qty, amount: qty * price };
+  }
+
   const id = 'GCP-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
   const proof = {
     id,
@@ -111,14 +123,15 @@ async function submitGcashProof(body) {
     memberId,
     memberName: String(member.name || ''),
     planId: String(member.planId || ''),
-    planName: String(plan.name || ''),
-    amount: Number(plan.price) || 0,
+    planName: addon ? 'Session Add-on (' + addon.qty + ' session' + (addon.qty !== 1 ? 's' : '') + ')' : String(plan.name || ''),
+    amount: addon ? addon.amount : (Number(plan.price) || 0),
     reference,
     receipt,
     createdAt: new Date().toISOString(),
     date: new Date().toISOString().slice(0, 10),
     source: 'online-renewal'
   };
+  if (addon) { proof.kind = 'sessions_addon'; proof.sessions = addon.qty; }
   await ctx.db.collection('notifications').doc(id).set(proof);
   return { status: 200, body: { ok: true, id } };
 }

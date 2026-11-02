@@ -191,6 +191,8 @@ function pruneMemberActivity(){
 }
 const LoginAttempts=new AttemptTracker(KEY.loginAttempts);
 const Settings=new Repository(KEY.settings);
+function getSessionPrice(){return Number((Settings.one('sessions')||{}).price)||150;}
+function setSessionPrice(v){Settings.save([...Settings.all().filter(x=>x.id!=='sessions'),{id:'sessions',price:Number(v)}]);}
 function getWalkinFee(){return Number((Settings.one('walkin')||{}).fee)||100;}
 function setWalkinFee(fee){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{...(Settings.one('walkin')||{}),id:'walkin',fee:Number(fee)}]);}
 function setWalkinConfig(fee,hours){Settings.save([...Settings.all().filter(x=>x.id!=='walkin'),{...(Settings.one('walkin')||{}),id:'walkin',fee:Number(fee),hours:Number(hours)}]);}
@@ -4667,7 +4669,7 @@ let billingSearch='';let billingFromDate='';let billingToDate='';let billingPlan
 function renderGcashPanel(){
   const el=document.getElementById('panelGcash');if(!el)return;
   const any=Notifications.all().some(n=>n.type==='gcash_proof'||n.type==='walkin_proof');
-  el.innerHTML=`<div class="page-actions"><div class="table-controls"><span style="font-size:12px;color:var(--gray-500)">Online GCash payments from members and walk-in visitors. Confirm to activate, or reject with a reason.</span></div>${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary" onclick="openGcashSettings()">⚙ GCash Settings</button>':''}</div>
+  el.innerHTML=`<div class="page-actions"><div class="table-controls"><span style="font-size:12px;color:var(--gray-500)">Online GCash payments from members and walk-in visitors. Confirm to activate, or reject with a reason.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary btn-inline" onclick="openAddSessions()">Add Sessions</button>${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary" onclick="openSessionPrice()">Session price: ₱'+getSessionPrice().toLocaleString()+'</button><button class="btn-secondary" onclick="openGcashSettings()">⚙ GCash Settings</button>':''}</div></div>
   <div id="gcashSection">${gcashVerifyHtml()}${gcashHistoryHtml()}</div>
   ${any?'':'<div class="table-card"><div class="empty-state"><div class="empty-icon">📱</div><p>No GCash submissions yet</p></div></div>'}`;
   iconize(el);
@@ -4706,12 +4708,13 @@ function gcashProofForPayment(p){
 }
 function payOriginBadge(p){
   const n=gcashProofForPayment(p);
+  const _tag=p.source==='sessions'?'<div><span style="display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;letter-spacing:.5px;margin-bottom:4px;background:rgba(251,191,36,.15);color:var(--gold);border:1px solid rgba(251,191,36,.3)">SESSIONS</span></div>':'';
   const base='display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;letter-spacing:.5px;margin-bottom:4px;';
   if(n){
     const where=n.source==='online-renewal'?'Expired login':'Member account';
-    return `<div><span style="${base}background:rgba(127,250,136,.12);color:var(--green);border:1px solid rgba(127,250,136,.3)" title="Paid online by the member and confirmed by staff">ONLINE GCASH</span><div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">${where}${n.reviewedBy?' · confirmed by '+esc(n.reviewedBy):''}</div></div>`;
+    return _tag+`<div><span style="${base}background:rgba(127,250,136,.12);color:var(--green);border:1px solid rgba(127,250,136,.3)" title="Paid online by the member and confirmed by staff">ONLINE GCASH</span><div style="font-size:10px;color:var(--gray-500);margin-bottom:4px">${where}${n.reviewedBy?' · confirmed by '+esc(n.reviewedBy):''}</div></div>`;
   }
-  return `<div><span style="${base}background:rgba(255,255,255,.06);color:var(--gray-300);border:1px solid rgba(255,255,255,.12)" title="Recorded by staff at the counter">FRONT DESK</span></div>`;
+  return _tag+`<div><span style="${base}background:rgba(255,255,255,.06);color:var(--gray-300);border:1px solid rgba(255,255,255,.12)" title="Recorded by staff at the counter">FRONT DESK</span></div>`;
 }
 function payRefCell(p){
   const n=gcashProofForPayment(p);
@@ -5050,7 +5053,7 @@ async function submitGcashProof(){
   const btn=document.getElementById('gp_submit');
   if(btn){btn.disabled=true;btn.textContent='Sending…';}
   try{
-    const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memberId:mem.id,reference:ref,receipt})});
+    const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({memberId:mem.id,reference:ref,receipt},(_m&&_m.dataset.mode==='addon')?{kind:'sessions_addon',qty:Number(_m.dataset.qty)||1}:{}))});
     let data=null;try{data=await res.json();}catch(e){}
     if(!data)throw new Error('Server error. Please try again.');
     if(!data.ok)throw new Error(data.error||'Could not send your payment.');
@@ -5099,6 +5102,20 @@ function updateRenewBadge(){
   }
   b.textContent='!';b.style.display=on?'flex':'none';
 }
+function addonQty(){const el=document.getElementById('addonQty');const q=el?parseInt(el.value,10):1;return (q>=1&&q<=20)?q:1;}
+function addonUpdateTotal(){const t=document.getElementById('addonTotal');if(t)t.textContent='₱'+(addonQty()*getSessionPrice()).toLocaleString();}
+function openSessionAddon(){
+  if(!currentUser||currentUser.role!=='member'){toast('Please log in as a member.','error');return;}
+  const mem=Members.one(currentUser.memberId||currentUser.id);
+  const plan=mem&&mem.planId?Plans.one(mem.planId):null;
+  if(!mem||!plan||plan.sessions==='Unlimited'){toast('Your plan does not use trainer sessions.','info');return;}
+  const latest=latestGcashProof(mem.id);
+  if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
+  if(!gcashReady()){toast('GCash payment is not set up yet. Please pay at the front desk.','info');return;}
+  const q=addonQty();
+  _fillGcashModal(mem,{name:q+' extra trainer session'+(q!==1?'s':''),price:q*getSessionPrice()},'Add Trainer Sessions');
+  const m=document.getElementById('gcashPayModal');m.dataset.mode='addon';m.dataset.qty=String(q);
+}
 function renderMyRenew(){
   const el=document.getElementById('panelMyRenew');if(!el)return;
   const mem=currentUser?Members.one(currentUser.memberId||currentUser.id):null;
@@ -5132,6 +5149,16 @@ function renderMyRenew(){
     <div style="font-size:12px;color:var(--gray-300);line-height:1.7;margin-bottom:14px">Pay with your GCash wallet (no need to visit the gym): send the payment, then upload your receipt and reference number. The front desk confirms it and your remaining days <strong>and unused trainer sessions</strong> are added to your new plan. Or pay in <strong>Cash / GCash</strong> at the front desk.</div>
     ${action}
   </div>
+  ${(plan&&plan.sessions!=='Unlimited'&&mem.status!=='Archived'&&mem.status!=='pending_payment'&&d!==null&&d>0)?`<div class="table-card" style="padding:20px;margin-top:16px">
+    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Add Trainer Sessions</div>
+    <div style="font-size:12px;color:var(--gray-300);line-height:1.7;margin:8px 0 14px">Need more sessions? Choose how many, then pay with GCash or at the front desk. Your membership expiry does not change.</div>
+    <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+      <div class="form-group" style="margin:0"><label>Sessions</label><select id="addonQty" onchange="addonUpdateTotal()" style="min-width:90px">${Array.from({length:10},(_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('')}</select></div>
+      <div style="font-size:13px;color:var(--gray-300)">₱${getSessionPrice().toLocaleString()} per session<br>Total: <strong id="addonTotal" style="color:var(--green);font-size:16px">₱${getSessionPrice().toLocaleString()}</strong></div>
+      ${(latest&&latest.status==='open')?'<span style="font-size:12px;color:var(--gold)">Waiting for verification</span>':'<button class="btn-primary" style="width:auto;padding:11px 22px" onclick="openSessionAddon()">Pay via GCash</button>'}
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);margin-top:10px">Or tell the front desk how many sessions you want and pay there in Cash or GCash.</div>
+  </div>`:''}
   <div class="table-card" style="margin-top:16px">
     <div class="table-header"><h3>My GCash Submissions</h3></div>
     <div style="overflow-x:auto"><table><thead><tr><th>Submitted</th><th>Reference</th><th>Amount</th><th>Status</th></tr></thead><tbody>${rows||'<tr><td colspan="4"><div class="empty-state"><p>No submissions yet</p></div></td></tr>'}</tbody></table></div>
@@ -5218,6 +5245,7 @@ function confirmGcashProof(id){
   if(p.type==='walkin_proof')return confirmWalkinProof(p);
   const m=Members.one(p.memberId);
   if(!m){toast('Member not found.','error');return;}
+  if(p.kind==='sessions_addon')return confirmAddonProof(p,m);
   if(bgCheckBlocksActivation(m)){toast('Background check is Flagged - clear it in the member profile first.','error');return;}
   const _dup=Notifications.all().some(n=>n.type==='gcash_proof'&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
     ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
@@ -5304,6 +5332,101 @@ async function submitWalkinProof(){
   reset();
   closeModal('gcashPayModal');
   toast('Payment sent! Go to the front desk and give your name ('+name+'). They will confirm and record your walk-in pass.','success');
+}
+async function applySessionsAddon(memberId,qty,amount,method,reference,notes){
+  const member=Members.one(memberId);if(!member)throw new Error('Member not found.');
+  qty=Math.floor(Number(qty));if(!(qty>=1&&qty<=20))throw new Error('Choose between 1 and 20 sessions.');
+  const newBonus=Math.max(0,Number(member.bonusSessions)||0)+qty;
+  const id=nextId(KEY.payments,'PAY');
+  const date=today();
+  const payment={id,memberId,memberName:member.name,planId:member.planId,planName:'Session Add-on ('+qty+' session'+(qty!==1?'s':'')+')',amount:Number(amount),date,newExpiry:member.expiryDate||'',method:method||'Cash',reference:sanitizeText(reference||''),notes:sanitizeText(notes||''),recordedBy:currentUser.name,recordedByUsername:currentUser.username,staffId:currentUser.id,status:'Paid',source:'sessions',sessions:qty,timestamp:Date.now(),createdAt:date};
+  if(window.GMSFB&&GMSFB.enabled){
+    if(!GMSFB.auth||!GMSFB.auth.currentUser)throw new Error('Firebase session expired - please log out and log in again.');
+    const res=await GMSFB.commitDocs([{col:'members',id:memberId,data:{bonusSessions:newBonus},merge:true},{col:'payments',id:id,data:payment,merge:false}]);
+    if(!res||!res.ok)throw new Error('Could not save to Firebase. Please try again.');
+    if(typeof GMSFB.applyLocalPatch==='function'){GMSFB.applyLocalPatch(KEY.members,memberId,{bonusSessions:newBonus});GMSFB.applyLocalPatch(KEY.payments,id,payment);}
+  }else{
+    const pays=Payments.all();pays.push(payment);Payments.save(pays);
+    Members.update(memberId,{bonusSessions:newBonus});
+  }
+  try{logActivity('Added','Trainer Sessions',member.name,qty+' session'+(qty!==1?'s':'')+' | ₱'+Number(amount).toLocaleString()+' | '+(method||'Cash'));}catch(e){}
+  return {payment,newBonus};
+}
+function confirmAddonProof(p,m){
+  const _dup=Notifications.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
+    ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
+  if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
+  const msg='Confirm that you received this GCash payment?'
+    +'<div style="margin-top:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.9">'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Member:</span> <strong style="color:var(--white)">'+esc(m.name)+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Add:</span> <strong style="color:var(--white)">'+esc(String(p.sessions))+' trainer session'+(Number(p.sessions)!==1?'s':'')+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Amount:</span> <strong style="color:var(--green)">₱'+Number(p.amount).toLocaleString()+'</strong></div>'
+    +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Reference:</span> <strong style="color:var(--white);font-family:monospace">'+esc(p.reference)+'</strong></div></div>'
+    +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8">Check that the amount and reference match your GCash history before confirming.</div>';
+  openConfirm('Confirm Session Add-on',msg,async function(){
+    try{
+      const fresh=Notifications.one(p.id);
+      if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
+      const r=await applySessionsAddon(m.id,p.sessions,p.amount,'GCash',p.reference,'GCash proof '+p.id);
+      Notifications.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:r.payment.id});
+      toast('Sessions added to '+m.name+'.','success');
+      refreshGcashViews();updateQueueBadge();
+    }catch(e){toast((e&&e.message)||'Could not add the sessions.','error');console.error(e);}
+  },'Confirm','btn-primary');
+}
+// ---- Staff: add sessions after a front desk payment ----
+function openAddSessions(){
+  if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+  document.getElementById('as_error').style.display='none';
+  document.getElementById('as_member').value='';document.getElementById('as_qty').value='1';
+  document.getElementById('as_method').value='Cash';document.getElementById('as_ref').value='';
+  document.getElementById('as_member').dataset.pick='';
+  const dl=document.getElementById('as_memberList');
+  dl.innerHTML=Members.all().filter(m=>m.status==='Active'||m.status==='Expiring Soon').map(m=>{const pl=m.planId?Plans.one(m.planId):null;return (pl&&pl.sessions!=='Unlimited')?'<option value="'+esc(m.id+' - '+m.name)+'"></option>':'';}).join('');
+  asToggleRef();asUpdateTotal();openModal('addSessionsModal');
+}
+function asToggleRef(){const g=document.getElementById('as_method').value==='GCash';document.getElementById('as_refWrap').style.display=g?'block':'none';}
+function asUpdateTotal(){const q=parseInt(document.getElementById('as_qty').value,10);document.getElementById('as_total').textContent=(q>=1)?'₱'+(q*getSessionPrice()).toLocaleString():'-';}
+async function saveAddSessions(){
+  const err=document.getElementById('as_error');err.style.display='none';
+  const fail=m=>{err.textContent=m;err.style.display='block';};
+  const raw=document.getElementById('as_member').value.trim();
+  const id=raw.split(' - ')[0].trim();
+  const m=Members.one(id);
+  if(!m)return fail('Pick a member from the list.');
+  const pl=m.planId?Plans.one(m.planId):null;
+  if(!pl||pl.sessions==='Unlimited')return fail('This member\'s plan does not use trainer sessions.');
+  if(m.status!=='Active'&&m.status!=='Expiring Soon')return fail('The membership must be active.');
+  const q=parseInt(document.getElementById('as_qty').value,10);
+  if(!(q>=1&&q<=20))return fail('Enter 1 to 20 sessions.');
+  const method=document.getElementById('as_method').value;
+  const ref=_normRef(document.getElementById('as_ref').value);
+  if(method==='GCash'){
+    if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number.');
+    const used=Notifications.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='rejected'&&_normRef(n.reference)===ref)||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===ref);
+    if(used)return fail('This reference number was already used.');
+  }
+  try{
+    await applySessionsAddon(m.id,q,q*getSessionPrice(),method,method==='GCash'?ref:'','Front desk');
+    closeModal('addSessionsModal');
+    toast(q+' session'+(q!==1?'s':'')+' added to '+m.name+'.','success');
+    refreshGcashViews();
+  }catch(e){fail((e&&e.message)||'Could not add the sessions.');}
+}
+// ---- Admin: session price ----
+function openSessionPrice(){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only admins can change the session price.','error');return;}
+  document.getElementById('sp_error').style.display='none';document.getElementById('sp_price').value=getSessionPrice();openModal('sessionPriceModal');
+}
+function saveSessionPrice(){
+  if(!currentUser||currentUser.role!=='admin')return;
+  const err=document.getElementById('sp_error');err.style.display='none';
+  const v=parseFloat(document.getElementById('sp_price').value);
+  if(!(v>0)||v>10000){err.textContent='Enter a valid price.';err.style.display='block';return;}
+  setSessionPrice(v);closeModal('sessionPriceModal');
+  toast('Session price set to ₱'+v.toLocaleString()+'.','success');
+  try{logActivity('Updated','Settings','Session price set to ₱'+v.toLocaleString());}catch(e){}
+  refreshGcashViews();
 }
 function confirmWalkinProof(p){
   const ue=walkinUntilError();

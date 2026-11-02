@@ -2788,6 +2788,35 @@
 
 
 
+<!-- Session price settings (admin) -->
+<div class="modal-overlay" id="sessionPriceModal" style="z-index:1300">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-head"><h2>Session Price</h2><button class="modal-close" onclick="closeModal('sessionPriceModal')">✕</button></div>
+    <div class="modal-body">
+      <div id="sp_error" class="error-msg"></div>
+      <div class="form-group"><label>Price per extra trainer session (₱) *</label><input type="number" id="sp_price" min="1" step="any" placeholder="e.g. 150" onkeydown="if(event.key==='Enter')saveSessionPrice()"></div>
+      <div style="font-size:11px;color:var(--gray-500);line-height:1.6">Members pay this price for each extra trainer session they add, online or at the front desk.</div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('sessionPriceModal')">Cancel</button><button class="btn-primary" onclick="saveSessionPrice()">Save</button></div>
+  </div>
+</div>
+
+<!-- Staff: add sessions for a member who paid at the front desk -->
+<div class="modal-overlay" id="addSessionsModal" style="z-index:1300">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h2>Add Trainer Sessions</h2><button class="modal-close" onclick="closeModal('addSessionsModal')">✕</button></div>
+    <div class="modal-body">
+      <div id="as_error" class="error-msg"></div>
+      <div class="form-group"><label>Member *</label><input type="text" id="as_member" list="as_memberList" placeholder="Type name or ID" autocomplete="off"><datalist id="as_memberList"></datalist></div>
+      <div class="form-group"><label>Number of sessions *</label><input type="number" id="as_qty" min="1" max="20" value="1" oninput="asUpdateTotal()"></div>
+      <div class="form-group"><label>Payment method *</label><select id="as_method" onchange="asToggleRef()"><option>Cash</option><option>GCash</option></select></div>
+      <div class="form-group" id="as_refWrap" style="display:none"><label>GCash Reference No. *</label><input type="text" id="as_ref" maxlength="24" placeholder="Reference number" autocomplete="off"></div>
+      <div style="background:rgba(127,250,136,.06);border:1px solid rgba(127,250,136,.2);border-radius:10px;padding:10px 14px;font-size:13px">Total to collect: <strong id="as_total" style="color:var(--green)">-</strong></div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('addSessionsModal')">Cancel</button><button class="btn-primary" onclick="saveAddSessions()">Add Sessions</button></div>
+  </div>
+</div>
+
 <!-- Walk-In Price Settings Modal (admin only) -->
 
 <div class="modal-overlay" id="walkinSettingsModal">
