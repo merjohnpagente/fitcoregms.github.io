@@ -6600,6 +6600,30 @@ function memberExerciseError(mem,type,exercise){
   if(!exercisesForPlan(pl,type).includes(exercise))return exercise+' is not included in the '+(pl?pl.name:'current')+' plan. Allowed for '+type+': '+exercisesForPlan(pl,type).join(', ')+'.';
   return '';
 }
+// Exercise library visible to a member: limited by plan (same body parts + per-body-part cap as session booking).
+function libraryForMember(list){
+  if(!currentUser||currentUser.role!=='member')return list;
+  const mem=Members.one(currentUser.memberId||currentUser.id);
+  const pl=mem&&mem.planId?Plans.one(mem.planId):null;
+  const types=planSessionTypes(pl);
+  if(!types)return list;
+  const lim=planExerciseLimit(pl);
+  const counts={};
+  return list.filter(e=>{
+    const m=e.muscle;
+    if(!types.includes(m))return false;
+    if(!lim)return true;
+    counts[m]=(counts[m]||0)+1;
+    return counts[m]<=lim;
+  });
+}
+function libraryPlanNote(){
+  if(!currentUser||currentUser.role!=='member')return '';
+  const mem=Members.one(currentUser.memberId||currentUser.id);
+  const pl=mem&&mem.planId?Plans.one(mem.planId):null;
+  if(!planSessionTypes(pl))return '';
+  return '<div class="ex-notice" role="status">Your '+esc(pl.name)+' plan includes: '+esc(planExerciseText(pl))+'. Upgrade your plan to unlock more exercises.</div>';
+}
 function planExerciseText(plan){const l=planSessionTypes(plan);const n=planExerciseLimit(plan);return (l?l.join(', '):'All exercises')+(n?' ('+n+' exercises each body part)':'');}
 function memberTypeAllowed(mem,type){
   const pl=mem&&mem.planId?Plans.one(mem.planId):null;
@@ -7251,9 +7275,9 @@ let _mpMuscle='All';
 let _mpSets='3';
 let _mpReps='10';
 let _mpName='';
-function _mpMuscles(){const set=new Set(['All']);ExerciseLibrary.all().forEach(e=>{if(e.muscle)set.add(e.muscle);});return[...set];}
+function _mpMuscles(){const set=new Set(['All']);libraryForMember(ExerciseLibrary.all()).forEach(e=>{if(e.muscle)set.add(e.muscle);});return[...set];}
 function _mpFilterLib(){
-  return ExerciseLibrary.all().filter(e=>{
+  return libraryForMember(ExerciseLibrary.all()).filter(e=>{
     if(_mpMuscle!=='All'&&e.muscle!==_mpMuscle)return false;
     if(_mpSearch&&!(e.name||'').toLowerCase().includes(_mpSearch.toLowerCase()))return false;
     return true;
@@ -7514,7 +7538,7 @@ function renderMyWorkouts(){
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Add Workout Entry</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group"><label>Exercise *</label><select id="wk_exercise">${ExerciseLibrary.all().map(e=>`<option value="${esc(e.name)}">${esc(e.name)} - ${esc(e.muscle)}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Exercise *</label><select id="wk_exercise">${libraryForMember(ExerciseLibrary.all()).map(e=>`<option value="${esc(e.name)}">${esc(e.name)} - ${esc(e.muscle)}</option>`).join('')}</select></div>
         <div class="form-group"><label>Date *</label><input type="date" id="wk_date" value="${today()}" max="${today()}"></div>
       </div>
       <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
@@ -7693,20 +7717,21 @@ function renderExerciseLibrary(){
   seedExerciseLibrary();
   if(!_wxMediaMap&&!_wxMediaLoading&&!_wxMediaError) loadWorkoutXMedia();
   const terms=_exSearchTerms(window._exLibQuery);
-  let list=ExerciseLibrary.all();
+  let list=libraryForMember(ExerciseLibrary.all());
   if(terms.length) list=list.filter(e=>_exMatchesTerms(e,terms));
   const animated=list.filter(e=>_exMediaFor(e)).length;
   const countText=`${list.length} exercise${list.length===1?'':'s'}${animated?` · ${animated} animated`:''}`;
   const notice=_wxMediaError
     ?`<div class="ex-notice" role="status">${esc(_wxMediaError)} <button type="button" class="ex-notice-retry" data-ex-retry>Retry</button></div>`
     :(_wxMediaLoading&&!_wxMediaMap?`<div class="ex-notice" role="status">Loading video demos...</div>`:'');
+  const planNote=libraryPlanNote();
   let grid=document.getElementById('exGrid');
   if(!grid){
-    el.innerHTML=`<div class="table-card"><div class="table-header ex-lib-head"><h3>Exercise Library <span id="exCount" class="ex-count" aria-live="polite">${esc(countText)}</span></h3><input type="text" id="exSearch" placeholder="Search name, muscle, or equipment..." value="${esc(window._exLibQuery||'')}" oninput="window._exLibQuery=this.value; clearTimeout(window._exSearchTimer); window._exSearchTimer=setTimeout(renderExerciseLibrary,120)" class="search-input ex-search" aria-label="Search exercises"></div><div id="exNotice">${notice}</div><div id="exGrid" class="ex-grid">${_exGridHtml(list)}</div></div>`;
+    el.innerHTML=`<div class="table-card"><div class="table-header ex-lib-head"><h3>Exercise Library <span id="exCount" class="ex-count" aria-live="polite">${esc(countText)}</span></h3><input type="text" id="exSearch" placeholder="Search name, muscle, or equipment..." value="${esc(window._exLibQuery||'')}" oninput="window._exLibQuery=this.value; clearTimeout(window._exSearchTimer); window._exSearchTimer=setTimeout(renderExerciseLibrary,120)" class="search-input ex-search" aria-label="Search exercises"></div><div id="exNotice">${notice}${planNote}</div><div id="exGrid" class="ex-grid">${_exGridHtml(list)}</div></div>`;
     grid=document.getElementById('exGrid');
   }else{
     const count=document.getElementById('exCount'); if(count) count.textContent=countText;
-    const noticeEl=document.getElementById('exNotice'); if(noticeEl) noticeEl.innerHTML=notice;
+    const noticeEl=document.getElementById('exNotice'); if(noticeEl) noticeEl.innerHTML=notice+planNote;
     grid.innerHTML=_exGridHtml(list);
   }
   if(grid) grid.setAttribute('aria-busy',_wxMediaLoading?'true':'false');
