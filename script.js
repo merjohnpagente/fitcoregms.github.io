@@ -6561,6 +6561,27 @@ const DEFAULT_SESSION_TYPES=['Personal Training','Cardio','Strength Training','F
 // this list plus whatever trainers have saved, so Boxing/Zumba/etc. remain
 // selectable even before the users snapshot arrives on a member device.
 const SESSION_TYPE_CATALOG=['Personal Training','Strength Training','Cardio','Yoga','Zumba','HIIT','Flexibility','CrossFit','Body Building','Muay Thai','Boxing','Pilates'];
+// Exercises (session types) a plan can train. null = everything.
+// Basic: Cardio + Strength Training. Standard: those + Flexibility + Assessment. Premium/others: all.
+// A plan can override this with plan.sessionTypes (array).
+function planSessionTypes(plan){
+  if(!plan)return null;
+  if(Array.isArray(plan.sessionTypes)&&plan.sessionTypes.length)return plan.sessionTypes;
+  const n=String(plan.name||'').trim().toLowerCase();
+  if(n==='basic')return ['Cardio','Strength Training'];
+  if(n==='standard')return ['Cardio','Strength Training','Flexibility','Assessment'];
+  return null;
+}
+function memberTypeAllowed(mem,type){
+  const pl=mem&&mem.planId?Plans.one(mem.planId):null;
+  const list=planSessionTypes(pl);
+  return !list||list.includes(type);
+}
+function memberTypeError(mem,type){
+  const pl=mem&&mem.planId?Plans.one(mem.planId):null;
+  const list=planSessionTypes(pl)||[];
+  return (type||'This exercise')+' is not included in the '+(pl?pl.name:'current')+' plan. Allowed: '+list.join(', ')+'.';
+}
 function isBookableTrainer(u){return !!u&&u.role==='trainer'&&u.status!=='locked'&&u.status!=='pending';}
 // Trainer specializations can arrive as an array (normal) or a legacy
 // comma-separated string. Normalize everywhere so the Users list, profile,
@@ -6778,6 +6799,7 @@ function saveSession(){
     const nd=new Date();const nowHM=String(nd.getHours()).padStart(2,'0')+':'+String(nd.getMinutes()).padStart(2,'0');
     if(start<nowHM){err.textContent='The start time has already passed today. Please choose a later time.';err.style.display='block';return;}
   }
+  if(memberCheck&&!memberTypeAllowed(memberCheck,type)){err.textContent=memberTypeError(memberCheck,type);err.style.display='block';return;}
   if(!sessionTypesForTrainer(trainerId).includes(type)){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';return;}
   const trAvail=Users.all().find(u=>u.id===trainerId);
   if(!isBookableTrainer(trAvail)){err.textContent='That trainer is not available for booking right now. Please choose another trainer.';err.style.display='block';return;}
@@ -7829,11 +7851,13 @@ function renderMySessions(){
   const mySessions=Sessions.all().filter(s=>s.memberId===mid).sort((a,b)=> (a.date||'').localeCompare(b.date||'') );
   const assignedTrainerId=(Members.one(mid)||{}).assignedTrainerId;
   const assignedTrainer=Users.all().find(u=>u.id===assignedTrainerId&&isBookableTrainer(u));
-  const defaultType=assignedTrainer?(sessionTypesForTrainer(assignedTrainer.id)[0]||allSessionTypes()[0]):allSessionTypes()[0];
+  const _okTypes=allSessionTypes().filter(t=>memberTypeAllowed(Members.one(mid),t));
+  const _tt=assignedTrainer?sessionTypesForTrainer(assignedTrainer.id).filter(t=>_okTypes.includes(t)):[];
+  const defaultType=_tt[0]||_okTypes[0]||allSessionTypes()[0];
   el.innerHTML=`
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Book a Session</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
-      <div class="form-group"><label>Session Type *</label><select id="bs_type" onchange="updateBsTrainerOptions()">${allSessionTypes().map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Session Type *</label>${(()=>{const _l=planSessionTypes(Plans.one((Members.one(mid)||{}).planId));return _l?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Your plan covers: '+esc(_l.join(", "))+'</div>':'';})()}<select id="bs_type" onchange="updateBsTrainerOptions()">${allSessionTypes().filter(t=>memberTypeAllowed(Members.one(mid),t)).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
       <div class="form-group"><label>Trainer *</label>
         <input type="text" id="bs_trainerSearch" placeholder="Search trainer..." oninput="bsFilterTrainers(this.value)" onclick="bsFilterTrainers(this.value)" autocomplete="off">
         <div id="bs_trainerList" style="background:var(--navy-700);border:1px solid var(--navy-600);border-radius:8px;max-height:220px;overflow-y:auto;display:none;position:relative;z-index:20"></div>
@@ -7970,6 +7994,7 @@ function bookSession(){
   // A missing plan, or a plan without a numeric session count, cannot book (no unlimited fallback).
   const bkPlan=mem.planId?Plans.one(mem.planId):null;
   if(!bkPlan){ if(err){err.textContent='You do not have an active plan. Please visit the front desk.';err.style.display='block';} return; }
+  {const _t=document.getElementById('bs_type');const _tv=_t?_t.value:'';if(_tv&&!memberTypeAllowed(mem,_tv)){if(err){err.textContent=memberTypeError(mem,_tv);err.style.display='block';}return;}}
   if(bkPlan.sessions!=='Unlimited'){
     const limit=memberSessionLimit(mem,bkPlan);
     if(!Number.isFinite(limit)||limit<=0){ if(err){err.textContent='Your plan ('+bkPlan.name+') does not include trainer sessions.';err.style.display='block';} return; }
