@@ -3086,7 +3086,8 @@ function updateQueueBadge(){
   _gcashSeen=gn;
 }
 function buildAdminDashboard(){
-  const members=Members.all().filter(m=>m.status!=='Archived');
+  const pendingPay=Members.all().filter(m=>m.status==='pending_payment').length;
+  const members=Members.all().filter(m=>m.status!=='Archived'&&m.status!=='pending_payment');
   const active=members.filter(m=>m.status==='Active'||m.status==='Expiring Soon');
   const expiring=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=1&&d<=7;});
   const payments=Payments.all();
@@ -3141,7 +3142,7 @@ function buildAdminDashboard(){
     <span style="font-size:11px;color:var(--gray-500)">for members without QR - one entry per day</span>
   </div>
   <div class="stats-grid">
-    <div class="stat-card orange"><div class="stat-top"><div class="stat-label">Total Members</div><span class="stat-ico">👥</span></div><div class="stat-value">${members.length}</div><div class="stat-hint">Registered members</div></div>
+    <div class="stat-card orange"><div class="stat-top"><div class="stat-label">Total Members</div><span class="stat-ico">👥</span></div><div class="stat-value">${members.length}</div><div class="stat-hint">Paid members${pendingPay?' (+'+pendingPay+' awaiting payment)':''}</div></div>
     <div class="stat-card green"><div class="stat-top"><div class="stat-label">Active Members</div><span class="stat-ico">✅</span></div><div class="stat-value">${active.length}</div><div class="stat-hint">Current active</div></div>
     <div class="stat-card gold"><div class="stat-top"><div class="stat-label">Expiring Soon</div><span class="stat-ico">⏳</span></div><div class="stat-value">${expiring.length}</div><div class="stat-hint">Within 7 days</div></div>
     <div class="stat-card blue"><div class="stat-top"><div class="stat-label">Monthly Revenue</div><span class="stat-ico">💰</span></div><div class="stat-value" style="font-size:24px">₱${totalMonthRev.toLocaleString()}</div><div class="stat-hint">Memberships + ${walkinThisMonth.length} walk-ins</div></div>
@@ -3201,7 +3202,7 @@ function buildAdminDashboard(){
   })()}`;
 }
 function buildStaffDashboard(){
-  const members=Members.all().filter(m=>m.status!=='Archived');
+  const members=Members.all().filter(m=>m.status!=='Archived'&&m.status!=='pending_payment');
   const today_=today();
   const attendance=Attendance.all().filter(a=>a.date===today_);
   const expiring3=members.filter(m=>{const d=daysUntil(m.expiryDate);return d>=1&&d<=3;});
@@ -10891,7 +10892,7 @@ function updateHeroMemberCount(){
   if(!el)return;
   const fb=window.GMSFB;
   if(fb&&fb.enabled&&fb.ready&&fb._lastCloud&&fb._lastCloud.members===undefined)return;
-  const count=Members.all().filter(m=>m&&m.status!=='Archived').length;
+  const count=Members.all().filter(m=>m&&m.status!=='Archived'&&m.status!=='pending_payment').length;
   const prev=parseInt(el.getAttribute('data-count'),10);
   if(prev===count&&el.dataset.counted)return;
   const from=parseInt(el.textContent,10)||0;
