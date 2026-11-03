@@ -3446,7 +3446,7 @@ function buildMemberDashboard(){
       </div>
       ${plan?`<div class="mb-plan-price">₱${Number(plan.price).toLocaleString()}<span>/${plan.duration===1?'mo':plan.duration+'mo'}</span></div>`:''}
     </div>
-    ${plan?`<ul class="mb-plan-perks">${(plan.benefits||plan.perks||'').split(/\n|,/).map(b=>b.trim()).filter(Boolean).map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
+    ${plan?`<ul class="mb-plan-perks">${(plan.benefits||plan.perks||'').split(/\n|,/).map(b=>b.trim()).filter(Boolean).map(b=>`<li>${esc(b)}</li>`).join('')}<li>Exercises: ${esc(planExerciseText(plan))}</li></ul>`:''}
     <div class="mb-plan-meta">
       <div><span>Duration</span><strong>${plan?plan.duration+' month(s)':'-'}</strong></div>
       <div><span>Start</span><strong>${mem.planStart?formatDate(mem.planStart):'-'}</strong></div>
@@ -6574,6 +6574,7 @@ function planSessionTypes(plan){
   if(n==='standard')return BODY_PART_TYPES.concat(['Cardio','Flexibility']);
   return null;
 }
+function planExerciseText(plan){const l=planSessionTypes(plan);return l?l.join(', '):'All exercises';}
 function memberTypeAllowed(mem,type){
   const pl=mem&&mem.planId?Plans.one(mem.planId):null;
   const list=planSessionTypes(pl);
@@ -9239,6 +9240,7 @@ function renderPlans(){
         <div style="background:var(--navy-700);border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">Sessions</div><div style="font-weight:700">${p.sessions}</div></div>
       </div>
       ${benefits.map(b=>`<div class="plan-feature">✓ ${esc(b)}</div>`).join('')}
+      <div class="plan-feature">✓ Exercises: ${esc(planExerciseText(p))}</div>
       <div style="margin-top:10px;font-size:11px;color:var(--gray-500)">${count} active member${count!==1?'s':''}</div>
     </div>`;}).join('');
   el.innerHTML=`
@@ -9318,7 +9320,7 @@ function renderExplorePlans(){
       <div class="ec-badge">${esc(badge)}</div>
       <div class="ec-name">${esc(p.name)}</div>
       <div class="ec-price">&#8369;${Number(p.price).toLocaleString()}<span>${esc(durLabel)}</span></div>
-      <ul class="ec-features">${benefitLines}<li>&#10003; ${esc(sessLabel)}</li></ul>
+      <ul class="ec-features">${benefitLines}<li>&#10003; ${esc(sessLabel)}</li><li>&#10003; Exercises: ${esc(planExerciseText(p))}</li></ul>
       <button class="btn-primary ec-btn" onclick="startMemberSignup('${p.id}')">Choose ${esc(p.name)} →</button>
     </div>`;
   }).join('');
