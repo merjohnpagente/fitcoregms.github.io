@@ -277,7 +277,7 @@
 
               <tr><td>Trainer Session</td><td><span class="cmp-x">&#10005;</span></td><td><span class="cmp-check">&#10003;</span></td><td><span class="cmp-check">&#10003;</span></td><td><span class="cmp-x">&#10005;</span></td></tr>
 
-              <tr><td>Trainer Exercises</td><td><span class="cmp-val" style="font-size:11px">Legs, Arms, Shoulders, Back</span></td><td><span class="cmp-val" style="font-size:11px">Basic + Cardio, Flexibility</span></td><td><span class="cmp-val" style="font-size:11px">All</span></td><td><span class="cmp-x">&#10005;</span></td></tr>
+              <tr><td>Trainer Exercises</td><td><span class="cmp-val" style="font-size:11px">Legs, Arms, Shoulders, Back (3 exercises each)</span></td><td><span class="cmp-val" style="font-size:11px">Same 4 (5 exercises each) + Cardio, Flexibility</span></td><td><span class="cmp-val" style="font-size:11px">All exercises</span></td><td><span class="cmp-x">&#10005;</span></td></tr>
 
               <tr><td>Priority Trainer</td><td><span class="cmp-x">&#10005;</span></td><td><span class="cmp-x">&#10005;</span></td><td><span class="cmp-check">&#10003;</span></td><td><span class="cmp-x">&#10005;</span></td></tr>
 
@@ -2327,6 +2327,8 @@
       <div id="sessionFormError" class="error-msg"></div>
 
       <div class="form-group"><label>Session Type *</label><select id="sf_type" onchange="onSessionTypeChange()"><option value="">Select type</option></select></div>
+
+      <div class="form-group" id="sf_exWrap" style="display:none"><label>Exercise *</label><select id="sf_exercise"></select></div>
 
       <div class="form-row">
 

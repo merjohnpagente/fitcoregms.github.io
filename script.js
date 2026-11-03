@@ -3261,7 +3261,7 @@ function buildTrainerDashboard(){
       ${todaySessions.length?todaySessions.map(s=>`<tr>
         <td>${esc(s.start)}–${esc(s.end)}</td>
         <td>${esc(s.memberName||'-')}</td>
-        <td>${esc(s.type||'-')}</td>
+        <td>${esc(s.type||'-')}${s.exercise?'<div style="font-size:11px;color:var(--gray-500)">'+esc(s.exercise)+'</div>':''}</td>
         <td>${statusBadge(s)}</td>
       </tr>`).join(''):`<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📅</div><p>No sessions today</p></div></td></tr>`}
       </tbody></table>
@@ -3273,7 +3273,7 @@ function buildTrainerDashboard(){
         <td>${formatDate(s.date)}</td>
         <td>${esc(s.start)}–${esc(s.end)}</td>
         <td>${esc(s.memberName||'-')}</td>
-        <td>${esc(s.type||'-')}</td>
+        <td>${esc(s.type||'-')}${s.exercise?'<div style="font-size:11px;color:var(--gray-500)">'+esc(s.exercise)+'</div>':''}</td>
         <td>${statusBadge(s)}</td>
       </tr>`).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📅</div><p>No upcoming sessions</p></div></td></tr>`}
       </tbody></table>
@@ -6312,7 +6312,7 @@ function renderListView(){
     return`<tr style="${rowHighlight}">
       <td>${formatDate(s.date)}</td><td>${esc(s.start)}–${esc(s.end)}</td>
       <td>${esc(s.trainerName||'-')}${myBadge}</td><td>${esc(s.memberName||'-')}</td>
-      <td>${esc(s.type)}</td>
+      <td>${esc(s.type)}${s.exercise?'<div style="font-size:11px;color:var(--gray-500)">'+esc(s.exercise)+'</div>':''}</td>
       <td><span class="badge ${statusCls}">${esc(s.status)}</span></td>
       <td>${createdByDisplay}</td>
       <td><div class="td-actions">
@@ -6574,7 +6574,32 @@ function planSessionTypes(plan){
   if(n==='standard')return BODY_PART_TYPES.concat(['Cardio','Flexibility']);
   return null;
 }
-function planExerciseText(plan){const l=planSessionTypes(plan);return l?l.join(', '):'All exercises';}
+// Specific exercises per body part. Basic gets the first 3 of each, Standard the first 5, Premium all.
+const EXERCISE_CATALOG={
+  Legs:['Squat','Lunges','Leg Press','Leg Curl','Leg Extension','Romanian Deadlift','Calf Raise'],
+  Arms:['Bicep Curl','Tricep Pushdown','Hammer Curl','Skull Crusher','Preacher Curl','Dips','Cable Curl'],
+  Shoulders:['Shoulder Press','Lateral Raise','Front Raise','Rear Delt Fly','Arnold Press','Shrugs','Upright Row'],
+  Back:['Lat Pulldown','Seated Row','Deadlift','Pull-ups','Bent-over Row','T-Bar Row','Back Extension']
+};
+function planExerciseLimit(plan){
+  if(!plan)return null;
+  if(Number(plan.exerciseLimit)>0)return Number(plan.exerciseLimit);
+  const n=String(plan.name||'').trim().toLowerCase();
+  return n==='basic'?3:(n==='standard'?5:null);
+}
+function exercisesForPlan(plan,type){
+  const all=EXERCISE_CATALOG[type]||[];
+  const lim=planExerciseLimit(plan);
+  return lim?all.slice(0,lim):all.slice();
+}
+function memberExerciseError(mem,type,exercise){
+  const pl=mem&&mem.planId?Plans.one(mem.planId):null;
+  if(!(type in EXERCISE_CATALOG))return '';
+  if(!exercise)return 'Choose an exercise for '+type+'.';
+  if(!exercisesForPlan(pl,type).includes(exercise))return exercise+' is not included in the '+(pl?pl.name:'current')+' plan. Allowed for '+type+': '+exercisesForPlan(pl,type).join(', ')+'.';
+  return '';
+}
+function planExerciseText(plan){const l=planSessionTypes(plan);const n=planExerciseLimit(plan);return (l?l.join(', '):'All exercises')+(n?' ('+n+' exercises each body part)':'');}
 function memberTypeAllowed(mem,type){
   const pl=mem&&mem.planId?Plans.one(mem.planId):null;
   const list=planSessionTypes(pl);
@@ -6688,7 +6713,19 @@ function populateSessionTypeOptions(selected){
     sel.value=keep;
   }
 }
+function updateSfExercises(selected){
+  const t=document.getElementById('sf_type'),w=document.getElementById('sf_exWrap'),sel=document.getElementById('sf_exercise');
+  if(!t||!w||!sel)return;
+  if(!(t.value in EXERCISE_CATALOG)){w.style.display='none';sel.innerHTML='';return;}
+  const m=Members.one((document.getElementById('sf_memberId')||{}).value||'');
+  const pl=m&&m.planId?Plans.one(m.planId):null;
+  const list=exercisesForPlan(pl,t.value);
+  sel.innerHTML='<option value="">Select exercise</option>'+list.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');
+  if(selected&&list.includes(selected))sel.value=selected;
+  w.style.display='';
+}
 function onSessionTypeChange(){
+  updateSfExercises();
   document.getElementById('sf_trainer').value='';
   document.getElementById('sf_trainerSearch').value='';
   const hint=document.getElementById('sf_availHint');
@@ -6716,6 +6753,7 @@ function openSessionModal(preDate){
   document.getElementById('sf_trainerList').style.display='none';
   populateSessionTypeOptions('');
   document.getElementById('sf_memberSearch').value='';document.getElementById('sf_memberId').value='';document.getElementById('sf_memberList').style.display='none';
+  updateSfExercises();
   // No past dates for new sessions - min=today blocks earlier days in the picker
   const dateEl=document.getElementById('sf_date');
   dateEl.min=today();
@@ -6741,6 +6779,7 @@ function editSession(id){
   document.getElementById('sf_trainerList').style.display='none';
   updateSessionTypesByTrainer();
   document.getElementById('sf_memberSearch').value=s.memberName||'';document.getElementById('sf_memberId').value=s.memberId||'';
+  updateSfExercises(s.exercise||'');
   // Editing: keep original date if already past; otherwise block earlier than today
   const dateEl=document.getElementById('sf_date');
   dateEl.min=(s.date<today())?s.date:today();
@@ -6775,6 +6814,7 @@ function filterSessionMember(val){
 function selectSessMember(id,name){
   document.getElementById('sf_memberSearch').value=name;
   document.getElementById('sf_memberId').value=id;
+  updateSfExercises();
   document.getElementById('sf_memberList').style.display='none';
 }
 function saveSession(){
@@ -6803,6 +6843,7 @@ function saveSession(){
     if(start<nowHM){err.textContent='The start time has already passed today. Please choose a later time.';err.style.display='block';return;}
   }
   if(memberCheck&&!memberTypeAllowed(memberCheck,type)){err.textContent=memberTypeError(memberCheck,type);err.style.display='block';return;}
+  {const _ee=memberCheck&&(type in EXERCISE_CATALOG)?memberExerciseError(memberCheck,type,(document.getElementById('sf_exercise')||{}).value||''):'';if(_ee){err.textContent=_ee;err.style.display='block';return;}}
   if(!sessionTypesForTrainer(trainerId).includes(type)){err.textContent='The selected trainer does not offer '+type+'. Please choose another type or trainer.';err.style.display='block';return;}
   const trAvail=Users.all().find(u=>u.id===trainerId);
   if(!isBookableTrainer(trAvail)){err.textContent='That trainer is not available for booking right now. Please choose another trainer.';err.style.display='block';return;}
@@ -6833,7 +6874,7 @@ function saveSession(){
   if(!isTrainerAvailable(trAvail,type,date,start,end,editingSessionId)){err.textContent='That trainer is no longer available for the selected slot. Please choose another available trainer or time.';err.style.display='block';return;}
   const trainer=Users.all().find(u=>u.id===trainerId);
   const member=Members.one(memberId);
-  const data={trainerId,trainerName:trainer?trainer.name:'Unknown',memberId,memberName:member?member.name:'Unknown',type,date,start,end,notes:sanitizeText(document.getElementById('sf_notes').value.trim()),status:'Scheduled'};
+  const data={trainerId,trainerName:trainer?trainer.name:'Unknown',memberId,memberName:member?member.name:'Unknown',type,exercise:(type in EXERCISE_CATALOG)?((document.getElementById('sf_exercise')||{}).value||''):'',date,start,end,notes:sanitizeText(document.getElementById('sf_notes').value.trim()),status:'Scheduled'};
   if(editingSessionId){
     const idx=sessions.findIndex(s=>s.id===editingSessionId);
     if(idx>-1)sessions[idx]={...sessions[idx],...data,editedBy:currentUser.name,editedByUsername:currentUser.username,editedByRole:currentUser.role,editedAt:today()};
@@ -7860,7 +7901,8 @@ function renderMySessions(){
   el.innerHTML=`
   <div class="table-card" style="margin-bottom:16px"><div class="table-header"><h3>Book a Session</h3></div>
     <div style="padding:16px 20px;display:grid;gap:12px">
-      <div class="form-group"><label>Session Type *</label>${(()=>{const _l=planSessionTypes(Plans.one((Members.one(mid)||{}).planId));return _l?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Your plan covers: '+esc(_l.join(", "))+'</div>':'';})()}<select id="bs_type" onchange="updateBsTrainerOptions()">${allSessionTypes().filter(t=>memberTypeAllowed(Members.one(mid),t)).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
+      <div class="form-group"><label>Session Type *</label>${(()=>{const _l=planSessionTypes(Plans.one((Members.one(mid)||{}).planId));return _l?'<div style="font-size:11px;color:var(--gray-500);margin-bottom:6px">Your plan covers: '+esc(_l.join(", "))+'</div>':'';})()}<select id="bs_type" onchange="updateBsExercises();updateBsTrainerOptions()">${allSessionTypes().filter(t=>memberTypeAllowed(Members.one(mid),t)).map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}</select></div>
+      <div class="form-group" id="bs_exWrap" style="display:none"><label>Exercise *</label><select id="bs_exercise"></select></div>
       <div class="form-group"><label>Trainer *</label>
         <input type="text" id="bs_trainerSearch" placeholder="Search trainer..." oninput="bsFilterTrainers(this.value)" onclick="bsFilterTrainers(this.value)" autocomplete="off">
         <div id="bs_trainerList" style="background:var(--navy-700);border:1px solid var(--navy-600);border-radius:8px;max-height:220px;overflow-y:auto;display:none;position:relative;z-index:20"></div>
@@ -7883,12 +7925,24 @@ function renderMySessions(){
       const tr=Users.one(s.trainerId);
       const statusColor={Pending:'var(--gold)',Accepted:'var(--cyan)',Scheduled:'var(--cyan)',Completed:'var(--green)',Declined:'var(--red)',Cancelled:'var(--red)'}[s.status]||'var(--gray-500)';
       const actionBtn=s.status==='Declined'?`<button class="btn-secondary btn-sm" onclick="rescheduleSession('${s.id}')" style="padding:4px 10px;font-size:11px">Reschedule</button>`:`<span style="font-size:11px;color:var(--gray-500)">-</span>`;
-      return `<tr><td>${formatDate(s.date)}</td><td>${esc(s.start||'')}–${esc(s.end||'')}</td><td>${esc(tr? (tr.coachName||tr.name): s.trainerName||s.trainerId)}</td><td>${esc(s.type||'-')}</td><td><span class="badge" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:${statusColor}">${esc(s.status)}</span></td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.progressNotes||s.notes||'-')}</td><td>${actionBtn}</td></tr>`;
+      return `<tr><td>${formatDate(s.date)}</td><td>${esc(s.start||'')}–${esc(s.end||'')}</td><td>${esc(tr? (tr.coachName||tr.name): s.trainerName||s.trainerId)}</td><td>${esc(s.type||'-')}${s.exercise?'<div style="font-size:11px;color:var(--gray-500)">'+esc(s.exercise)+'</div>':''}</td><td><span class="badge" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:${statusColor}">${esc(s.status)}</span></td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.progressNotes||s.notes||'-')}</td><td>${actionBtn}</td></tr>`;
     }).join('')}</tbody></table></div>`:`<div class="empty-state" style="padding:30px"><div class="empty-icon">📅</div><p>No sessions yet - book one above</p></div>`}
   </div>`;
   const typeSel=document.getElementById('bs_type');
   if(typeSel&&defaultType)typeSel.value=defaultType;
+  updateBsExercises();
   updateBsTrainerOptions(assignedTrainerId);
+}
+function updateBsExercises(){
+  const t=document.getElementById('bs_type'),w=document.getElementById('bs_exWrap'),sel=document.getElementById('bs_exercise');
+  if(!t||!w||!sel)return;
+  const mem=Members.one((currentUser&&(currentUser.memberId||currentUser.id))||'');
+  const pl=mem&&mem.planId?Plans.one(mem.planId):null;
+  if(!(t.value in EXERCISE_CATALOG)){w.style.display='none';sel.innerHTML='';return;}
+  const list=exercisesForPlan(pl,t.value);
+  sel.innerHTML=list.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');
+  const lim=planExerciseLimit(pl);
+  w.style.display='';
 }
 function updateBsTrainerOptions(preferredId){
   const typeSel=document.getElementById('bs_type');
@@ -7997,7 +8051,8 @@ function bookSession(){
   // A missing plan, or a plan without a numeric session count, cannot book (no unlimited fallback).
   const bkPlan=mem.planId?Plans.one(mem.planId):null;
   if(!bkPlan){ if(err){err.textContent='You do not have an active plan. Please visit the front desk.';err.style.display='block';} return; }
-  {const _t=document.getElementById('bs_type');const _tv=_t?_t.value:'';if(_tv&&!memberTypeAllowed(mem,_tv)){if(err){err.textContent=memberTypeError(mem,_tv);err.style.display='block';}return;}}
+  {const _t=document.getElementById('bs_type');const _tv=_t?_t.value:'';if(_tv&&!memberTypeAllowed(mem,_tv)){if(err){err.textContent=memberTypeError(mem,_tv);err.style.display='block';}return;}
+   const _ex=document.getElementById('bs_exercise');const _ee=memberExerciseError(mem,_tv,_ex?_ex.value:'');if(_ee){if(err){err.textContent=_ee;err.style.display='block';}return;}}
   if(bkPlan.sessions!=='Unlimited'){
     const limit=memberSessionLimit(mem,bkPlan);
     if(!Number.isFinite(limit)||limit<=0){ if(err){err.textContent='Your plan ('+bkPlan.name+') does not include trainer sessions.';err.style.display='block';} return; }
@@ -8033,7 +8088,7 @@ function bookSession(){
     if(!rateLimitOk('gms_rl_book_gap_'+rlMid,1,10000)||!rateLimitOk('gms_rl_book_'+rlMid,5,10*60*1000)){
       if(err){err.textContent='Too many booking requests - please wait a few minutes.';err.style.display='block';} return;
     }
-    Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
+    Sessions.add({id:'SES'+uid(),memberId:mid,memberName:mem?mem.name:currentUser.name,trainerId,trainerName:trainer? (trainer.coachName||trainer.name):'',date,start,end,type,exercise:((document.getElementById('bs_exercise')||{}).value&&type in EXERCISE_CATALOG)?document.getElementById('bs_exercise').value:'',status:'Pending',progressNotes:'',notes:'',createdAt:today(),createdBy:currentUser.name});
     toast('Session request sent - awaiting trainer approval.'); renderMySessions(); updateSchedPendingBadge();
     },
     'Yes, Request Session','btn-primary');
