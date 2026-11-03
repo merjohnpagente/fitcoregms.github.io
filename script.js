@@ -5114,6 +5114,7 @@ function updateRenewBadge(){
   }
   b.textContent='!';b.style.display=on?'flex':'none';
 }
+function addonRoom(mem,plan){const n=Number(plan&&plan.sessions);if(!(n>0))return 0;return Math.max(0,n-Math.max(0,Number(mem&&mem.bonusSessions)||0));}
 function addonQty(){const el=document.getElementById('addonQty');const q=el?parseInt(el.value,10):1;return (q>=1&&q<=20)?q:1;}
 function addonUpdateTotal(){const t=document.getElementById('addonTotal');if(t)t.textContent='₱'+(addonQty()*getSessionPrice()).toLocaleString();}
 function openSessionAddon(){
@@ -5124,7 +5125,8 @@ function openSessionAddon(){
   const latest=latestGcashProof(mem.id);
   if(latest&&latest.status==='open'){toast('You already submitted a payment. Please wait for verification.','info');return;}
   if(!gcashReady()){toast('GCash payment is not set up yet. Please pay at the front desk.','info');return;}
-  const q=addonQty();
+  if(addonRoom(mem,plan)<=0){toast('You reached the extra session limit for your plan.','info');return;}
+  const q=Math.min(addonQty(),addonRoom(mem,plan));
   _fillGcashModal(mem,{name:q+' extra trainer session'+(q!==1?'s':''),price:q*getSessionPrice()},'Add Trainer Sessions');
   const m=document.getElementById('gcashPayModal');m.dataset.mode='addon';m.dataset.qty=String(q);
 }
@@ -5174,9 +5176,9 @@ function renderMyRenew(){
     <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)">Add Trainer Sessions</div>
     <div style="font-size:12px;color:var(--gray-300);line-height:1.7;margin:8px 0 14px">Need more sessions? Choose how many, then pay with GCash or at the front desk. Your membership expiry does not change.</div>
     <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
-      <div class="form-group" style="margin:0"><label>Sessions</label><select id="addonQty" onchange="addonUpdateTotal()" style="min-width:90px">${Array.from({length:Math.min(20,Number(plan.sessions)||1)},(_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('')}</select></div>
+      <div class="form-group" style="margin:0"><label>Sessions</label><select id="addonQty" onchange="addonUpdateTotal()" style="min-width:90px">${Array.from({length:Math.max(1,Math.min(20,addonRoom(mem,plan)))},(_,i)=>'<option value="'+(i+1)+'">'+(i+1)+'</option>').join('')}</select></div>
       <div style="font-size:13px;color:var(--gray-300)">₱${getSessionPrice().toLocaleString()} per session<br>Total: <strong id="addonTotal" style="color:var(--green);font-size:16px">₱${getSessionPrice().toLocaleString()}</strong></div>
-      ${(latest&&latest.status==='open')?'<span style="font-size:12px;color:var(--gold)">Waiting for verification</span>':'<button class="btn-primary" style="width:auto;padding:11px 22px" onclick="openSessionAddon()">Pay via GCash</button>'}
+      ${(addonRoom(mem,plan)<=0)?'<span style="font-size:12px;color:var(--gold)">You reached the limit of '+Number(plan.sessions)+' extra sessions.</span>':(latest&&latest.status==='open')?'<span style="font-size:12px;color:var(--gold)">Waiting for verification</span>':'<button class="btn-primary" style="width:auto;padding:11px 22px" onclick="openSessionAddon()">Pay via GCash</button>'}
     </div>
     <div style="font-size:12px;color:var(--gray-500);margin-top:10px">Or tell the front desk how many sessions you want and pay there in Cash or GCash.</div>
   </div>`:''}
@@ -5357,7 +5359,7 @@ async function submitWalkinProof(){
 async function applySessionsAddon(memberId,qty,amount,method,reference,notes){
   const member=Members.one(memberId);if(!member)throw new Error('Member not found.');
   qty=Math.floor(Number(qty));if(!(qty>=1&&qty<=20))throw new Error('Choose between 1 and 20 sessions.');
-  {const _pl=member.planId?Plans.one(member.planId):null;const _mx=_pl&&Number(_pl.sessions)>0?Number(_pl.sessions):20;if(qty>_mx)throw new Error('You can add at most '+_mx+' sessions at a time for this plan.');}
+  {const _pl=member.planId?Plans.one(member.planId):null;const _mx=_pl?addonRoom(member,_pl):20;if(qty>_mx)throw new Error(_mx>0?'You can add at most '+_mx+' more session'+(_mx!==1?'s':'')+' for this plan.':'This member reached the extra session limit for the plan.');}
   const newBonus=Math.max(0,Number(member.bonusSessions)||0)+qty;
   const id=nextId(KEY.payments,'PAY');
   const date=today();
@@ -5419,8 +5421,9 @@ async function saveAddSessions(){
   if(!pl||pl.sessions==='Unlimited')return fail('This member\'s plan does not use trainer sessions.');
   if(m.status!=='Active'&&m.status!=='Expiring Soon')return fail('The membership must be active.');
   const q=parseInt(document.getElementById('as_qty').value,10);
-  const _mx=Number(pl.sessions)>0?Number(pl.sessions):20;
-  if(!(q>=1&&q<=_mx))return fail('Enter 1 to '+_mx+' sessions for this plan.');
+  const _mx=addonRoom(m,pl);
+  if(_mx<=0)return fail('This member reached the extra session limit ('+Number(pl.sessions)+') for the plan.');
+  if(!(q>=1&&q<=_mx))return fail('Enter 1 to '+_mx+' sessions (limit for this plan).');
   const method=document.getElementById('as_method').value;
   const ref=_normRef(document.getElementById('as_ref').value);
   if(method==='GCash'){
