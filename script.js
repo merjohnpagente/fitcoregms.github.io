@@ -6564,14 +6564,14 @@ const DEFAULT_SESSION_TYPES=['Personal Training','Cardio','Strength Training','F
 const BODY_PART_TYPES=['Legs','Arms','Shoulders','Back'];
 const SESSION_TYPE_CATALOG=['Legs','Arms','Shoulders','Back','Personal Training','Strength Training','Cardio','Yoga','Zumba','HIIT','Flexibility','CrossFit','Body Building','Muay Thai','Boxing','Pilates'];
 // Exercises (session types) a plan can train. null = everything.
-// Basic: Legs + Arms. Standard: Legs, Arms, Shoulders, Back. Premium/others: all.
+// Basic: Legs, Arms, Shoulders, Back. Standard: those + Cardio + Flexibility. Premium/others: all.
 // A plan can override this with plan.sessionTypes (array).
 function planSessionTypes(plan){
   if(!plan)return null;
   if(Array.isArray(plan.sessionTypes)&&plan.sessionTypes.length)return plan.sessionTypes;
   const n=String(plan.name||'').trim().toLowerCase();
-  if(n==='basic')return ['Legs','Arms'];
-  if(n==='standard')return BODY_PART_TYPES.slice();
+  if(n==='basic')return BODY_PART_TYPES.slice();
+  if(n==='standard')return BODY_PART_TYPES.concat(['Cardio','Flexibility']);
   return null;
 }
 function memberTypeAllowed(mem,type){
