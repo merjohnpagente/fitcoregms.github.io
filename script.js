@@ -6560,16 +6560,18 @@ const DEFAULT_SESSION_TYPES=['Personal Training','Cardio','Strength Training','F
 // Public catalogue of trainer specializations. Session Type is built from
 // this list plus whatever trainers have saved, so Boxing/Zumba/etc. remain
 // selectable even before the users snapshot arrives on a member device.
-const SESSION_TYPE_CATALOG=['Personal Training','Strength Training','Cardio','Yoga','Zumba','HIIT','Flexibility','CrossFit','Body Building','Muay Thai','Boxing','Pilates'];
+// Body-part workouts: any trainer can run these (like Assessment), and Basic/Standard plans are limited to them.
+const BODY_PART_TYPES=['Legs','Arms','Shoulders','Back'];
+const SESSION_TYPE_CATALOG=['Legs','Arms','Shoulders','Back','Personal Training','Strength Training','Cardio','Yoga','Zumba','HIIT','Flexibility','CrossFit','Body Building','Muay Thai','Boxing','Pilates'];
 // Exercises (session types) a plan can train. null = everything.
-// Basic: Cardio + Strength Training. Standard: those + Flexibility + Assessment. Premium/others: all.
+// Basic: Legs + Arms. Standard: Legs, Arms, Shoulders, Back. Premium/others: all.
 // A plan can override this with plan.sessionTypes (array).
 function planSessionTypes(plan){
   if(!plan)return null;
   if(Array.isArray(plan.sessionTypes)&&plan.sessionTypes.length)return plan.sessionTypes;
   const n=String(plan.name||'').trim().toLowerCase();
-  if(n==='basic')return ['Cardio','Strength Training'];
-  if(n==='standard')return ['Cardio','Strength Training','Flexibility','Assessment'];
+  if(n==='basic')return ['Legs','Arms'];
+  if(n==='standard')return BODY_PART_TYPES.slice();
   return null;
 }
 function memberTypeAllowed(mem,type){
@@ -6599,7 +6601,7 @@ function trainerSpecs(u){
 function sessionTypesForTrainer(trainerId){
   const trainer=Users.all().find(u=>u.id===trainerId);
   const types=(trainer?trainerSpecs(trainer):DEFAULT_SESSION_TYPES).slice();
-  if(!types.includes('Assessment'))types.push('Assessment');
+  ['Assessment'].concat(BODY_PART_TYPES).forEach(function(t){if(!types.includes(t))types.push(t);});
   return types;
 }
 function allSessionTypes(){
@@ -6615,7 +6617,7 @@ function allSessionTypes(){
   return types.concat(extra,['Assessment']);
 }
 function trainerOffersType(trainer,type){
-  if(!type||type==='Assessment')return true;
+  if(!type||type==='Assessment'||BODY_PART_TYPES.includes(type))return true;
   return trainerSpecs(trainer).includes(type);
 }
 function trainersForSessionType(type){
