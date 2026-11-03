@@ -110,6 +110,7 @@ async function submitGcashProof(body) {
     if (!(qty >= 1 && qty <= 20)) return bad('Choose between 1 and 20 sessions.');
     if (member.status !== 'Active' && member.status !== 'Expiring Soon') return bad('Your membership must be active to add sessions.', 409);
     if (!plan || String(plan.sessions) === 'Unlimited' || !(Number(plan.sessions) > 0)) return bad('Your plan does not use trainer sessions.', 409);
+    if (qty > Number(plan.sessions)) return bad('You can add at most ' + Number(plan.sessions) + ' sessions at a time for your plan.');
     const ss = await ctx.db.collection('settings').doc('sessions').get();
     const price = ss.exists && Number((ss.data() || {}).price) > 0 ? Number(ss.data().price) : 150;
     addon = { qty, amount: qty * price };
