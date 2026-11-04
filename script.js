@@ -5246,7 +5246,7 @@ function gcashHistoryHtml(){
       <td>${(ok&&!(currentUser&&currentUser.role==='admin'))?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
   return `<div class="table-card" style="margin-bottom:16px"><div class="table-header" style="flex-wrap:wrap;gap:10px"><h3>GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''}</span></h3>${_gcashSearchBox('gcashSearchH')}</div>
-    <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'refreshGcashViews()')}</div>`;
+    <div style="overflow-x:auto"><table class="gcash-hist"><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'refreshGcashViews()')}</div>`;
 }
 function gcashVerifyHtml(){
   const allOpen=openGcashProofs();
