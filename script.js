@@ -5243,7 +5243,7 @@ function gcashHistoryHtml(){
       <td style="font-family:monospace">${esc(p.reference)}</td>
       <td><span class="badge ${ok?'badge-paid':'badge-expired'}">${ok?'Confirmed':'Rejected'}</span>${!ok&&p.rejectReason?`<div style="font-size:11px;color:var(--gray-500);margin-top:3px">${esc(p.rejectReason)}</div>`:''}</td>
       <td>${esc(p.reviewedBy||'-')}<div style="font-size:11px;color:var(--gray-500)">${p.reviewedAt?formatDateTime(p.reviewedAt):''}</div></td>
-      <td>${ok?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
+      <td>${(ok&&!(currentUser&&currentUser.role==='admin'))?'':`<button class="btn-icon" title="Delete this submission" onclick="deleteGcashProof('${esc(p.id)}')" style="color:#ef4444">${iconSvg('trash',14)}</button>`}</td>
     </tr>`;}).join('');
   return `<div class="table-card" style="margin-bottom:16px"><div class="table-header" style="flex-wrap:wrap;gap:10px"><h3>GCash Payment Decisions <span style="font-size:12px;font-weight:400;color:var(--gray-500);margin-left:6px">${done.length} record${done.length!==1?'s':''}</span></h3>${_gcashSearchBox('gcashSearchH')}</div>
     <div style="overflow-x:auto"><table><thead><tr><th>Receipt</th><th>Name</th><th>Amount</th><th>Reference</th><th>Status</th><th>Reviewed by</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7"><div class="empty-state"><p>No match found</p></div></td></tr>'}</tbody></table></div>${_pagBar('gcashHPage',gcashHPage,hPages,done.length,'refreshGcashViews()')}</div>`;
@@ -5276,9 +5276,9 @@ function deleteGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
   const p=GcashPayments.one(id);
   if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof'))return;
-  if(p.status==='confirmed'){toast('A confirmed payment cannot be deleted here.','error');return;}
+  if(p.status==='confirmed'&&currentUser.role!=='admin'){toast('Only an admin can delete a confirmed payment record.','error');return;}
   const who=p.type==='walkin_proof'?p.visitorName:p.memberName;
-  openConfirm('Delete Submission','Delete the GCash submission of <strong>'+esc(who)+'</strong> (Ref '+esc(p.reference)+')? This removes the receipt picture and cannot be undone.',function(){
+  openConfirm('Delete Submission','Delete the GCash submission of <strong>'+esc(who)+'</strong> (Ref '+esc(p.reference)+')? This removes the receipt picture and cannot be undone.'+(p.status==='confirmed'?'<div style="margin-top:10px;font-size:12px;color:var(--gold);line-height:1.6">This payment was already confirmed. The payment record in Billing stays, but its GCash receipt picture will no longer be shown there.</div>':''),function(){
     GcashPayments.remove(id);
     try{logActivity('Deleted','GCash Submission',who,'Ref: '+p.reference);}catch(e){}
     toast('Submission deleted.','success');
