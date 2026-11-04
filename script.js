@@ -2127,7 +2127,7 @@ function msValidateCredentials(err){
     if(ageM>=16&&ageM<=17){ const cc=document.getElementById('msConsentWritten'); if(!cc||!cc.checked) return fail('Please confirm parental/guardian written consent has been signed on file.'); }
   }
   if(!/^[a-zA-Z0-9._]{3,20}$/.test(uname))return fail('Username must be 3–20 characters (letters, numbers, dots, underscores only).');
-  if(Members.all().find(m=>m.username&&m.username.toLowerCase()===uname.toLowerCase())||Users.all().find(u=>u.username&&u.username.toLowerCase()===uname.toLowerCase()))return fail('Username already taken. Please choose another.');
+  if(Members.all().find(m=>m.status!=='Archived'&&m.username&&m.username.toLowerCase()===uname.toLowerCase())||Users.all().find(u=>u.username&&u.username.toLowerCase()===uname.toLowerCase()))return fail('Username already taken. Please choose another.');
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return fail('Please enter a valid email address.');
   if(!validatePhone(contact,msDial))return fail(phoneErrorMsg(msDial));
   if(pass.length<8)return fail('Password must be at least 8 characters.');
@@ -2135,7 +2135,7 @@ function msValidateCredentials(err){
   // Require at least "Fair" password strength (score >= 2)
   if((window._msPwScore||0)<2)return fail('Password is too weak. Please add uppercase, numbers, or special characters.');
   const normContact=normalizeContact(contact,msDial);
-  if(Members.all().find(m=>m.contact===normContact))return fail('Phone number already registered. Please log in instead or use another number.');
+  if(Members.all().find(m=>m.status!=='Archived'&&m.contact===normContact))return fail('Phone number already registered. Please log in instead or use another number.');
   return{name,uname,contact:normContact,email,pass,dob,sex,age:ageM,address,province:msAddr.province,city:msAddr.city,barangay:msAddr.barangay,street:msAddr.street,firstName,middleName,lastName,suffix};
 }
 async function submitMemberSignup(){
@@ -2165,15 +2165,28 @@ async function submitMemberSignup(){
   const authEmail=String(v.email||'').trim().toLowerCase();
   if(!authEmail){err.textContent='A valid email address is required for your login account.';err.style.display='block';restoreBtn();return;}
   // Server-side duplicate check (catches cross-device duplicates)
+  let reviveId=null;
   try{
-    const dupUser=await GMSFB.db.collection('members').where('username','==',v.uname.toLowerCase()).limit(1).get();
-    if(!dupUser.empty){err.textContent='Username already taken. Please choose another.';err.style.display='block'; restoreBtn(); return;}
-    const dupContact=await GMSFB.db.collection('members').where('contact','==',v.contact).limit(1).get();
-    if(!dupContact.empty){err.textContent='Phone number already registered. Please log in instead.';err.style.display='block'; restoreBtn(); return;}
+    // Archived sign-ups (usually unpaid ones auto-archived) do not block a new registration:
+    // the person registers again and that archived record is reused (see reviveId below).
+    const dupQ=async(field,val)=>{
+      const snap=await GMSFB.db.collection('members').where(field,'==',val).limit(10).get();
+      let live=false,arch=null;
+      snap.forEach(d=>{const x=d.data();if(x.status==='Archived'){arch=arch||d.id;}else live=true;});
+      return {live,arch};
+    };
+    const qU=await dupQ('username',v.uname.toLowerCase());
+    if(qU.live){err.textContent='Username already taken. Please choose another.';err.style.display='block'; restoreBtn(); return;}
+    const qC=await dupQ('contact',v.contact);
+    if(qC.live){err.textContent='Phone number already registered. Please log in instead.';err.style.display='block'; restoreBtn(); return;}
+    let qE={live:false,arch:null};
     if(v.email){
-      const dupEmail=await GMSFB.db.collection('members').where('email','==',v.email.toLowerCase()).limit(1).get();
-      if(!dupEmail.empty){err.textContent='Email already registered. Please log in instead.';err.style.display='block'; restoreBtn(); return;}
+      qE=await dupQ('email',v.email.toLowerCase());
+      if(qE.live){err.textContent='Email already registered. Please log in instead.';err.style.display='block'; restoreBtn(); return;}
     }
+    const arch=[qU.arch,qC.arch,qE.arch].filter(Boolean);
+    if(arch.length&&arch.some(x=>x!==arch[0])){err.textContent='These details match more than one old registration. Please visit the front desk.';err.style.display='block'; restoreBtn(); return;}
+    reviveId=arch[0]||null;
   }catch(e){}
   const r=await GMSFB.createUserCreds(authEmail,v.pass,v.contact);
   if(!r.ok){
@@ -2181,15 +2194,15 @@ async function submitMemberSignup(){
       // Recover earlier half-finished signups: verify the password on the
       // SECONDARY app (the context secSetDoc writes through).
       const si=await GMSFB.secSignIn(authEmail,v.pass);
-      if(!si.ok){err.textContent='Email already registered. Please log in instead.';err.style.display='block'; restoreBtn(); return;}
+      if(!si.ok){err.textContent=reviveId?'This email was used for an earlier registration. Enter the same password you used before, or tap Forgot Password on the login page to reset it, then register again.':'Email already registered. Please log in instead.';err.style.display='block'; restoreBtn(); return;}
     } else {err.textContent=r.error;err.style.display='block'; restoreBtn(); return;}
   }
   const plan=planId?Plans.one(planId):null;
   // Collision-safe ID: the local cache may be empty on guest devices, so also
   // skip any ID that already exists in the cloud mirror.
-  let id=nextMemberId();
+  let id=reviveId||nextMemberId();
   const cloudMembers=(window.GMSFB&&GMSFB._lastCloud&&GMSFB._lastCloud.members)||{};
-  while(cloudMembers[id])id='MEM-'+String(parseInt(id.split('-')[1],10)+1).padStart(4,'0');
+  if(!reviveId)while(cloudMembers[id])id='MEM-'+String(parseInt(id.split('-')[1],10)+1).padStart(4,'0');
   const dob=v.dob||''; const calcAgeVal=v.age||calcAge(dob);
   const addr=sanitizeText(v.address||'');
   // Guardian consent fields (ages 13-17)
@@ -2962,7 +2975,9 @@ function scanRenewals(){
     if(m.status!=='pending_payment')return;
     const created=new Date(m.createdAt||now).getTime();
     if(now-created>PENDING_ARCHIVE_DAYS*86400000){
-      m.status='Archived';changed=true;
+      // A member who already submitted a GCash payment is waiting on staff, not unpaid: never archive them.
+      if(GcashPayments.all().some(p=>p.memberId===m.id&&p.status==='open'))return;
+      m.status='Archived';m.archivedAt=today();changed=true;
       resolveNotifsForMember(m.id);
     }
   });
