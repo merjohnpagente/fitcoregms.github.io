@@ -10116,10 +10116,37 @@ function renderUsers(){
   <div class="page-actions">
     <input class="search-input" placeholder="Search ${searchPh}…" value="${esc(userSearch)}" oninput="userSearch=this.value;refreshUserTable()">
     <button class="btn-primary btn-inline" onclick="openUserModal()">+ Add User</button>
+    ${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary btn-inline" onclick="downloadBackup()" title="Download a copy of all system data">'+iconSvg('download',14)+' Download Backup</button>':''}
   </div>
   <div class="table-card" id="userTableCard"></div>`;
   refreshUserTable();
   updatePendingBadge();
+}
+// Admin backup: one JSON file with every collection currently synced from Firestore.
+// Passwords never live in these docs (Firebase Auth holds credentials) but any stray
+// password fields are stripped anyway.
+function downloadBackup(){
+  if(!currentUser||currentUser.role!=='admin'){toast('Only an admin can download a backup.','error');return;}
+  if(!(window.GMSFB&&GMSFB.enabled&&GMSFB.ready)){toast('Not connected to Firebase. Please try again.','error');return;}
+  try{
+    const names={};
+    Object.keys(KEY).forEach(k=>{if(k!=='loginAttempts')names[KEY[k]]=k;});
+    const data={};let total=0;
+    Object.keys(names).forEach(sk=>{
+      const col=(GMSFB._colmap&&GMSFB._colmap[sk])||names[sk];
+      const rows=DB.get(sk).map(d=>{const c=deepClone(d);['password','passwordHash','pw','salt'].forEach(f=>{delete c[f];});return c;});
+      data[col]=rows;total+=rows.length;
+    });
+    const out={app:'FitCore GMS',exportedAt:new Date().toISOString(),exportedBy:currentUser.name,totalDocuments:total,collections:data};
+    const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    const d=new Date();const stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0');
+    a.href=URL.createObjectURL(blob);a.download='fitcore-backup-'+stamp+'.json';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    try{logActivity('Exported','Backup','Full data backup',total+' documents');}catch(e){}
+    toast('Backup downloaded ('+total+' records).','success');
+  }catch(e){console.error(e);toast('Could not create the backup.','error');}
 }
 function refreshUserTable(){
   const label={admin:'Admins',staff:'Staff',trainer:'Trainers'}[userRoleTab]||'Users';
