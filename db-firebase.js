@@ -17,7 +17,7 @@
   var COLMAP={
     gms_users:'users', gms_members:'members', gms_payments:'payments',
     gms_sessions:'sessions', gms_plans:'plans', gms_attendance:'attendance',
-    gms_walkins:'walkins', gms_notifications:'notifications',
+    gms_walkins:'walkins', gms_notifications:'notifications', gms_gcash_payments:'gcashPayments',
     gms_messages:'messages', gms_announcements:'announcements',
     gms_settings:'settings', gms_activity_log:'activitylog',
     gms_workouts:'workouts', gms_workout_plans:'workoutPlans',

@@ -1,5 +1,5 @@
 // ============================= DATA LAYER =============================
-const KEY={users:'gms_users',members:'gms_members',payments:'gms_payments',sessions:'gms_sessions',plans:'gms_plans',attendance:'gms_attendance',walkins:'gms_walkins',loginAttempts:'gms_login_attempts',activityLog:'gms_activity_log',settings:'gms_settings',notifications:'gms_notifications',messages:'gms_messages',announcements:'gms_announcements',workouts:'gms_workouts',workoutPlans:'gms_workout_plans',measurements:'gms_measurements',goals:'gms_goals',exerciseLibrary:'gms_exercise_library'};
+const KEY={users:'gms_users',members:'gms_members',payments:'gms_payments',sessions:'gms_sessions',plans:'gms_plans',attendance:'gms_attendance',walkins:'gms_walkins',loginAttempts:'gms_login_attempts',activityLog:'gms_activity_log',settings:'gms_settings',notifications:'gms_notifications',messages:'gms_messages',announcements:'gms_announcements',workouts:'gms_workouts',workoutPlans:'gms_workout_plans',measurements:'gms_measurements',goals:'gms_goals',exerciseLibrary:'gms_exercise_library',gcashPayments:'gms_gcash_payments'};
 const PENDING_ARCHIVE_DAYS=7;
 const QR_SCAN_DUP_WINDOW_MIN=30;
 // Safe deep clone for Repository reads - structuredClone when available,
@@ -112,6 +112,8 @@ Attendance.add=function(item){
 };
 const Walkins=new Repository(KEY.walkins);
 const Notifications=new Repository(KEY.notifications);
+// GCash proofs (member renewals, session add-ons, walk-ins) live in their own Firestore collection: gcashPayments.
+const GcashPayments=new Repository(KEY.gcashPayments);
 const Messages=new Repository(KEY.messages);
 const Announcements=new Repository(KEY.announcements);
 const Workouts=new Repository(KEY.workouts);
@@ -2625,6 +2627,7 @@ function loadApp(){
   seedExerciseLibrary();
   try{if(currentUser&&currentUser.role!=='member')pruneMemberActivity();}catch(e){}
   try{if(window.GMSFB&&typeof GMSFB.flushPending==='function')GMSFB.flushPending();}catch(e){}
+  migrateGcashProofs();
   updatePendingBadge();
   updateSchedPendingBadge();
   updateQueueBadge();
@@ -4094,6 +4097,7 @@ function renumberMembers(){
     Members.save(live.map(m=>{m.id=remap[m.id];return m;}));
     Payments.save(Payments.all().filter(p=>!aIds.includes(p.memberId)).map(p=>{if(remap[p.memberId])p.memberId=remap[p.memberId];return p;}));
     Notifications.save(Notifications.all().filter(n=>!aIds.includes(n.memberId)).map(n=>{if(remap[n.memberId])n.memberId=remap[n.memberId];return n;}));
+    GcashPayments.save(GcashPayments.all().filter(n=>!aIds.includes(n.memberId)).map(n=>{if(remap[n.memberId])n.memberId=remap[n.memberId];return n;}));
     Attendance.save(Attendance.all().filter(a=>!aIds.includes(a.memberId)).map(a=>{if(remap[a.memberId])a.memberId=remap[a.memberId];return a;}));
     Sessions.save(Sessions.all().filter(s=>!aIds.includes(s.memberId)).map(s=>{if(remap[s.memberId])s.memberId=remap[s.memberId];if(remap[s.id])s.id=remap[s.id];return s;}));
     Members.all().forEach(m=>{if(m.qrToken||m.status==='Active'){try{Members.update(m.id,{qrToken:qrTokenFor(m.id,today())});}catch(e){}}});
@@ -4123,12 +4127,14 @@ function resetAllMembers(){
     const allAttIds=Attendance.all().map(a=>a.id);
     const allSessIds=Sessions.all().map(s=>s.id);
     const allNotifIds=Notifications.all().map(n=>n.id);
+    const allGcashIds=GcashPayments.all().map(n=>n.id);
     const allMsgIds=Messages.all().map(m=>m.id);
     Members.save([]);
     Payments.save([]);
     Attendance.save([]);
     Sessions.save([]);
     Notifications.save([]);
+    GcashPayments.save([]);
     Messages.save([]);
     // Explicitly delete all docs from Firestore cloud
     if(window.GMSFB&&GMSFB.enabled){
@@ -4138,6 +4144,7 @@ function resetAllMembers(){
         GMSFB.deleteDocs('gms_attendance',allAttIds);
         GMSFB.deleteDocs('gms_sessions',allSessIds);
         GMSFB.deleteDocs('gms_notifications',allNotifIds);
+        GMSFB.deleteDocs('gms_gcash_payments',allGcashIds);
         GMSFB.deleteDocs('gms_messages',allMsgIds);
       }catch(e){}
     }
@@ -4681,7 +4688,7 @@ function refreshHistoryTable(){
 let billingSearch='';let billingFromDate='';let billingToDate='';let billingPlanFilter='All';let billingPage=1;
 function renderGcashPanel(){
   const el=document.getElementById('panelGcash');if(!el)return;
-  const any=Notifications.all().some(n=>n.type==='gcash_proof'||n.type==='walkin_proof');
+  const any=GcashPayments.all().some(n=>n.type==='gcash_proof'||n.type==='walkin_proof');
   el.innerHTML=`<div class="page-actions"><div class="table-controls"><span style="font-size:12px;color:var(--gray-500)">Online GCash payments from members and walk-in visitors. Confirm to activate, or reject with a reason.</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary btn-inline" onclick="openAddSessions()">Add Sessions</button>${currentUser&&currentUser.role==='admin'?'<button class="btn-secondary" onclick="openSessionPrice()">Session price: ₱'+getSessionPrice().toLocaleString()+'</button><button class="btn-secondary" onclick="openGcashSettings()">⚙ GCash Settings</button>':''}</div></div>
   <div id="gcashSection">${gcashVerifyHtml()}${gcashHistoryHtml()}</div>
   ${any?'':'<div class="table-card"><div class="empty-state"><div class="empty-icon">📱</div><p>No GCash submissions yet</p></div></div>'}`;
@@ -4712,9 +4719,31 @@ function renderBilling(){
   <div class="table-card" id="billingTableCard"></div>`;
   refreshBillingTable();
 }
+// One-time move: older GCash proofs were stored in `notifications`. Copy them into `gcashPayments`
+// and remove the old docs (atomic batch). Runs for admin/staff only, once per session.
+async function migrateGcashProofs(){
+  try{
+    if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
+    if(!window.GMSFB||!GMSFB.enabled||!GMSFB.auth||!GMSFB.auth.currentUser)return;
+    if(sessionStorage.getItem('gms_gcash_migrated'))return;
+    await GMSFB.waitForSnap('gms_notifications',8000);
+    await GMSFB.waitForSnap('gms_gcash_payments',8000);
+    if(GMSFB._syncErr&&GMSFB._syncErr.gcashPayments)return; // rules not published yet
+    sessionStorage.setItem('gms_gcash_migrated','1');
+    const old=Notifications.all().filter(n=>n&&(n.type==='gcash_proof'||n.type==='walkin_proof'));
+    if(!old.length)return;
+    const ops=[];
+    old.forEach(n=>{ops.push({col:'gcashPayments',id:n.id,data:n,merge:false});ops.push({col:'notifications',id:n.id,delete:true});});
+    for(let i=0;i<ops.length;i+=400){
+      const r=await GMSFB.commitDocs(ops.slice(i,i+400));
+      if(!r||!r.ok){sessionStorage.removeItem('gms_gcash_migrated');console.warn('[gcash migrate] failed',r);return;}
+    }
+    console.info('[gcash migrate] moved',old.length,'proofs');
+  }catch(e){console.warn('[gcash migrate]',e);}
+}
 function gcashProofForPayment(p){
   if(!p)return null;
-  const all=Notifications.all();
+  const all=GcashPayments.all();
   let n=all.find(x=>x.type==='gcash_proof'&&x.paymentId===p.id);
   if(!n&&p.notes){const m=String(p.notes).match(/GCP-[A-Za-z0-9]+/);if(m)n=all.find(x=>x.id===m[0]);}
   return n||null;
@@ -4882,12 +4911,12 @@ function saveGcashSettings(){
 }
 // ---- Proof helpers ----
 function gcashProofsOf(memberId){
-  return Notifications.all().filter(n=>n.type==='gcash_proof'&&n.memberId===memberId)
+  return GcashPayments.all().filter(n=>n.type==='gcash_proof'&&n.memberId===memberId)
     .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 function latestGcashProof(memberId){return gcashProofsOf(memberId)[0]||null;}
 function openGcashProofs(){
-  return Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status==='open')
+  return GcashPayments.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status==='open')
     .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 // ---- Member: pay via GCash ----
@@ -4922,7 +4951,7 @@ async function msSubmitGcashProof(){
       if(!wr||!wr.ok)throw new Error('Could not send your payment. Please check your connection and try again.');
       GMSFB.secondarySignOut();
     }else{
-      Notifications.add(proof);
+      GcashPayments.add(proof);
     }
   }catch(e){
     if(btn){btn.disabled=false;btn.textContent='Submit Payment';}
@@ -5057,7 +5086,7 @@ async function submitGcashProof(){
   if(!receipt)return fail('Please upload a screenshot of your GCash receipt.');
   const latest=latestGcashProof(mem.id);
   if(latest&&latest.status==='open')return fail('You already submitted a payment that is waiting for verification.');
-  const used=Notifications.all().some(n=>n.type==='gcash_proof'&&n.status!=='rejected'&&_normRef(n.reference)===ref)
+  const used=GcashPayments.all().some(n=>n.type==='gcash_proof'&&n.status!=='rejected'&&_normRef(n.reference)===ref)
     ||Payments.all().some(p=>String(p.method||'')==='GCash'&&_normRef(p.reference)===ref);
   if(used)return fail('This reference number was already used.');
   if(!rateLimitOk('gms_gcash_'+mem.id,5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
@@ -5197,7 +5226,7 @@ function mbGcashCta(mem){
 }
 // ---- Admin/Staff: verify proofs ----
 function gcashHistoryHtml(){
-  const allDone=Notifications.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='open');
+  const allDone=GcashPayments.all().filter(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='open');
   const done=allDone.filter(_gcashMatch)
     .sort((a,b)=>String(b.reviewedAt||b.createdAt).localeCompare(String(a.reviewedAt||a.createdAt)));
   if(!allDone.length)return '';
@@ -5245,12 +5274,12 @@ function gcashVerifyHtml(){
 }
 function deleteGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
-  const p=Notifications.one(id);
+  const p=GcashPayments.one(id);
   if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof'))return;
   if(p.status==='confirmed'){toast('A confirmed payment cannot be deleted here.','error');return;}
   const who=p.type==='walkin_proof'?p.visitorName:p.memberName;
   openConfirm('Delete Submission','Delete the GCash submission of <strong>'+esc(who)+'</strong> (Ref '+esc(p.reference)+')? This removes the receipt picture and cannot be undone.',function(){
-    Notifications.remove(id);
+    GcashPayments.remove(id);
     try{logActivity('Deleted','GCash Submission',who,'Ref: '+p.reference);}catch(e){}
     toast('Submission deleted.','success');
     refreshGcashViews();
@@ -5258,20 +5287,20 @@ function deleteGcashProof(id){
   },'Delete','btn-danger');
 }
 function viewGcashReceipt(id){
-  const p=Notifications.one(id);
+  const p=GcashPayments.one(id);
   if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')){return;}
   openAvatarZoom(_safeImg(p.receipt),'GCash receipt '+(p.reference||''));
 }
 function confirmGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
-  const p=Notifications.one(id);
+  const p=GcashPayments.one(id);
   if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');refreshGcashViews();return;}
   if(p.type==='walkin_proof')return confirmWalkinProof(p);
   const m=Members.one(p.memberId);
   if(!m){toast('Member not found.','error');return;}
   if(p.kind==='sessions_addon')return confirmAddonProof(p,m);
   if(bgCheckBlocksActivation(m)){toast('Background check is Flagged - clear it in the member profile first.','error');return;}
-  const _dup=Notifications.all().some(n=>n.type==='gcash_proof'&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
+  const _dup=GcashPayments.all().some(n=>n.type==='gcash_proof'&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
     ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
   if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
   const msg='Confirm that you received this GCash payment?'
@@ -5283,11 +5312,11 @@ function confirmGcashProof(id){
     +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8">&#128161; Check that the amount and reference match your GCash history before confirming.</div>';
   openConfirm('📱 Confirm GCash Payment',msg,async function(){
     try{
-      const fresh=Notifications.one(id);
+      const fresh=GcashPayments.one(id);
       if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
       const result=await applyPaymentConfirmation(m.id,Number(p.amount),'GCash',p.reference,{planId:p.planId,date:today(),notes:'GCash proof '+p.id,source:m.status==='pending_payment'?'activation':'renewal'});
       if(!result||!result.member){toast('Member not found.','error');return;}
-      Notifications.update(id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:result.payment.id});
+      GcashPayments.update(id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:result.payment.id});
       _dismissedIds.add(m.id);
       toast('GCash payment confirmed. Membership is active.','success');
       refreshGcashViews();updateQueueBadge();scanRenewals();
@@ -5299,7 +5328,7 @@ function confirmGcashProof(id){
 }
 function rejectGcashProof(id){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
-  const p=Notifications.one(id);
+  const p=GcashPayments.one(id);
   if(!p||(p.type!=='gcash_proof'&&p.type!=='walkin_proof')||p.status!=='open'){toast('This payment was already handled.','info');refreshGcashViews();return;}
   const msg='Reject this GCash payment from <strong>'+esc(p.type==='walkin_proof'?p.visitorName:p.memberName)+'</strong> (Ref '+esc(p.reference)+')?'
     +'<div style="margin-top:12px"><label style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px">Reason</label>'
@@ -5309,9 +5338,9 @@ function rejectGcashProof(id){
   openConfirm('✖ Reject GCash Payment',msg,function(){
     const sel=(document.getElementById('gcRejReason')||{}).value||'Could not be verified';
     const note=sanitizeText((document.getElementById('gcRejNote')||{}).value||'').trim();
-    const fresh=Notifications.one(id);
+    const fresh=GcashPayments.one(id);
     if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
-    Notifications.update(id,{status:'rejected',rejectReason:note?sel+' - '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
+    GcashPayments.update(id,{status:'rejected',rejectReason:note?sel+' - '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
     try{logActivity('Rejected','GCash Payment',p.type==='walkin_proof'?p.visitorName:p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
     toast('GCash payment rejected. The member can submit again.','success');
     refreshGcashViews();updateQueueBadge();
@@ -5377,7 +5406,7 @@ async function applySessionsAddon(memberId,qty,amount,method,reference,notes){
   return {payment,newBonus};
 }
 function confirmAddonProof(p,m){
-  const _dup=Notifications.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
+  const _dup=GcashPayments.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
     ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
   if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
   const msg='Confirm that you received this GCash payment?'
@@ -5389,10 +5418,10 @@ function confirmAddonProof(p,m){
     +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8">Check that the amount and reference match your GCash history before confirming.</div>';
   openConfirm('Confirm Session Add-on',msg,async function(){
     try{
-      const fresh=Notifications.one(p.id);
+      const fresh=GcashPayments.one(p.id);
       if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
       const r=await applySessionsAddon(m.id,p.sessions,p.amount,'GCash',p.reference,'GCash proof '+p.id);
-      Notifications.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:r.payment.id});
+      GcashPayments.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),paymentId:r.payment.id});
       toast('Sessions added to '+m.name+'.','success');
       refreshGcashViews();updateQueueBadge();
     }catch(e){toast((e&&e.message)||'Could not add the sessions.','error');console.error(e);}
@@ -5429,7 +5458,7 @@ async function saveAddSessions(){
   const ref=_normRef(document.getElementById('as_ref').value);
   if(method==='GCash'){
     if(!/^[A-Z0-9]{8,24}$/.test(ref))return fail('Enter a valid GCash reference number.');
-    const used=Notifications.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='rejected'&&_normRef(n.reference)===ref)||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===ref);
+    const used=GcashPayments.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.status!=='rejected'&&_normRef(n.reference)===ref)||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===ref);
     if(used)return fail('This reference number was already used.');
   }
   try{
@@ -5456,7 +5485,7 @@ function saveSessionPrice(){
 }
 function confirmWalkinProof(p){
   const ue=walkinUntilError();
-  const _dup=Notifications.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
+  const _dup=GcashPayments.all().some(n=>(n.type==='gcash_proof'||n.type==='walkin_proof')&&n.id!==p.id&&n.status!=='rejected'&&_normRef(n.reference)===_normRef(p.reference))
     ||Payments.all().some(x=>String(x.method||'')==='GCash'&&_normRef(x.reference)===_normRef(p.reference));
   if(_dup){toast('Another payment already uses this reference number. Check it, then reject this one if it is a duplicate.','error');return;}
   if(ue){toast(ue,'error');return;}
@@ -5469,7 +5498,7 @@ function confirmWalkinProof(p){
     +'<div><span style="color:var(--gray-500);width:90px;display:inline-block">Reference:</span> <strong style="color:var(--white);font-family:monospace">'+esc(p.reference)+'</strong></div></div>'
     +'<div style="margin-top:10px;font-size:11px;color:#d7ddd8">&#128161; Check that the amount and reference match your GCash history before confirming.</div>';
   openConfirm('📱 Confirm GCash Walk-In',msg,function(){
-    const fresh=Notifications.one(p.id);
+    const fresh=GcashPayments.one(p.id);
     if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
     const ue2=walkinUntilError();if(ue2){toast(ue2,'error');return;}
     const until=walkinComputeUntil(hrs);
@@ -5478,7 +5507,7 @@ function confirmWalkinProof(p){
     const newId='WI-'+String(walkins.length+1).padStart(4,'0');
     walkins.push({id:newId,visitorName:sanitizeText(p.visitorName),date:today(),time,until,hours:hrs,fee:Number(p.amount),method:'GCash',reference:p.reference,proofId:p.id,recordedBy:currentUser.username,createdAt:today()});
     Walkins.save(walkins);
-    Notifications.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),walkinId:newId});
+    GcashPayments.update(p.id,{status:'confirmed',reviewedBy:currentUser.name,reviewedAt:new Date().toISOString(),walkinId:newId});
     toast('Walk-in recorded for '+p.visitorName+' · until '+_fmtTime12(until),'success');
     try{logActivity('Confirmed','GCash Walk-In',p.visitorName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
     refreshGcashViews();
@@ -9020,7 +9049,7 @@ function walkinUntilCell(w){
   const limit=hrs>0?` <span style="color:var(--gray-500);font-size:11px">(${fmtHours(hrs)})</span>`:'';
   return esc(_fmtTime12(w.until))+limit+' '+(live?'<span class="badge badge-active" style="margin-left:4px">Ongoing</span>':'<span class="badge badge-expired" style="margin-left:4px">Ended</span>');
 }
-function walkinProof(w){return w&&w.proofId?Notifications.one(w.proofId):null;}
+function walkinProof(w){return w&&w.proofId?GcashPayments.one(w.proofId):null;}
 function walkinPayCell(w){
   const n=walkinProof(w);
   const gc=(w.method==='GCash')||!!n;

@@ -31,7 +31,7 @@ async function submitWalkinProof(body) {
   const fee = Number(w.fee) > 0 ? Number(w.fee) : 100;
   const hours = Number(w.hours) > 0 && Number(w.hours) <= 12 ? Number(w.hours) : 2;
 
-  const sameRef = await ctx.db.collection('notifications').where('reference', '==', reference).limit(10).get();
+  const sameRef = await ctx.db.collection('gcashPayments').where('reference', '==', reference).limit(10).get();
   let used = false;
   sameRef.forEach((doc) => {
     const x = doc.data() || {};
@@ -44,7 +44,7 @@ async function submitWalkinProof(body) {
   if (used) return bad('This reference number was already used.');
 
   const id = 'WIP-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(3).toString('hex').toUpperCase();
-  await ctx.db.collection('notifications').doc(id).set({
+  await ctx.db.collection('gcashPayments').doc(id).set({
     id,
     type: 'walkin_proof',
     status: 'open',
@@ -82,7 +82,7 @@ async function submitGcashProof(body) {
   if (!plan) return bad('No plan on file. Please visit the front desk to renew.', 409);
 
   // One open proof per member - same rule the member UI shows.
-  const mine = await ctx.db.collection('notifications').where('memberId', '==', memberId).limit(50).get();
+  const mine = await ctx.db.collection('gcashPayments').where('memberId', '==', memberId).limit(50).get();
   let open = false;
   mine.forEach((doc) => {
     const x = doc.data() || {};
@@ -91,7 +91,7 @@ async function submitGcashProof(body) {
   if (open) return bad('You already submitted a payment that is waiting for verification.');
 
   // A reference number can only back one payment.
-  const sameRef = await ctx.db.collection('notifications').where('reference', '==', reference).limit(10).get();
+  const sameRef = await ctx.db.collection('gcashPayments').where('reference', '==', reference).limit(10).get();
   let used = false;
   sameRef.forEach((doc) => {
     const x = doc.data() || {};
@@ -134,7 +134,7 @@ async function submitGcashProof(body) {
     source: 'online-renewal'
   };
   if (addon) { proof.kind = 'sessions_addon'; proof.sessions = addon.qty; }
-  await ctx.db.collection('notifications').doc(id).set(proof);
+  await ctx.db.collection('gcashPayments').doc(id).set(proof);
   return { status: 200, body: { ok: true, id } };
 }
 

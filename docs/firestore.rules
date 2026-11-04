@@ -60,25 +60,25 @@ service cloud.firestore {
     match /{collection}/{doc} {
       allow read: if request.auth != null
         && collection in ['users','members','payments','sessions',
-                          'attendance','walkins','notifications','messages',
+                          'attendance','walkins','notifications','gcashPayments','messages',
                           'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
       allow create: if request.auth != null
         && collection in ['users','members','payments','sessions',
-                          'attendance','walkins','notifications','messages',
+                          'attendance','walkins','notifications','gcashPayments','messages',
                           'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
       allow update: if request.auth != null
         && collection in ['users','members','payments','sessions',
-                          'attendance','walkins','notifications','messages',
+                          'attendance','walkins','notifications','gcashPayments','messages',
                           'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
       allow delete: if request.auth != null
         && collection in ['users','members','payments','sessions',
-                          'attendance','walkins','notifications','messages',
+                          'attendance','walkins','notifications','gcashPayments','messages',
                           'announcements','workouts',
                           'workoutPlans','measurements','goals',
                           'exerciseLibrary'];
