@@ -4761,9 +4761,15 @@ async function migrateGcashProofs(){
 }
 function gcashProofForPayment(p){
   if(!p)return null;
-  const all=GcashPayments.all();
+  // Older proofs may still sit in `notifications` (before the gcashPayments move), so look in both.
+  let legacy=[];try{legacy=Notifications.all().filter(x=>x.type==='gcash_proof');}catch(e){}
+  const all=GcashPayments.all().concat(legacy);
   let n=all.find(x=>x.type==='gcash_proof'&&x.paymentId===p.id);
   if(!n&&p.notes){const m=String(p.notes).match(/GCP-[A-Za-z0-9]+/);if(m)n=all.find(x=>x.id===m[0]);}
+  if(!n&&p.reference&&p.memberId){
+    const r=_normRef(p.reference);
+    n=all.find(x=>x.type==='gcash_proof'&&x.memberId===p.memberId&&x.status!=='rejected'&&_normRef(x.reference)===r);
+  }
   return n||null;
 }
 function payOriginBadge(p){
