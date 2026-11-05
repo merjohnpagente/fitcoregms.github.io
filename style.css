@@ -2087,3 +2087,38 @@ details.gcash-hist>summary::-webkit-details-marker{display:none}
 /* Compact, minimal confirm dialog buttons */
 #confirmModal .confirm-btns{flex-direction:row!important;gap:8px;justify-content:flex-end}
 #confirmModal .confirm-btns .btn-sm{width:auto!important;flex:0 1 auto;min-height:0!important;padding:9px 16px!important;font-size:12px!important;font-weight:600;letter-spacing:.2px;text-transform:none!important;box-shadow:none!important;border-radius:10px;white-space:nowrap}
+
+/* ===== Forgot password: clean + animated ===== */
+#forgotModal .modal{border-radius:22px}
+#forgotModal .modal-head{border-bottom:none;padding-bottom:0}
+#fpModalTitle{visibility:hidden;height:0;font-size:0}
+#forgotModal .modal-foot{border-top:none;padding-top:6px}
+#fpStep1,#fpStep2,#fpStep3{animation:fpIn .38s cubic-bezier(.22,1,.36,1) both}
+@keyframes fpIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+#forgotModal .ms-step-head{text-align:center;margin-bottom:22px}
+#forgotModal .ms-step-icon{position:relative;width:60px;height:60px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(127,250,136,.1);color:var(--green);animation:fpPop .5s cubic-bezier(.34,1.56,.64,1) both .08s}
+#forgotModal .ms-step-icon::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1.5px solid rgba(127,250,136,.35);animation:fpRing 2.4s ease-out infinite}
+@keyframes fpPop{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
+@keyframes fpRing{0%{opacity:.7;transform:scale(.92)}100%{opacity:0;transform:scale(1.25)}}
+#forgotModal .ms-step-head h1{font-size:24px;letter-spacing:1px;margin:0 0 6px}
+#forgotModal .ms-step-head p{font-size:13px;color:var(--gray-500);line-height:1.6}
+.fp-otp-box{animation:fpBox .4s cubic-bezier(.34,1.56,.64,1) both;transition:transform .15s,border-color .2s,background .2s,box-shadow .2s}
+.fp-otp-box:nth-child(1){animation-delay:.05s}.fp-otp-box:nth-child(2){animation-delay:.09s}.fp-otp-box:nth-child(3){animation-delay:.13s}
+.fp-otp-box:nth-child(4){animation-delay:.17s}.fp-otp-box:nth-child(5){animation-delay:.21s}.fp-otp-box:nth-child(6){animation-delay:.25s}
+@keyframes fpBox{from{opacity:0;transform:translateY(10px) scale(.85)}to{opacity:1;transform:none}}
+.fp-otp-box:focus{transform:translateY(-2px)}
+.fp-otp-box.filled{animation:fpFill .22s ease-out}
+@keyframes fpFill{0%{transform:scale(.9)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+.fp-otp.shake{animation:fpShake .45s ease}
+.fp-otp.shake .fp-otp-box{border-color:rgba(239,68,68,.7);background:rgba(239,68,68,.08)}
+@keyframes fpShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+#fpProgress .ms-step-line{position:relative;overflow:hidden;background:rgba(255,255,255,.08)}
+#fpProgress .ms-step-line::after{content:"";position:absolute;inset:0;background:var(--green);transform:scaleX(0);transform-origin:left;transition:transform .45s ease}
+#fpProgress .ms-step-line.done{background:rgba(255,255,255,.08)}
+#fpProgress .ms-step-line.done::after{transform:scaleX(1)}
+#fpProgress .ms-step-num{transition:all .3s ease}
+#fpProgress .ms-step-num.active{transform:scale(1.1)}
+#forgotError,#forgotSuccess,#fpsError,#fpsSuccess{animation:fpIn .3s ease both}
+@media (prefers-reduced-motion:reduce){
+  #fpStep1,#fpStep2,#fpStep3,#forgotModal .ms-step-icon,#forgotModal .ms-step-icon::after,.fp-otp-box,.fp-otp.shake,#forgotError,#forgotSuccess{animation:none!important}
+}

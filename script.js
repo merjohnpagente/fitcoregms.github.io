@@ -1213,6 +1213,10 @@ function setFpBtnLoading(btn,on,label){
     delete btn.dataset.fpIdle;
   }
 }
+function fpShake(){
+  const el=document.getElementById('fpOtp'); if(!el)return;
+  el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+}
 function showFpStep(n){
   _fpStep=n;
   ['fpStep1','fpStep2','fpStep3'].forEach((id,i)=>{
@@ -1419,7 +1423,7 @@ async function fpSendCode(isResend){
   if(err) err.style.display='none'; if(suc) suc.style.display='none'; if(codeErr) codeErr.style.display='none';
   const emailEl=document.getElementById('fp_email');
   const email=((emailEl&&emailEl.value)||_fpEmail||'').trim().toLowerCase();
-  const showErr=(m)=>{ if(_fpStep===2&&codeErr){codeErr.textContent=m;codeErr.style.display='block';} else if(err){err.textContent=m;err.style.display='block';} };
+  const showErr=(m)=>{ if(_fpStep===2&&codeErr){codeErr.textContent=m;codeErr.style.display='block';fpShake();} else if(err){err.textContent=m;err.style.display='block';} };
   if(!email){ showErr('Please enter your email.'); return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showErr('Please enter a valid email address.'); return; }
   if(email.endsWith('@fitcoregym.local')){ showErr('Please use your real Gmail address.'); return; }
@@ -1445,7 +1449,7 @@ async function fpVerifyCode(){
   if(err) err.style.display='none';
   if(codeErr) codeErr.style.display='none';
   const finalCode=getFpOtp()||(document.getElementById('fp_code_input')?document.getElementById('fp_code_input').value.trim():'');
-  const fail=(m)=>{ if(codeErr){codeErr.textContent=m;codeErr.style.display='block';} };
+  const fail=(m)=>{ if(codeErr){codeErr.textContent=m;codeErr.style.display='block';} fpShake(); };
   if(!finalCode){ fail('Please enter the 6-digit code.'); return; }
   if(!/^\d{6}$/.test(finalCode)){ fail('Code must be 6 digits.'); return; }
   if(!_fpEmail){ fail('Session expired. Please go back and request a new code.'); return; }
