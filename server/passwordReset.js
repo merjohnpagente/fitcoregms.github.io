@@ -114,7 +114,7 @@ async function sendNotifyEmail(to, name, subject, message, status) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       service_id: process.env.EMAILJS_SERVICE_ID || 'service_qzaheib',
-      template_id: process.env.EMAILJS_NOTIFY_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID || 'template_cwn0ver',
+      template_id: process.env.EMAILJS_NOTIFY_TEMPLATE_ID || 'template_n8719ej',
       user_id: process.env.EMAILJS_PUBLIC_KEY || 'G6l2ttn_xjztBJVM6',
       accessToken: env('EMAILJS_PRIVATE_KEY'),
       template_params: {
