@@ -2122,3 +2122,14 @@ details.gcash-hist>summary::-webkit-details-marker{display:none}
 @media (prefers-reduced-motion:reduce){
   #fpStep1,#fpStep2,#fpStep3,#forgotModal .ms-step-icon,#forgotModal .ms-step-icon::after,.fp-otp-box,.fp-otp.shake,#forgotError,#forgotSuccess{animation:none!important}
 }
+
+/* OTP: checking + success states */
+.fp-otp.verifying .fp-otp-box{animation:fpCheck .9s ease-in-out infinite;border-color:rgba(127,250,136,.5)}
+.fp-otp.verifying .fp-otp-box:nth-child(2){animation-delay:.08s}.fp-otp.verifying .fp-otp-box:nth-child(3){animation-delay:.16s}
+.fp-otp.verifying .fp-otp-box:nth-child(4){animation-delay:.24s}.fp-otp.verifying .fp-otp-box:nth-child(5){animation-delay:.32s}.fp-otp.verifying .fp-otp-box:nth-child(6){animation-delay:.4s}
+@keyframes fpCheck{0%,100%{transform:translateY(0);opacity:1}50%{transform:translateY(-5px);opacity:.65}}
+.fp-otp.success .fp-otp-box{animation:fpOk .5s cubic-bezier(.34,1.56,.64,1) both;border-color:var(--green);background:rgba(127,250,136,.16);color:var(--green);box-shadow:0 0 0 3px rgba(127,250,136,.18)}
+.fp-otp.success .fp-otp-box:nth-child(2){animation-delay:.05s}.fp-otp.success .fp-otp-box:nth-child(3){animation-delay:.1s}
+.fp-otp.success .fp-otp-box:nth-child(4){animation-delay:.15s}.fp-otp.success .fp-otp-box:nth-child(5){animation-delay:.2s}.fp-otp.success .fp-otp-box:nth-child(6){animation-delay:.25s}
+@keyframes fpOk{0%{transform:scale(1)}50%{transform:scale(1.14)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.fp-otp.verifying .fp-otp-box,.fp-otp.success .fp-otp-box{animation:none!important}}

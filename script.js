@@ -1253,6 +1253,7 @@ function setFpOtp(val){
   const h=document.getElementById('fp_code_input');
   if(h) h.value=digits;
   updateFpVerifyBtnState();
+  if(digits.length===6)setTimeout(fpAutoVerify,120);
 }
 function initFpOtp(){
   document.querySelectorAll('.fp-otp-box').forEach(b=>{
@@ -1298,6 +1299,7 @@ function onFpOtpPaste(e){
 }
 function openForgotModal(){
   _fpForcedMode=false;
+  _fpVerifying=false; document.querySelectorAll('.fp-otp-box').forEach(b=>{b.readOnly=false;});
   const prog=document.getElementById('fpProgress'); if(prog) prog.style.display='none';
   const closeBtn=document.querySelector('#forgotModal .modal-close'); if(closeBtn) closeBtn.style.display='';
   const t=document.getElementById('fpModalTitle'); if(t) t.textContent='Reset Password';
@@ -1355,10 +1357,16 @@ function updateFpVerifyBtnState(){
   btn.style.opacity=shouldDisable?'0.5':'';
   btn.style.cursor=shouldDisable?'not-allowed':'';
 }
+let _fpVerifying=false;
+function fpAutoVerify(){
+  if(_fpStep!==2||_fpVerifying)return;
+  if(getFpOtp().length===6)fpVerifyCode();
+}
 function onFpCodeInput(){
   const err=document.getElementById('fp_code_error'); if(err) err.style.display='none';
   const forgotErr=document.getElementById('forgotError'); if(forgotErr) forgotErr.style.display='none';
   updateFpVerifyBtnState();
+  setTimeout(fpAutoVerify,60);
 }
 function sendForgotCode(){
   if(_fpStep===2) resendForgotCode();
@@ -1444,8 +1452,10 @@ async function fpSendCode(isResend){
 }
 async function fpSubmitCode(){ return fpSendCode(false); }
 async function fpVerifyCode(){
+  if(_fpVerifying)return;
   const err=document.getElementById('forgotError');
   const codeErr=document.getElementById('fp_code_error');
+  const otpEl=document.getElementById('fpOtp');
   if(err) err.style.display='none';
   if(codeErr) codeErr.style.display='none';
   const finalCode=getFpOtp()||(document.getElementById('fp_code_input')?document.getElementById('fp_code_input').value.trim():'');
@@ -1453,11 +1463,30 @@ async function fpVerifyCode(){
   if(!finalCode){ fail('Please enter the 6-digit code.'); return; }
   if(!/^\d{6}$/.test(finalCode)){ fail('Code must be 6 digits.'); return; }
   if(!_fpEmail){ fail('Session expired. Please go back and request a new code.'); return; }
+  _fpVerifying=true;
   const verifyBtn=document.getElementById('fp_verify_btn');
-  setFpBtnLoading(verifyBtn,true,'Verifying…');
-  const r=await fpApi('verify',{email:_fpEmail,code:finalCode});
-  if(!r.ok||!r.resetToken){ setFpBtnLoading(verifyBtn,false); fail(r.error||'Invalid code. Please try again.'); return; }
+  setFpBtnLoading(verifyBtn,true,'Checking…');
+  if(otpEl){otpEl.classList.remove('shake','success');otpEl.classList.add('verifying');}
+  document.querySelectorAll('.fp-otp-box').forEach(b=>{b.blur();b.readOnly=true;});
+  const minWait=new Promise(r=>setTimeout(r,650)); // let the checking animation be seen
+  const [r]=await Promise.all([fpApi('verify',{email:_fpEmail,code:finalCode}),minWait]);
+  if(otpEl)otpEl.classList.remove('verifying');
+  if(!r.ok||!r.resetToken){
+    _fpVerifying=false;
+    setFpBtnLoading(verifyBtn,false);
+    fail(r.error||'Wrong code. Please try again.');
+    setTimeout(function(){
+      setFpOtp('');
+      document.querySelectorAll('.fp-otp-box').forEach(b=>{b.readOnly=false;});
+      const f=document.querySelector('.fp-otp-box'); if(f)f.focus();
+      updateFpVerifyBtnState();
+    },520);
+    return;
+  }
   _fpResetToken=r.resetToken;
+  if(otpEl)otpEl.classList.add('success');
+  if(codeErr){codeErr.style.display='none';}
+  await new Promise(res=>setTimeout(res,850)); // show the green check before moving on
   const _n1=document.getElementById('fp_new_pass'); if(_n1) _n1.value='';
   const _n2=document.getElementById('fp_new_pass2'); if(_n2) _n2.value='';
   const _e2=document.getElementById('fpsError'); if(_e2) _e2.style.display='none';
@@ -1466,6 +1495,9 @@ async function fpVerifyCode(){
   ['fps1','fps2','fps3'].forEach(id=>{const b=document.getElementById(id); if(b) b.className='pw-strength-bar';});
   if(_fpCodeTimer){clearInterval(_fpCodeTimer); _fpCodeTimer=null;}
   showFpStep(3);
+  document.querySelectorAll('.fp-otp-box').forEach(b=>{b.readOnly=false;});
+  if(otpEl)otpEl.classList.remove('success');
+  _fpVerifying=false;
   setFpBtnLoading(verifyBtn,false);
   toast('Code verified - now set your new password.','success');
 }
