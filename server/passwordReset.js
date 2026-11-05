@@ -105,6 +105,68 @@ async function sendEmailJs(to, name, label, code) {
   if (!res.ok) throw new Error('EmailJS ' + res.status + ': ' + (await res.text()).slice(0, 200));
 }
 
+// Generic notification mail (payment confirmed / rejected). Uses the same EmailJS
+// service; set EMAILJS_NOTIFY_TEMPLATE_ID to use a dedicated template (variables:
+// to_email, to_name, subject, message, status, from_name). Falls back to the OTP template.
+async function sendNotifyEmail(to, name, subject, message, status) {
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id: process.env.EMAILJS_SERVICE_ID || 'service_qzaheib',
+      template_id: process.env.EMAILJS_NOTIFY_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID || 'template_cwn0ver',
+      user_id: process.env.EMAILJS_PUBLIC_KEY || 'G6l2ttn_xjztBJVM6',
+      accessToken: env('EMAILJS_PRIVATE_KEY'),
+      template_params: {
+        to_email: to, to_name: name, username: name, user_role: 'Member',
+        subject: subject, status: status, otp_code: status,
+        from_name: 'FitCore GMS', message: message
+      }
+    })
+  });
+  if (!res.ok) throw new Error('EmailJS ' + res.status + ': ' + (await res.text()).slice(0, 200));
+}
+
+// Admin/staff -> email a member that their payment was confirmed or rejected.
+async function notifyPayment(idToken, memberId, kind, info) {
+  const ctx = init();
+  const bad = (msg, status) => ({ status: status || 400, body: { ok: false, error: msg } });
+  let decoded;
+  try { decoded = await ctx.auth.verifyIdToken(String(idToken || ''), true); } catch (e) { return bad('Session expired. Please log in again.', 401); }
+  const callerEmail = String(decoded.email || '').toLowerCase();
+  const cq = callerEmail ? await ctx.db.collection('users').where('authEmail', '==', callerEmail).limit(1).get() : { empty: true };
+  const caller = cq.empty ? null : cq.docs[0].data();
+  if (!caller || !['admin', 'staff'].includes(caller.role) || caller.status === 'locked') return bad('Only admin or staff can send this.', 403);
+  if (kind !== 'confirmed' && kind !== 'rejected') return bad('Unknown notification.', 400);
+
+  const snap = await ctx.db.collection('members').doc(String(memberId || '')).get();
+  if (!snap.exists) return bad('Member not found.', 404);
+  const m = snap.data();
+  const email = [m.email, m.authEmail].map((x) => String(x || '').trim().toLowerCase())
+    .find((x) => x && isEmail(x) && !x.endsWith('@fitcoregym.local'));
+  if (!email) return { status: 200, body: { ok: true, skipped: 'no-email' } };
+
+  const clean = (v, n) => String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').slice(0, n || 120);
+  const i = info || {};
+  const lines = [];
+  if (i.plan) lines.push('Plan: ' + clean(i.plan));
+  if (i.amount) lines.push('Amount: PHP ' + Number(i.amount).toLocaleString('en-US'));
+  if (i.reference) lines.push('GCash reference: ' + clean(i.reference, 40));
+  let subject, message;
+  if (kind === 'confirmed') {
+    if (i.newExpiry) lines.push('Valid until: ' + clean(i.newExpiry, 20));
+    subject = 'FitCore GMS: Your payment was confirmed';
+    message = 'Hi ' + (m.name || 'Member') + ', your payment was confirmed and your membership is active.\n\n' + lines.join('\n') + '\n\nThank you and see you at the gym!';
+  } else {
+    subject = 'FitCore GMS: Your payment was rejected';
+    message = 'Hi ' + (m.name || 'Member') + ', we could not verify your payment.\n\n' + lines.join('\n')
+      + '\nReason: ' + clean(i.reason || 'Could not be verified', 200)
+      + '\n\nPlease log in and submit it again with the correct reference number and receipt, or pay at the front desk.';
+  }
+  await sendNotifyEmail(email, m.name || 'Member', subject, message, kind === 'confirmed' ? 'CONFIRMED' : 'REJECTED');
+  return { status: 200, body: { ok: true } };
+}
+
 async function sendCode(email) {
   const ctx = init();
   const ref = ctx.db.collection(COLLECTION).doc(sha256(email));
@@ -342,4 +404,4 @@ async function adminSetMemberPassword(idToken, memberId, email, newPassword) {
   return { status: 200, body: { ok: true } };
 }
 
-module.exports = { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail, init };
+module.exports = { notifyPayment, sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail, init };

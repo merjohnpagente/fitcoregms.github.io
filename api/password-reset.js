@@ -1,4 +1,4 @@
-const { sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail } = require('../server/passwordReset');
+const { notifyPayment, sendCode, verifyCode, resetPassword, changeEmail, adminChangeUserEmail, adminIssueResetCode, adminSetMemberPassword, isEmail } = require('../server/passwordReset');
 
 // Browsers allowed to call this API. Add your own origins via ALLOWED_ORIGINS (comma-separated).
 const DEFAULT_ORIGINS = ['https://merjohnpagente.github.io'];
@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
   body = body || {};
   const email = String(body.email || '').trim().toLowerCase();
-  if (!isEmail(email)) return send(res, 400, { ok: false, error: 'Please enter a valid email address.' });
+  if (body.action !== 'notify-payment' && !isEmail(email)) return send(res, 400, { ok: false, error: 'Please enter a valid email address.' });
 
   try {
     let r;
@@ -40,6 +40,7 @@ module.exports = async function handler(req, res) {
     else if (body.action === 'admin-change-email') r = await adminChangeUserEmail(body.idToken, String(body.id || ''), email);
     else if (body.action === 'admin-issue-code') r = await adminIssueResetCode(body.idToken, String(body.id || ''));
     else if (body.action === 'admin-set-password') r = await adminSetMemberPassword(body.idToken, String(body.id || ''), email, body.newPassword);
+    else if (body.action === 'notify-payment') r = await notifyPayment(body.idToken, String(body.memberId || ''), String(body.kind || ''), body.info);
     else r = { status: 400, body: { ok: false, error: 'Unknown action.' } };
     return send(res, r.status, r.body);
   } catch (e) {

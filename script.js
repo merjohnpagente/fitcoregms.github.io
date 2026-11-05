@@ -1391,6 +1391,15 @@ async function fpApi(action,payload){
   if(!data) return {ok:false,error:'Server error. Please try again.'};
   return data;
 }
+// Fire-and-forget: email the member when their payment is confirmed / rejected.
+async function notifyPaymentEmail(memberId,kind,info){
+  try{
+    if(!memberId||!(window.GMSFB&&GMSFB.auth&&GMSFB.auth.currentUser))return;
+    const tok=await GMSFB.auth.currentUser.getIdToken();
+    const r=await fpApi('notify-payment',{idToken:tok,memberId:memberId,kind:kind,info:info||{}});
+    if(r&&r.ok&&!r.skipped)toast('Email sent to the member.','info');
+  }catch(e){}
+}
 function fpStartResendTimer(sec){
   const link=document.getElementById('fp_resend'); if(!link) return;
   if(_fpCodeTimer){ clearInterval(_fpCodeTimer); _fpCodeTimer=null; }
@@ -5388,6 +5397,7 @@ function rejectGcashProof(id){
     if(!fresh||fresh.status!=='open'){toast('This payment was already handled.','info');return;}
     GcashPayments.update(id,{status:'rejected',rejectReason:note?sel+' - '+note:sel,reviewedBy:currentUser.name,reviewedAt:new Date().toISOString()});
     try{logActivity('Rejected','GCash Payment',p.type==='walkin_proof'?p.visitorName:p.memberName,'Ref: '+p.reference+' | ₱'+Number(p.amount));}catch(e){}
+    try{if(p.type==='gcash_proof'&&p.memberId)notifyPaymentEmail(p.memberId,'rejected',{plan:p.planName,amount:p.amount,reference:p.reference,reason:note?sel+' - '+note:sel});}catch(e){}
     toast('GCash payment rejected. The member can submit again.','success');
     refreshGcashViews();updateQueueBadge();
   },'Reject','btn-danger');
@@ -5448,6 +5458,7 @@ async function applySessionsAddon(memberId,qty,amount,method,reference,notes){
   }else{
     throw new Error('Not connected to Firebase. Please check your internet and try again.');
   }
+  try{notifyPaymentEmail(memberId,'confirmed',{plan:'Session Add-on ('+qty+' session'+(qty!==1?'s':'')+')',amount:Number(amount),reference:reference||''});}catch(e){}
   try{logActivity('Added','Trainer Sessions',member.name,qty+' session'+(qty!==1?'s':'')+' | ₱'+Number(amount).toLocaleString()+' | '+(method||'Cash'));}catch(e){}
   return {payment,newBonus};
 }
@@ -8780,6 +8791,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
     GMSFB.applyLocalPatch(KEY.members,memberId,activation);
   }
   _queueSelected.delete(memberId);
+  try{notifyPaymentEmail(memberId,'confirmed',{plan:plan?plan.name:'',amount:amount||(plan?Number(plan.price):0),reference:reference||'',newExpiry:newExpiry||''});}catch(e){}
   logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'-')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
   return {member:Members.one(memberId)||{...member,...activation},payment};
 }
