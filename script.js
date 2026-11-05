@@ -2953,7 +2953,19 @@ function openConfirm(title,msg,onOk,btnLabel='Delete',btnClass='btn-danger'){
   const _cb=document.getElementById('confirmCancelBtn');if(_cb)_cb.textContent='Cancel';
   btn.textContent=btnLabel;
   btn.className='btn-sm '+btnClass;
-  btn.onclick=()=>{onOk();closeModal('confirmModal');};
+  btn.disabled=false;
+  btn.onclick=async()=>{
+    if(btn.dataset.busy)return; // ignore repeated clicks while working
+    const r=onOk();
+    if(r&&typeof r.then==='function'){
+      btn.dataset.busy='1';btn.disabled=true;
+      btn.innerHTML='<span class="btn-spinner"></span>Please wait…';
+      if(_cb)_cb.disabled=true;
+      try{await r;}catch(e){}
+      delete btn.dataset.busy;btn.disabled=false;if(_cb)_cb.disabled=false;
+    }
+    closeModal('confirmModal');
+  };
   openModal('confirmModal');
 }
 
@@ -4966,7 +4978,7 @@ async function msSubmitGcashProof(){
   if(!rateLimitOk('gms_gcash_signup',5,10*60*1000))return fail('Too many attempts. Please wait a few minutes and try again.');
   const proof={id:'GCP-'+uid(),type:'gcash_proof',status:'open',memberId:mem.id,memberName:mem.name,planId:plan.id,planName:plan.name,amount:Number(plan.price),reference:ref,receipt,createdAt:new Date().toISOString(),date:today()};
   const btn=document.getElementById('ms_submit');
-  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>Sending…';}
   try{
     if(window.GMSFB&&GMSFB.enabled){
       const conflict=await _secProofConflict(mem.id,ref);
@@ -5059,7 +5071,7 @@ async function submitExpiredRenewal(){
   const base=fpApiBase();
   if(!base&&/\.github\.io$/i.test(location.hostname))return fail('Online GCash renewal is not available on this site. Please renew at the front desk.');
   const btn=document.getElementById('gp_submit');
-  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>Sending…';}
   const reset=()=>{if(btn){btn.disabled=false;btn.textContent='Submit Payment';}};
   try{
     const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memberId:mem.id,reference:ref,receipt})});
@@ -5093,7 +5105,17 @@ function onGcashReceiptPick(input){
     const pv=document.getElementById('gp_preview');pv.src=d;pv.style.display='block';
   });
 }
+let _gcashBusy=false;
 async function submitGcashProof(){
+  if(_gcashBusy)return; // block double-clicks / double-submits
+  _gcashBusy=true;
+  const foot=document.querySelector('#gcashPayModal .modal-foot');
+  const others=foot?[...foot.querySelectorAll('button')].filter(b=>b.id!=='gp_submit'):[];
+  others.forEach(b=>{b.disabled=true;});
+  try{await _submitGcashProofImpl();}
+  finally{_gcashBusy=false;others.forEach(b=>{b.disabled=false;});}
+}
+async function _submitGcashProofImpl(){
   const _m=document.getElementById('gcashPayModal');
   if(_m&&_m.dataset.mode==='expired')return submitExpiredRenewal();
   if(_m&&_m.dataset.mode==='walkin')return submitWalkinProof();
@@ -5117,7 +5139,7 @@ async function submitGcashProof(){
   const base=fpApiBase();
   if(!base&&/\.github\.io$/i.test(location.hostname))return fail('Online GCash payment is not available on this site. Please pay at the front desk.');
   const btn=document.getElementById('gp_submit');
-  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>Sending…';}
   try{
     const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({memberId:mem.id,reference:ref,receipt},(_m&&_m.dataset.mode==='addon')?{kind:'sessions_addon',qty:Number(_m.dataset.qty)||1}:{}))});
     let data=null;try{data=await res.json();}catch(e){}
@@ -5398,7 +5420,7 @@ async function submitWalkinProof(){
   const base=fpApiBase();
   if(!base&&/\.github\.io$/i.test(location.hostname))return fail('Online GCash is not available on this site. Please pay at the front desk.');
   const btn=document.getElementById('gp_submit');
-  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>Sending…';}
   const reset=()=>{if(btn){btn.disabled=false;btn.textContent='Submit Payment';}};
   try{
     const res=await fetch(base+'/api/gcash-proof',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'walkin',visitorName:name,reference:ref,receipt})});
