@@ -149,17 +149,28 @@ async function notifyPayment(idToken, memberId, kind, info) {
   const clean = (v, n) => String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').slice(0, n || 120);
   const i = info || {};
   const lines = [];
-  if (i.plan) lines.push('Plan: ' + clean(i.plan));
-  if (i.amount) lines.push('Amount: PHP ' + Number(i.amount).toLocaleString('en-US'));
-  if (i.reference) lines.push('GCash reference: ' + clean(i.reference, 40));
   let subject, message;
   if (kind === 'confirmed') {
-    if (i.newExpiry) lines.push('Valid until: ' + clean(i.newExpiry, 20));
+    const r = [];
+    r.push('===== OFFICIAL RECEIPT =====');
+    if (i.receiptNo) r.push('Receipt No: ' + clean(i.receiptNo, 30));
+    r.push('Date: ' + clean(i.date || new Date().toISOString().slice(0, 10), 20));
+    r.push('Member: ' + (m.name || 'Member') + (snap.id ? ' (' + snap.id + ')' : ''));
+    if (i.plan) r.push('Plan: ' + clean(i.plan));
+    if (i.amount) r.push('Amount paid: PHP ' + Number(i.amount).toLocaleString('en-US'));
+    r.push('Payment method: ' + clean(i.method || 'GCash', 20));
+    if (i.reference) r.push('GCash reference: ' + clean(i.reference, 40));
+    if (i.newExpiry) r.push('Valid until: ' + clean(i.newExpiry, 20));
+    if (i.receivedBy) r.push('Received by: ' + clean(i.receivedBy, 60));
+    r.push('============================');
     subject = 'FitCore GMS: Your payment was confirmed';
-    message = 'Hi ' + (m.name || 'Member') + ', your payment was confirmed and your membership is active.\n\n' + lines.join('\n') + '\n\nThank you and see you at the gym!';
+    message = 'Your payment was confirmed and your membership is active. Here is your receipt:\n\n' + r.join('\n') + '\n\nKeep this email as your proof of payment. Thank you and see you at the gym!';
   } else {
+    if (i.plan) lines.push('Plan: ' + clean(i.plan));
+    if (i.amount) lines.push('Amount: PHP ' + Number(i.amount).toLocaleString('en-US'));
+    if (i.reference) lines.push('GCash reference: ' + clean(i.reference, 40));
     subject = 'FitCore GMS: Your payment was rejected';
-    message = 'Hi ' + (m.name || 'Member') + ', we could not verify your payment.\n\n' + lines.join('\n')
+    message = 'We could not verify your payment.\n\n' + lines.join('\n')
       + '\nReason: ' + clean(i.reason || 'Could not be verified', 200)
       + '\n\nPlease log in and submit it again with the correct reference number and receipt, or pay at the front desk.';
   }

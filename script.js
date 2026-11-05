@@ -5494,7 +5494,7 @@ async function applySessionsAddon(memberId,qty,amount,method,reference,notes){
   }else{
     throw new Error('Not connected to Firebase. Please check your internet and try again.');
   }
-  try{notifyPaymentEmail(memberId,'confirmed',{plan:'Session Add-on ('+qty+' session'+(qty!==1?'s':'')+')',amount:Number(amount),reference:reference||''});}catch(e){}
+  try{notifyPaymentEmail(memberId,'confirmed',{receiptNo:id,date:date,method:method||'Cash',receivedBy:(currentUser&&currentUser.name)||'',plan:'Session Add-on ('+qty+' session'+(qty!==1?'s':'')+')',amount:Number(amount),reference:reference||''});}catch(e){}
   try{logActivity('Added','Trainer Sessions',member.name,qty+' session'+(qty!==1?'s':'')+' | ₱'+Number(amount).toLocaleString()+' | '+(method||'Cash'));}catch(e){}
   return {payment,newBonus};
 }
@@ -8827,7 +8827,7 @@ async function applyPaymentConfirmation(memberId,amount,method,reference,opts){
     GMSFB.applyLocalPatch(KEY.members,memberId,activation);
   }
   _queueSelected.delete(memberId);
-  try{notifyPaymentEmail(memberId,'confirmed',{plan:plan?plan.name:'',amount:amount||(plan?Number(plan.price):0),reference:reference||'',newExpiry:newExpiry||''});}catch(e){}
+  try{notifyPaymentEmail(memberId,'confirmed',{receiptNo:payment.id,date:payment.date,method:payment.method,receivedBy:payment.recordedBy||'',plan:plan?plan.name:'',amount:amount||(plan?Number(plan.price):0),reference:reference||'',newExpiry:newExpiry||''});}catch(e){}
   logActivity('Activated','Member',member.name,'ID: '+memberId+' | Plan: '+(plan?plan.name:'-')+' | Payment: '+method+' ₱'+(amount||(plan?Number(plan.price):0)));
   return {member:Members.one(memberId)||{...member,...activation},payment};
 }
