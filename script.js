@@ -3433,7 +3433,7 @@ function buildMemberDashboard(){
         }
       }catch(e){}
     }
-    banner=`<div class="mb-banner active${soon?' soon':''}">
+    banner=`<div class="mb-banner active${soon?' soon':''}${soon&&d<=1?' critical':(soon&&d<=3?' urgent':'')}">
       <div class="mb-banner-ico">${soon?'⚠️':'✅'}</div>
       <div class="mb-banner-main">
         <div class="mb-banner-title">${soon?'Membership Ending Soon':'Membership Active'}</div>
