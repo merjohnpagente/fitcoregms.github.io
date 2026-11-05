@@ -3407,7 +3407,7 @@ function buildMemberDashboard(){
               +(ready?'<div><strong style="color:var(--white)">Pay via GCash</strong>: submit your reference and receipt, staff will confirm.</div>':'')
               +'<div><strong style="color:var(--white)">Pay at the front desk</strong>'+(pr?' (<span style="color:var(--green)">₱'+pr+'</span>)':'')+': Cash or GCash, staff renews it right away.</div></div>';
             openConfirm('Membership Ending Soon',msg,function(){ready?(navigate('myRenew'),setTimeout(openGcashPay,150)):navigate('myRenew');},ready?'Pay via GCash':'View Renew Page','btn-primary');
-            var cb=document.getElementById('confirmCancelBtn');if(cb)cb.textContent='I will pay at the front desk';
+            var cb=document.getElementById('confirmCancelBtn');if(cb)cb.textContent='At front desk';
           },700);
         }
       }catch(e){}

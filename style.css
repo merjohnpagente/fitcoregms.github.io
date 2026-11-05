@@ -2074,3 +2074,7 @@ details.gcash-hist>summary::-webkit-details-marker{display:none}
 
 /* GCash decisions: keep the delete column visible while the table scrolls sideways */
 .gcash-hist th:last-child,.gcash-hist td:last-child{position:sticky;right:0;z-index:2;background:#151a15;box-shadow:-8px 0 12px rgba(0,0,0,.35);padding-left:10px;padding-right:12px}
+
+/* Compact, minimal confirm dialog buttons */
+#confirmModal .confirm-btns{flex-direction:row!important;gap:8px;justify-content:flex-end}
+#confirmModal .confirm-btns .btn-sm{width:auto!important;flex:0 1 auto;min-height:0!important;padding:9px 16px!important;font-size:12px!important;font-weight:600;letter-spacing:.2px;text-transform:none!important;box-shadow:none!important;border-radius:10px;white-space:nowrap}
