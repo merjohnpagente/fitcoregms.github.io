@@ -3829,6 +3829,8 @@ function openMemberModal(id=null){
     // Firebase Auth email (legacy synthetic .local addresses are not shown).
     const mEmail=String(m.email||'').trim()||(m.authEmail&&!String(m.authEmail).endsWith('@fitcoregym.local')?m.authEmail:'');
     document.getElementById('mf_email').value=mEmail;
+    { const ug=document.getElementById('mf_username_group'), ui=document.getElementById('mf_username');
+      if(ug&&ui){ug.style.display='';ui.value=m.username||'(not set)';} }
     { const ps=document.getElementById('mf_pass_section'); if(ps) ps.style.display=(currentUser&&currentUser.role==='admin')?'block':'none';
       ['mf_pass','mf_pass2'].forEach(i=>{const e=document.getElementById(i); if(e){e.value='';e.type='password';}}); }
     document.getElementById('mf_paydate').value=today();
@@ -3854,6 +3856,7 @@ function openMemberModal(id=null){
     }
   } else {
     ['mf_name','mf_contact','mf_age','mf_address','mf_ecname','mf_ecnum','mf_notes','mf_email'].forEach(id=>document.getElementById(id).value='');
+    { const ug=document.getElementById('mf_username_group'); if(ug) ug.style.display='none'; }
     { const ps=document.getElementById('mf_pass_section'); if(ps) ps.style.display='none'; ['mf_pass','mf_pass2'].forEach(i=>{const e=document.getElementById(i); if(e) e.value='';}); }
     const dobIn=document.getElementById('mf_dob'); if(dobIn) dobIn.value='';
     const hint=document.getElementById('mf_age_hint'); if(hint){hint.textContent=''; hint.style.display='none';}
