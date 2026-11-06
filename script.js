@@ -3158,7 +3158,38 @@ function updateQueueBadge(){
   const gn=openGcashProofs().length;
   if(gb){gb.textContent=gn;gb.style.display=gn>0?'flex':'none';}
   if(_gcashSeen!==null&&gn>_gcashSeen)toast(gn+' GCash payment'+(gn!==1?'s':'')+' waiting for verification','info');
+  const _chg=_gcashSeen!==null&&gn!==_gcashSeen;
   _gcashSeen=gn;
+  if(_chg&&typeof _lastPanel!=='undefined'&&_lastPanel==='dashboard'){try{renderDashboard();}catch(e){}}
+}
+function _agoText(iso){
+  const t=new Date(iso).getTime();if(!t)return '';
+  const m=Math.max(0,Math.round((Date.now()-t)/60000));
+  if(m<1)return 'just now';if(m<60)return m+' min ago';
+  const h=Math.round(m/60);if(h<24)return h+' hr ago';
+  const d=Math.round(h/24);return d+' day'+(d!==1?'s':'')+' ago';
+}
+// Dashboard card: payments members/visitors submitted that still need admin/staff action.
+function pendingPaymentsCard(){
+  const proofs=openGcashProofs();
+  const frontDesk=Members.all().filter(m=>m.status==='pending_payment');
+  if(!proofs.length&&!frontDesk.length)return '';
+  const kindLabel=p=>p.type==='walkin_proof'?'Walk-in':(p.kind==='sessions_addon'?'Session add-on':(p.source==='online-renewal'?'Renewal / Payment':'Membership'));
+  const rows=proofs.slice(0,5).map(p=>{
+    const who=p.type==='walkin_proof'?(p.visitorName||'Walk-in'):(p.memberName||p.memberId||'Member');
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.06);flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:160px"><div style="font-weight:700;color:var(--white)">'+esc(who)+'</div>'
+      +'<div style="font-size:11px;color:var(--gray-500)">'+esc(kindLabel(p))+(p.planName?' · '+esc(p.planName):'')+' · Ref '+esc(p.reference||'-')+' · '+esc(_agoText(p.createdAt))+'</div></div>'
+      +'<div style="font-weight:800;color:var(--green)">₱'+Number(p.amount||0).toLocaleString()+'</div>'
+      +'<button class="btn-primary btn-sm" style="width:auto" onclick="navigate(\'gcash\')">Review</button></div>';
+  }).join('');
+  const more=proofs.length>5?'<div style="font-size:11px;color:var(--gray-500);padding-top:8px">+ '+(proofs.length-5)+' more waiting</div>':'';
+  const fd=frontDesk.length?'<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.06)"><div style="flex:1;color:var(--gray-300);font-size:13px">🏋️ <strong style="color:var(--white)">'+frontDesk.length+'</strong> member'+(frontDesk.length!==1?'s':'')+' will pay at the front desk</div><button class="btn-secondary btn-sm" style="width:auto" onclick="navigate(\'queue\')">Open Queue</button></div>':'';
+  return '<div style="background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.35);border-radius:14px;padding:14px 16px;margin:14px 0 16px">'
+    +'<div style="display:flex;align-items:center;gap:8px;font-weight:800;color:var(--gold);letter-spacing:.3px">⏳ Payments waiting'
+    +(proofs.length?'<span style="background:var(--gold);color:#0a0a0a;border-radius:999px;font-size:11px;padding:2px 9px">'+proofs.length+'</span>':'')+'</div>'
+    +(proofs.length?'<div style="font-size:12px;color:var(--gray-300);margin:4px 0 6px">Submitted online - verify the reference and receipt, then confirm or reject.</div>':'')
+    +rows+more+fd+'</div>';
 }
 function buildAdminDashboard(){
   const pendingPay=Members.all().filter(m=>m.status==='pending_payment').length;
@@ -3211,6 +3242,7 @@ function buildAdminDashboard(){
   ${dashHero(`<button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;width:auto" onclick="navigate('scanner')">${iconSvg('camera',16)} Open QR Scanner</button>
     <button class="btn-secondary" onclick="navigate('billing')">💳 Record Payment</button>
     ${pendingUsers.length?`<button class="btn-secondary" style="background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.3);color:var(--gold)" onclick="navigate('users')">⏳ ${pendingUsers.length} Pending Approval</button>`:''}`)}
+  ${pendingPaymentsCard()}
   <div class="checkin-btn-wrap" style="display:flex;align-items:center;gap:10px;margin:14px 0 16px;flex-wrap:wrap">
     <button class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;width:auto;background:var(--green);color:#0a0a0a;border-color:var(--green);font-weight:800;box-shadow:0 4px 14px rgba(127,250,136,.25)" onclick="openCheckin()">${iconSvg('logIn',16)} Manual Check-In (No QR)</button>
     <button class="btn-secondary" style="display:inline-flex;align-items:center;gap:8px;width:auto;background:rgba(179,188,181,.15);color:var(--orange);border:1px solid rgba(179,188,181,.3)" onclick="openCheckout()">🚪 Manual Check-Out</button>
@@ -3285,6 +3317,7 @@ function buildStaffDashboard(){
   const todayLog=attendance.map(a=>{const m=Members.all().find(x=>x.id===a.memberId);const pl=m?Plans.all().find(p=>p.id===m.planId):null;return{...a,memberName:m?m.name:'Unknown',planName:pl?pl.name:'-'};});
   const todayWalkins=Walkins.all().filter(w=>w.date===today_).length;
   return `
+  ${pendingPaymentsCard()}
   <div class="stats-grid">
     <div class="stat-card orange"><div class="stat-label">Total Members</div><div class="stat-value">${members.length}</div></div>
     <div class="stat-card green"><div class="stat-label">Today's Check-Ins</div><div class="stat-value">${attendance.length}</div></div>
