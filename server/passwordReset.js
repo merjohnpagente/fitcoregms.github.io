@@ -108,7 +108,7 @@ async function sendEmailJs(to, name, label, code) {
 // Generic notification mail (payment confirmed / rejected). Uses the same EmailJS
 // service; set EMAILJS_NOTIFY_TEMPLATE_ID to use a dedicated template (variables:
 // to_email, to_name, subject, message, status, from_name). Falls back to the OTP template.
-async function sendNotifyEmail(to, name, subject, message, status) {
+async function sendNotifyEmail(to, name, subject, message, status, statusLabel) {
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -119,7 +119,7 @@ async function sendNotifyEmail(to, name, subject, message, status) {
       accessToken: env('EMAILJS_PRIVATE_KEY'),
       template_params: {
         to_email: to, to_name: name, username: name, user_role: 'Member',
-        subject: subject, status: status, otp_code: status,
+        subject: subject, status: status, status_label: statusLabel || 'PAYMENT STATUS', otp_code: status,
         from_name: 'FitCore GMS', message: message
       }
     })
@@ -137,7 +137,7 @@ async function notifyPayment(idToken, memberId, kind, info) {
   const cq = callerEmail ? await ctx.db.collection('users').where('authEmail', '==', callerEmail).limit(1).get() : { empty: true };
   const caller = cq.empty ? null : cq.docs[0].data();
   if (!caller || !['admin', 'staff'].includes(caller.role) || caller.status === 'locked') return bad('Only admin or staff can send this.', 403);
-  if (kind !== 'confirmed' && kind !== 'rejected') return bad('Unknown notification.', 400);
+  if (kind !== 'confirmed' && kind !== 'rejected' && kind !== 'message') return bad('Unknown notification.', 400);
 
   const snap = await ctx.db.collection('members').doc(String(memberId || '')).get();
   if (!snap.exists) return bad('Member not found.', 404);
@@ -150,7 +150,10 @@ async function notifyPayment(idToken, memberId, kind, info) {
   const i = info || {};
   const lines = [];
   let subject, message;
-  if (kind === 'confirmed') {
+  if (kind === 'message') {
+    subject = 'New message from FitCore';
+    message = 'You have a new message from ' + clean(i.from || 'the front desk', 60) + ':\n\n"' + String(i.text == null ? '' : i.text).replace(/\r/g, '').slice(0, 1000) + '"\n\nLog in to FitCore and open Messages to reply.';
+  } else if (kind === 'confirmed') {
     const r = [];
     r.push('===== OFFICIAL RECEIPT =====');
     if (i.receiptNo) r.push('Receipt No: ' + clean(i.receiptNo, 30));
@@ -174,7 +177,7 @@ async function notifyPayment(idToken, memberId, kind, info) {
       + '\nReason: ' + clean(i.reason || 'Could not be verified', 200)
       + '\n\nPlease log in and submit it again with the correct reference number and receipt, or pay at the front desk.';
   }
-  await sendNotifyEmail(email, m.name || 'Member', subject, message, kind === 'confirmed' ? 'CONFIRMED' : 'REJECTED');
+  await sendNotifyEmail(email, m.name || 'Member', subject, message, kind === 'confirmed' ? 'CONFIRMED' : (kind === 'message' ? 'NEW MESSAGE' : 'REJECTED'), kind === 'message' ? 'MESSAGE FROM THE GYM' : 'PAYMENT STATUS');
   return { status: 200, body: { ok: true } };
 }
 

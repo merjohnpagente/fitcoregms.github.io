@@ -7342,7 +7342,10 @@ function sendMessage(){
   input.value='';
   renderMsgThread();updateMessageBadge();
   if(_msgStaffMode&&document.getElementById('panelMessages'))renderMessages();
-  toast('Message sent.');
+  if(_msgStaffMode){
+    toast('Message sent. Emailing the member…');
+    notifyPaymentEmail(_msgThreadId,'message',{text:text,from:(currentUser&&currentUser.name)||'Front Desk'});
+  }else toast('Message sent.');
 }
 
 // ======================================================================
