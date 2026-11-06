@@ -3040,7 +3040,7 @@ function scanRenewals(){
   });
   if(changed)Members.save(all);
   const badge=document.getElementById('notifBadge');
-  if(badge){const c=Members.all().filter(m=>m.status!=='Archived'&&(m.status==='Expiring Soon'||m.status==='Expired')&&!_dismissedIds.has(m.id)).length;badge.textContent=c;badge.style.display=c>0?'flex':'none';}
+  updateNotifBadge();
   updateQueueBadge();
 }
 
@@ -3149,6 +3149,12 @@ function renderDashboard(){
   }
   if(_dashPlay){_dashPlay=false;animateDashboard(el);}
 }
+function updateNotifBadge(){
+  const badge=document.getElementById('notifBadge');if(!badge)return;
+  let c=Members.all().filter(m=>m.status!=='Archived'&&(m.status==='Expiring Soon'||m.status==='Expired')&&!_dismissedIds.has(m.id)).length;
+  if(currentUser&&(currentUser.role==='admin'||currentUser.role==='staff'))c+=openGcashProofs().length;
+  badge.textContent=c;badge.style.display=c>0?'flex':'none';
+}
 function updateQueueBadge(){
   if(!currentUser||(currentUser.role!=='admin'&&currentUser.role!=='staff'))return;
   const pending=Members.all().filter(m=>m.status==='pending_payment').length;
@@ -3160,6 +3166,8 @@ function updateQueueBadge(){
   if(_gcashSeen!==null&&gn>_gcashSeen)toast(gn+' GCash payment'+(gn!==1?'s':'')+' waiting for verification','info');
   const _chg=_gcashSeen!==null&&gn!==_gcashSeen;
   _gcashSeen=gn;
+  updateNotifBadge();
+  if(_chg&&typeof _lastPanel!=='undefined'&&_lastPanel==='notifications'){try{renderNotifications();}catch(e){}}
   if(_chg&&typeof _lastPanel!=='undefined'&&_lastPanel==='dashboard'){try{renderDashboard();}catch(e){}}
 }
 function _agoText(iso){
@@ -7170,6 +7178,7 @@ function renderNotifications(){
     </div>`;}).join('');
   const tab=(label,key,cnt)=>`<button class="filter-chip${_notifFilter===key?' active':''}" onclick="_notifFilter='${key}';renderNotifications()">${label} <span style="opacity:.7">(${cnt})</span></button>`;
   el.innerHTML=`
+  ${pendingPaymentsCard()}
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
       <div class="section-title" style="margin-bottom:4px">Member Renewals <span class="badge badge-expired" style="margin-left:6px">${members.length}</span></div>
