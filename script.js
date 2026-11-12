@@ -1409,8 +1409,15 @@ async function notifyPaymentEmail(memberId,kind,info){
     if(!memberId||!(window.GMSFB&&GMSFB.auth&&GMSFB.auth.currentUser))return;
     const tok=await GMSFB.auth.currentUser.getIdToken();
     const r=await fpApi('notify-payment',{idToken:tok,memberId:memberId,kind:kind,info:info||{}});
-    if(r&&r.ok&&!r.skipped)toast('Email sent to the member.','info');
-  }catch(e){}
+    if(r&&r.ok){
+      if(!r.skipped)toast('Email sent to the member\u2019s Gmail.','info');
+      else if(kind!=='message')toast('No email sent: this member has no real Gmail on file. Add it in the member profile.','error');
+    }else{
+      toast('Email NOT sent: '+((r&&r.error)||'unknown error'),'error');
+    }
+  }catch(e){
+    toast('Email NOT sent: '+((e&&e.message)||'network error'),'error');
+  }
 }
 function fpStartResendTimer(sec){
   const link=document.getElementById('fp_resend'); if(!link) return;
